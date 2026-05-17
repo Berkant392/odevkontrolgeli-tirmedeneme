@@ -16,25 +16,34 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
     // Kütüphane Modal State'i
     const [showLibModal, setShowLibModal] = useState(false);
 
-    // Güvenli Okuma: cls henüz yüklenmediyse çökmeyi engeller
     const isVip = cls?.type === 'vip' && !isTeacherMode;
 
-    // Veritabanından gelen veriyi güvenli (ID çakışması yaratmayacak) şekilde normalize edip local state'e alıyoruz
+    // 🛡️ VERİ KALKANI: Firebase'deki bozuk "nesne" kayıtlarını temizleyip uygulamayı çökmeden korur.
     useEffect(() => {
         if (cls && cls.curriculum && Array.isArray(cls.curriculum)) {
             const sanitized = cls.curriculum.map((topic, tIdx) => {
                 const topicId = topic.id ? String(topic.id) : `curr_${tIdx}_${Date.now()}`;
+                
+                // Eğer başlık yanlışlıkla object kaydedilmişse onu metne çevirir
+                let tTitle = topic.title;
+                if (typeof tTitle === 'object' && tTitle !== null) { tTitle = tTitle.title || tTitle.text || "İsimsiz Konu"; }
+                if (tTitle === undefined || tTitle === null) { tTitle = ""; }
+
                 return {
                     ...topic,
                     id: topicId,
-                    title: topic.title || "",
+                    title: String(tTitle),
                     isCompleted: !!topic.isCompleted,
                     subTopics: Array.isArray(topic.subTopics)
                         ? topic.subTopics.map((sub, sIdx) => {
                             if (typeof sub === 'object' && sub !== null) {
+                                let sTitle = sub.title;
+                                if (typeof sTitle === 'object' && sTitle !== null) { sTitle = sTitle.title || sTitle.text || "İsimsiz Alt Başlık"; }
+                                if (sTitle === undefined || sTitle === null) { sTitle = ""; }
+
                                 return {
                                     id: sub.id ? String(sub.id) : `sub_${topicId}_${sIdx}_${Date.now()}`,
-                                    title: sub.title || "",
+                                    title: String(sTitle),
                                     isCompleted: !!sub.isCompleted
                                 };
                             }
@@ -86,17 +95,14 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
 
         const newCurriculum = Array.from(localCurriculum);
 
-        // 1. ANA KONU (ÜNİTE) TAŞIMA İŞLEMİ
         if (type === 'topic') {
             const [movedTopic] = newCurriculum.splice(source.index, 1);
             newCurriculum.splice(destination.index, 0, movedTopic);
-            
             setLocalCurriculum(newCurriculum);
             updateClassInDb({ ...cls, curriculum: newCurriculum });
             return;
         }
 
-        // 2. ALT BAŞLIK (KONU) TAŞIMA İŞLEMİ
         if (type === 'subtopic') {
             const sourceTopicIndex = newCurriculum.findIndex(t => t.id === source.droppableId);
             const destTopicIndex = newCurriculum.findIndex(t => t.id === destination.droppableId);
@@ -130,6 +136,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
     const addTopic = (title) => { 
         if(!title.trim()) return; 
         const updated = [...localCurriculum, { id: generateId('curr'), title: title.trim(), isCompleted: false, subTopics: [] }]; 
+        setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated }); 
         setNewTopicTitle(""); 
     };
@@ -141,6 +148,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
             if(t.id === topicId) return { ...t, subTopics: [...(t.subTopics||[]), { id: generateId('sub'), title: title.trim(), isCompleted: false }] }; 
             return t; 
         }); 
+        setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated }); 
         setNewSubTopicTitles(p => ({...p, [topicId]: ""})); 
     };
@@ -154,6 +162,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
             } 
             return t; 
         }); 
+        setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated }); 
     };
 
@@ -167,11 +176,13 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
             } 
             return t; 
         }); 
+        setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated }); 
     };
 
     const deleteTopic = (topicId) => {
         const updated = localCurriculum.filter(t => t.id !== topicId);
+        setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated });
     };
 
@@ -180,6 +191,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
             if(t.id === topicId) return { ...t, subTopics: (t.subTopics || []).filter(st => st.id !== subTopicId) }; 
             return t; 
         }); 
+        setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated }); 
     };
 
@@ -187,6 +199,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
     const saveEditTopic = (id) => {
         if(!editVal.trim()) { setEditingTopicId(null); return; }
         const updated = localCurriculum.map(t => t.id === id ? { ...t, title: editVal.trim() } : t);
+        setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated });
         setEditingTopicId(null);
     };
@@ -200,13 +213,13 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
             } 
             return t; 
         });
+        setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated });
         setEditingSubTopicId(null);
     };
 
     return (
         <div className="animate-scale-in max-w-4xl mx-auto mt-4 relative z-10">
-            {/* Üst İlerleme Kartı */}
             <div className={`p-8 rounded-3xl mb-8 ${isVip ? 'bg-slate-700 border border-slate-600 shadow-lg' : 'bg-white border border-slate-100 shadow-float'}`}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-4">
@@ -231,7 +244,6 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                 </div>
             </div>
 
-            {/* Yeni Konu Ekleme Barı */}
             {isTeacherMode && (
                 <div className="flex flex-col md:flex-row gap-3 mb-8">
                     <input type="text" placeholder="Yeni Ana Konu Başlığı (Örn: Türev)..." className="flex-1 hover-lift bg-white border-2 border-slate-200 rounded-2xl px-6 py-4 text-lg focus:border-brandPurple outline-none font-bold text-slate-800 shadow-sm transition-all" value={newTopicTitle} onChange={e => setNewTopicTitle(e.target.value)} onKeyDown={e => e.key==='Enter' && addTopic(newTopicTitle)}/>
@@ -246,15 +258,14 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                 </div>
             )}
 
-            {/* Müfredat Listesi Paneli (Sürükle Bırak) */}
             <div className={`rounded-3xl p-6 md:p-10 ${isVip ? 'bg-slate-700 border border-slate-600 shadow-lg' : 'bg-white border border-slate-100 shadow-float'}`}>
                 {localCurriculum.length === 0 ? (
-                    <div className="text-center py-12 font-bold text-slate-400">
+                    <div className={`text-center py-12 font-bold ${isVip ? 'text-slate-400' : 'text-slate-400'}`}>
                         Henüz hiç konu eklenmemiş.
                     </div>
                 ) : (
                     <DragDropContext onDragEnd={handleDragEnd}>
-                        <Droppable droppableId="curriculum-list" type="topic">
+                        <Droppable droppableId="curriculum-board" type="topic">
                             {(provided) => (
                                 <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-8">
                                     {localCurriculum.map((topic, index) => {
@@ -262,18 +273,17 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                         const isEditingThisTopic = editingTopicId === topic.id;
                                         
                                         return (
-                                            <Draggable key={topic.id} draggableId={topic.id} index={index}>
+                                            <Draggable key={topic.id} draggableId={topic.id} index={index} isDragDisabled={!isTeacherMode}>
                                                 {(provided, snapshot) => (
-                                                    <div
-                                                        ref={provided.innerRef}
-                                                        {...provided.draggableProps}
-                                                        className={`flex flex-col group/topic p-2 rounded-2xl transition-all ${snapshot.isDragging ? (isVip ? 'bg-slate-800/80 border border-indigo-500/50 shadow-2xl scale-[1.01]' : 'bg-purple-50/50 border border-brandPurple/30 shadow-2xl scale-[1.01]') : ''}`}
+                                                    <div 
+                                                        ref={provided.innerRef} 
+                                                        {...provided.draggableProps} 
+                                                        className={`flex flex-col group/topic rounded-2xl transition-all ${snapshot.isDragging ? (isVip ? 'bg-slate-800/80 shadow-2xl scale-[1.01]' : 'bg-slate-50 shadow-2xl scale-[1.01] ring-1 ring-brandPurple/20') : ''}`}
                                                     >
-                                                        <div className="flex items-start gap-4">
-                                                            {/* Ana Başlık Sürükleme Tutamacı */}
+                                                        <div className="flex items-start gap-4 p-2">
                                                             {isTeacherMode && (
-                                                                <div {...provided.dragHandleProps} className="mt-2 text-slate-400 hover:text-brandPurple cursor-grab active:cursor-grabbing transition-colors">
-                                                                    <GripVertical size={20} />
+                                                                <div {...provided.dragHandleProps} className="mt-1 cursor-grab active:cursor-grabbing text-slate-400 hover:text-brandPurple transition-colors">
+                                                                    <GripVertical size={24} />
                                                                 </div>
                                                             )}
                                                             
@@ -310,23 +320,22 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                             </div>
                                                         </div>
 
-                                                        {/* Alt Başlıklar Droppable Alanı */}
+                                                        {/* Alt Başlıklar Alanı */}
                                                         <Droppable droppableId={topic.id} type="subtopic">
                                                             {(provided) => (
-                                                                <div {...provided.droppableProps} ref={provided.innerRef} className="pl-11 mt-3 space-y-3 min-h-[5px]">
+                                                                <div {...provided.droppableProps} ref={provided.innerRef} className="pl-11 mt-1 space-y-2 min-h-[5px]">
                                                                     {topic.subTopics?.map((sub, subIndex) => {
                                                                         const isEditingThisSub = editingSubTopicId === sub.id;
                                                                         return (
-                                                                            <Draggable key={sub.id} draggableId={sub.id} index={subIndex}>
+                                                                            <Draggable key={sub.id} draggableId={sub.id} index={subIndex} isDragDisabled={!isTeacherMode}>
                                                                                 {(provided, snapshot) => (
-                                                                                    <div
-                                                                                        ref={provided.innerRef}
-                                                                                        {...provided.draggableProps}
-                                                                                        className={`flex items-center gap-3 group/sub hover-lift p-1.5 rounded-xl transition-all ${snapshot.isDragging ? (isVip ? 'bg-slate-900/60 shadow-md' : 'bg-slate-100 shadow-sm') : ''}`}
+                                                                                    <div 
+                                                                                        ref={provided.innerRef} 
+                                                                                        {...provided.draggableProps} 
+                                                                                        className={`flex items-center gap-3 group/sub p-1.5 rounded-xl transition-all ${snapshot.isDragging ? (isVip ? 'bg-slate-900/50 shadow-md scale-[1.01]' : 'bg-slate-50 shadow-md scale-[1.01]') : 'hover-lift'}`}
                                                                                     >
-                                                                                        {/* Alt Başlık Sürükleme Tutamacı */}
                                                                                         {isTeacherMode && (
-                                                                                            <div {...provided.dragHandleProps} className="text-slate-400 hover:text-brandPurple cursor-grab active:cursor-grabbing transition-colors">
+                                                                                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-brandPurple transition-colors">
                                                                                                 <GripVertical size={16} />
                                                                                             </div>
                                                                                         )}
@@ -364,7 +373,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
 
                                                                     {/* Yeni Alt Başlık Ekleme Inputu */}
                                                                     {isTeacherMode && (
-                                                                        <div className="flex items-center gap-3 mt-2 opacity-50 focus-within:opacity-100 transition-opacity">
+                                                                        <div className="flex items-center gap-3 mt-2 pl-[28px] opacity-50 focus-within:opacity-100 transition-opacity">
                                                                             <CornerDownRight size={20} className="text-slate-400" />
                                                                             <input type="text" placeholder="Alt başlık ekle..." className="flex-1 bg-transparent border-none text-base font-bold text-slate-600 focus:outline-none focus:ring-0 placeholder:text-slate-400" value={newSubTopicTitles[topic.id] || ""} onChange={e => setNewSubTopicTitles(p => ({...p, [topic.id]: e.target.value}))} onKeyDown={e => e.key==='Enter' && addSubTopic(topic.id)}/>
                                                                         </div>
@@ -411,13 +420,22 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                     id: generateId('curr'),
                                                     title: item.text,
                                                     isCompleted: false,
-                                                    subTopics: (item.subTopics || []).map((st, idx) => ({ 
-                                                        id: `sub_lib_${idx}_${Date.now()}`, 
-                                                        title: typeof st === 'object' ? (st.title || '') : String(st), 
-                                                        isCompleted: false 
-                                                    }))
+                                                    // 🛡️ KALKAN: Kütüphaneden eklerken falsy string hatasını engeller.
+                                                    subTopics: (item.subTopics || []).map((st, idx) => {
+                                                        let safeTitle = "";
+                                                        if (typeof st === 'object' && st !== null) { safeTitle = st.title || st.text || "İsimsiz"; }
+                                                        else { safeTitle = String(st); }
+                                                        
+                                                        return { 
+                                                            id: generateId('sub'), 
+                                                            title: safeTitle, 
+                                                            isCompleted: false 
+                                                        };
+                                                    })
                                                 };
-                                                updateClassInDb({ ...cls, curriculum: [...localCurriculum, newTopic] });
+                                                const updated = [...localCurriculum, newTopic];
+                                                setLocalCurriculum(updated);
+                                                updateClassInDb({ ...cls, curriculum: updated });
                                                 setShowLibModal(false);
                                             }}
                                             className="px-4 py-2 bg-purple-50 text-brandPurple font-bold text-sm rounded-xl md:opacity-0 group-hover:opacity-100 transition-all hover:bg-brandPurple hover:text-white"
