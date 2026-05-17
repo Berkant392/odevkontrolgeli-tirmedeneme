@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Layout, Crown, Pencil, AlertOctagon, KeyRound, BookOpen, Plus, Trash2, Calendar, MoreVertical, UserPlus, Printer } from 'lucide-react';
 import { calculateStats, formatDate } from '../../utils/helpers';
-import { TOPIC_THEMES } from '../../utils/constants';
+import { TOPIC_THEMES, STATUS_OPTIONS } from '../../utils/constants';
 import MobileStudentCard from '../student/MobileCard';
 import PdfDownloadButton from '../ui/PdfButton';
 import StatusBadge from '../ui/StatusBadge';
