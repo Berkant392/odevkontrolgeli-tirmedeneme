@@ -9,7 +9,7 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
-  "dependencies": {
+"dependencies": {
     "@hello-pangea/dnd": "^16.6.0",
     "@react-pdf/renderer": "^3.3.8",
     "date-fns": "^3.3.1",
