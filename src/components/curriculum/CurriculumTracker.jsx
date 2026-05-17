@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, Save, X, GripVertical, GripHorizontal } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
+// DİKKAT: onUpdate parametresi buraya eklendi!
 const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   const [localCurriculum, setLocalCurriculum] = useState([]);
   
@@ -16,26 +17,19 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   const [addingSubTo, setAddingSubTo] = useState(null);
   const [newSubName, setNewSubName] = useState("");
 
-  // Dışarıdan gelen veriyi local state'e eşitle (Derin kopya ile güvene alıyoruz)
+  // Dışarıdan gelen veriyi local state'e eşitle
   useEffect(() => {
     setLocalCurriculum(JSON.parse(JSON.stringify(curriculum || [])));
   }, [curriculum]);
 
-  // ==========================================
-  // SÜRÜKLE BIRAK (DND) MANTIĞI
-  // ==========================================
   const handleDragEnd = (result) => {
     const { source, destination, type } = result;
 
-    // Hedef yoksa (boşluğa bırakıldıysa) iptal
     if (!destination) return;
-
-    // Aynı yere geri bırakıldıysa iptal
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
     const newCurriculum = Array.from(localCurriculum);
 
-    // 1. ANA BAŞLIK TAŞIMA İŞLEMİ
     if (type === 'topic') {
       const [movedTopic] = newCurriculum.splice(source.index, 1);
       newCurriculum.splice(destination.index, 0, movedTopic);
@@ -45,7 +39,6 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
       return;
     }
 
-    // 2. ALT BAŞLIK TAŞIMA İŞLEMİ
     if (type === 'subtopic') {
       const sourceTopicIndex = newCurriculum.findIndex(t => t.id === source.droppableId);
       const destTopicIndex = newCurriculum.findIndex(t => t.id === destination.droppableId);
@@ -60,13 +53,9 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
         ? sourceSubTopics 
         : Array.from(destTopic.subTopics || []);
 
-      // Öğeyi kaynaktan çıkar
       const [movedSub] = sourceSubTopics.splice(source.index, 1);
-
-      // Öğeyi hedefe ekle
       destSubTopics.splice(destination.index, 0, movedSub);
 
-      // State'i güncelle
       newCurriculum[sourceTopicIndex] = { ...sourceTopic, subTopics: sourceSubTopics };
       if (source.droppableId !== destination.droppableId) {
         newCurriculum[destTopicIndex] = { ...destTopic, subTopics: destSubTopics };
@@ -77,9 +66,6 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
     }
   };
 
-  // ==========================================
-  // CRUD İŞLEMLERİ (Ekleme, Silme, Düzenleme)
-  // ==========================================
   const handleAddTopic = () => {
     if (!newTopicName.trim()) return;
     const newTopic = {
@@ -155,7 +141,6 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
 
   return (
     <div className="space-y-6">
-      {/* Yeni Ana Başlık Ekleme */}
       <div className="flex gap-2">
         <input
           type="text"
@@ -174,7 +159,6 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
         </button>
       </div>
 
-      {/* Sürükle Bırak Bağlamı */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="board" type="topic">
           {(provided) => (
@@ -195,7 +179,6 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                           : 'border-slate-700'
                       }`}
                     >
-                      {/* Ana Başlık Header */}
                       <div className="p-4 border-b border-slate-700 flex items-center justify-between group">
                         <div className="flex items-center gap-3 flex-1">
                           <div 
@@ -247,7 +230,6 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                         )}
                       </div>
 
-                      {/* Alt Başlıklar Alanı (Droppable) */}
                       <div className="p-4 bg-slate-800/50 rounded-b-xl">
                         <Droppable droppableId={topic.id} type="subtopic">
                           {(provided, snapshot) => (
@@ -329,7 +311,6 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                           )}
                         </Droppable>
 
-                        {/* Yeni Alt Başlık Ekleme Alanı */}
                         {addingSubTo === topic.id ? (
                           <div className="mt-3 flex items-center gap-2 pl-8">
                             <input
