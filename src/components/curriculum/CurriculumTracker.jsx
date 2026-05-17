@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, Save, X, GripVertical, GripHorizontal } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
-// DİKKAT: onUpdate parametresi buraya eklendi!
 const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   const [localCurriculum, setLocalCurriculum] = useState([]);
   
@@ -17,11 +16,23 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   const [addingSubTo, setAddingSubTo] = useState(null);
   const [newSubName, setNewSubName] = useState("");
 
-  // Dışarıdan gelen veriyi local state'e eşitle
+  // Dışarıdan gelen veriyi kontrol edip eksik ID varsa tamamlayarak local state'e alıyoruz
   useEffect(() => {
-    setLocalCurriculum(JSON.parse(JSON.stringify(curriculum || [])));
+    if (curriculum && Array.isArray(curriculum)) {
+      const sanitized = JSON.parse(JSON.stringify(curriculum)).map((topic, index) => ({
+        ...topic,
+        id: topic.id ? String(topic.id) : `topic_auto_${index}_${Date.now()}`,
+        subTopics: topic.subTopics || []
+      }));
+      setLocalCurriculum(sanitized);
+    } else {
+      setLocalCurriculum([]);
+    }
   }, [curriculum]);
 
+  // ==========================================
+  // SÜRÜKLE BIRAK (DND) MANTIĞI
+  // ==========================================
   const handleDragEnd = (result) => {
     const { source, destination, type } = result;
 
@@ -30,6 +41,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
 
     const newCurriculum = Array.from(localCurriculum);
 
+    // 1. ANA BAŞLIK TAŞIMA İŞLEMİ
     if (type === 'topic') {
       const [movedTopic] = newCurriculum.splice(source.index, 1);
       newCurriculum.splice(destination.index, 0, movedTopic);
@@ -39,6 +51,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
       return;
     }
 
+    // 2. ALT BAŞLIK TAŞIMA İŞLEMİ
     if (type === 'subtopic') {
       const sourceTopicIndex = newCurriculum.findIndex(t => t.id === source.droppableId);
       const destTopicIndex = newCurriculum.findIndex(t => t.id === destination.droppableId);
@@ -66,6 +79,9 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
     }
   };
 
+  // ==========================================
+  // CRUD İŞLEMLERİ (Ekleme, Silme, Düzenleme)
+  // ==========================================
   const handleAddTopic = () => {
     if (!newTopicName.trim()) return;
     const newTopic = {
