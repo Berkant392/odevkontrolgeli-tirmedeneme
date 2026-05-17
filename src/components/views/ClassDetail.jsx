@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Layout, Crown, Pencil, AlertOctagon, KeyRound, BookOpen, Plus, Trash2, Calendar, MoreVertical, UserPlus, Printer } from 'lucide-react';
 import { calculateStats, formatDate } from '../../utils/helpers';
-import { TOPIC_THEMES, STATUS_OPTIONS } from '../../utils/constants';
+import { TOPIC_THEMES } from '../../utils/constants';
 import MobileStudentCard from '../student/MobileCard';
 import PdfDownloadButton from '../ui/PdfButton';
 import StatusBadge from '../ui/StatusBadge';
@@ -22,7 +22,7 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                 </div>
                 <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
                     <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm mr-2"><div className={`w-8 h-8 rounded-full border-4 ${selectedClass.type === 'vip' ? 'border-yellow-200' : 'border-purple-100'} flex items-center justify-center relative`}><svg className="w-full h-full transform -rotate-90 absolute" viewBox="0 0 36 36"><path className={selectedClass.type === 'vip' ? "text-amber-500" : "text-brandPurple"} strokeDasharray={`${calculateStats(selectedClass.students, selectedClass.topics).percentage}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4" /></svg></div><div className="flex flex-col"><span className="text-xs font-black text-slate-800">%{calculateStats(selectedClass.students, selectedClass.topics).percentage}</span><span className="text-[9px] font-bold text-slate-400 uppercase">Başarı</span></div></div>
-                    {!selectedClass.type === 'vip' && <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleOpenRisk(selectedClass)} className="text-xs bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-1 transition-colors"><AlertOctagon size={14}/> Risk</motion.button>}
+                    {selectedClass.type !== 'vip' && <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleOpenRisk(selectedClass)} className="text-xs bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-1 transition-colors"><AlertOctagon size={14}/> Risk</motion.button>}
                     <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handlePrintPasswords(selectedClass)} className="text-xs bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-1 transition-colors"><KeyRound size={14}/> Şifreler</motion.button>
                     <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setActiveTab(activeTab === 'curriculum' ? 'homework' : 'curriculum')} className={`text-xs px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-1.5 transition-colors ${activeTab === 'curriculum' ? 'bg-purple-50 text-brandPurple border border-purple-200 hover:bg-purple-100' : 'bg-slate-800 text-white border border-slate-700 hover:bg-slate-700'}`}><BookOpen size={16}/> {activeTab === 'curriculum' ? 'Ödev Takibine Dön' : 'Müfredat Listesi'}</motion.button>
                     <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => { setModalData({ classId: selectedClass.id }); setModalType('topic'); }} className={`text-xs text-white px-4 py-2 rounded-xl font-bold shadow-md flex items-center gap-1 ${selectedClass.type === 'vip' ? 'real-gold-bg text-slate-900 shadow-vip-glow' : 'bg-brandPurple hover:bg-purple-700 shadow-glow'}`}><Plus size={14}/> Ödev Ekle</motion.button>
@@ -93,7 +93,7 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                                                 return ( 
                                                     <React.Fragment key={topic.id}>
                                                         <td className={`border-r border-slate-100 ${theme.cell}`}></td>
-                                                        {topic.subColumns?.map(col => ( 
+                                                        {topic.subTopics?.map(col => ( 
                                                             <td key={col.id} className={`p-2 border-r border-slate-100 text-center ${theme.cell}`} onContextMenu={(e) => { e.preventDefault(); openCellNoteModal(selectedClass.id, std.id, col.id, std.assignmentNotes?.[col.id]); }}>
                                                                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={(e) => { e.stopPropagation(); setActiveCell({ classId: selectedClass.id, studentId: std.id, colId: col.id, anchorEl: e.currentTarget }); }} className="cursor-pointer inline-block"><StatusBadge status={std.grades?.[col.id] || 'assigned'} hasNote={!!std.assignmentNotes?.[col.id]} /></motion.div>
                                                             </td> 
@@ -114,7 +114,18 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                 </motion.div>
             )}
 
-            {activeTab === 'curriculum' && ( <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-slate-50/50 border-t border-slate-100"><CurriculumTracker cls={selectedClass} updateClassInDb={updateClassInDb} isTeacherMode={true} libraryItems={libraryItems} saveToLibrary={saveToLibrary} /></motion.div> )}
+            {activeTab === 'curriculum' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-slate-50/50 border-t border-slate-100">
+                    <CurriculumTracker 
+                        curriculum={selectedClass.curriculum || []} 
+                        onUpdate={(newCurriculum) => {
+                            updateClassInDb({ ...selectedClass, curriculum: newCurriculum });
+                        }} 
+                        libraryItems={libraryItems} 
+                        saveToLibrary={saveToLibrary} 
+                    />
+                </motion.div> 
+            )}
         </motion.div>
     );
 };
