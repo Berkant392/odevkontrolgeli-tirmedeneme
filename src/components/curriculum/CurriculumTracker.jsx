@@ -1,421 +1,437 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Save, X, GripVertical, GripHorizontal, CheckCircle, Circle } from 'lucide-react';
+import { Plus, Trash2, BookOpen, CheckSquare, Square, CornerDownRight, Pencil, Check, Library, Save, X, GripVertical } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { generateId } from '../../utils/helpers';
 
-const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
-  const [localCurriculum, setLocalCurriculum] = useState([]);
-  
-  // Düzenleme State'leri
-  const [editingTopicId, setEditingTopicId] = useState(null);
-  const [editTopicName, setEditTopicName] = useState("");
-  const [editingSubTopic, setEditingSubTopic] = useState({ topicId: null, subIndex: null });
-  const [editSubTopicName, setEditSubTopicName] = useState("");
-  
-  // Ekleme State'leri
-  const [newTopicName, setNewTopicName] = useState("");
-  const [addingSubTo, setAddingSubTo] = useState(null);
-  const [newSubName, setNewSubName] = useState("");
+const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems = [], saveToLibrary }) => {
+    const [localCurriculum, setLocalCurriculum] = useState([]);
+    const [newTopicTitle, setNewTopicTitle] = useState("");
+    const [newSubTopicTitles, setNewSubTopicTitles] = useState({});
+    
+    // Düzenleme (Edit) State'leri
+    const [editingTopicId, setEditingTopicId] = useState(null);
+    const [editingSubTopicId, setEditingSubTopicId] = useState(null);
+    const [editVal, setEditVal] = useState("");
 
-  // Girişte veriyi tamamen normalize ediyoruz. Böylece alt başlıklar kesinlikle nesne { title, isCompleted } oluyor.
-  useEffect(() => {
-    if (curriculum && Array.isArray(curriculum)) {
-      const sanitized = curriculum.map((topic, index) => ({
-        ...topic,
-        id: topic.id ? String(topic.id) : `topic_auto_${index}_${Date.now()}`,
-        title: topic.title || "",
-        subTopics: Array.isArray(topic.subTopics) 
-          ? topic.subTopics.map(s => {
-              if (typeof s === 'object' && s !== null) {
-                return { title: s.title || '', isCompleted: !!s.isCompleted };
-              }
-              return { title: String(s), isCompleted: false };
-            }) 
-          : []
-      }));
-      setLocalCurriculum(sanitized);
-    } else {
-      setLocalCurriculum([]);
-    }
-  }, [curriculum]);
+    // Kütüphane Modal State'i
+    const [showLibModal, setShowLibModal] = useState(false);
 
-  // ==========================================
-  // SÜRÜKLE BIRAK (DND) MANTIĞI
-  // ==========================================
-  const handleDragEnd = (result) => {
-    const { source, destination, type } = result;
+    const isVip = cls.type === 'vip' && !isTeacherMode;
 
-    if (!destination) return;
-    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+    // Veritabanından gelen veriyi güvenli (ID çakışması yaratmayacak) şekilde normalize edip local state'e alıyoruz
+    useEffect(() => {
+        if (cls && cls.curriculum && Array.isArray(cls.curriculum)) {
+            const sanitized = cls.curriculum.map((topic, tIdx) => {
+                const topicId = topic.id ? String(topic.id) : `curr_${tIdx}_${Date.now()}`;
+                return {
+                    ...topic,
+                    id: topicId,
+                    title: topic.title || "",
+                    isCompleted: !!topic.isCompleted,
+                    subTopics: Array.isArray(topic.subTopics)
+                        ? topic.subTopics.map((sub, sIdx) => {
+                            if (typeof sub === 'object' && sub !== null) {
+                                return {
+                                    id: sub.id ? String(sub.id) : `sub_${topicId}_${sIdx}_${Date.now()}`,
+                                    title: sub.title || "",
+                                    isCompleted: !!sub.isCompleted
+                                };
+                            }
+                            return {
+                                id: `sub_${topicId}_${sIdx}_${Date.now()}`,
+                                title: String(sub),
+                                isCompleted: false
+                            };
+                        })
+                        : []
+                };
+            });
+            setLocalCurriculum(sanitized);
+        } else {
+            setLocalCurriculum([]);
+        }
+    }, [cls?.curriculum]);
 
-    const newCurriculum = Array.from(localCurriculum);
-
-    // 1. ANA BAŞLIK TAŞIMA İŞLEMİ
-    if (type === 'topic') {
-      const [movedTopic] = newCurriculum.splice(source.index, 1);
-      newCurriculum.splice(destination.index, 0, movedTopic);
-      
-      setLocalCurriculum(newCurriculum);
-      if (onUpdate) onUpdate(newCurriculum);
-      return;
-    }
-
-    // 2. ALT BAŞLIK TAŞIMA İŞLEMİ
-    if (type === 'subtopic') {
-      const sourceTopicIndex = newCurriculum.findIndex(t => t.id === source.droppableId);
-      const destTopicIndex = newCurriculum.findIndex(t => t.id === destination.droppableId);
-
-      if (sourceTopicIndex === -1 || destTopicIndex === -1) return;
-
-      const sourceTopic = newCurriculum[sourceTopicIndex];
-      const destTopic = newCurriculum[destTopicIndex];
-
-      const sourceSubTopics = Array.from(sourceTopic.subTopics || []);
-      const destSubTopics = source.droppableId === destination.droppableId 
-        ? sourceSubTopics 
-        : Array.from(destTopic.subTopics || []);
-
-      const [movedSub] = sourceSubTopics.splice(source.index, 1);
-      destSubTopics.splice(destination.index, 0, movedSub);
-
-      newCurriculum[sourceTopicIndex] = { ...sourceTopic, subTopics: sourceSubTopics };
-      if (source.droppableId !== destination.droppableId) {
-        newCurriculum[destTopicIndex] = { ...destTopic, subTopics: destSubTopics };
-      }
-
-      setLocalCurriculum(newCurriculum);
-      if (onUpdate) onUpdate(newCurriculum);
-    }
-  };
-
-  // ==========================================
-  // CRUD İŞLEMLERİ
-  // ==========================================
-  const handleAddTopic = () => {
-    if (!newTopicName.trim()) return;
-    const newTopic = {
-      id: `topic_${Date.now()}`,
-      title: newTopicName.trim(),
-      subTopics: []
-    };
-    const updated = [...localCurriculum, newTopic];
-    setLocalCurriculum(updated);
-    if (onUpdate) onUpdate(updated);
-    setNewTopicName("");
-  };
-
-  const handleDeleteTopic = (topicId) => {
-    if(window.confirm('Bu ana başlığı ve tüm alt başlıklarını silmek istediğinize emin misiniz?')) {
-        const updated = localCurriculum.filter(t => t.id !== topicId);
-        setLocalCurriculum(updated);
-        if (onUpdate) onUpdate(updated);
-    }
-  };
-
-  const handleSaveTopicEdit = (topicId) => {
-    if (!editTopicName.trim()) return;
-    const updated = localCurriculum.map(t => 
-      t.id === topicId ? { ...t, title: editTopicName.trim() } : t
-    );
-    setLocalCurriculum(updated);
-    if (onUpdate) onUpdate(updated);
-    setEditingTopicId(null);
-  };
-
-  const handleAddSubTopic = (topicId) => {
-    if (!newSubName.trim()) return;
-    const updated = localCurriculum.map(t => {
-      if (t.id === topicId) {
-        return { 
-          ...t, 
-          subTopics: [...(t.subTopics || []), { title: newSubName.trim(), isCompleted: false }] 
-        };
-      }
-      return t;
-    });
-    setLocalCurriculum(updated);
-    if (onUpdate) onUpdate(updated);
-    setNewSubName("");
-    setAddingSubTo(null);
-  };
-
-  const handleDeleteSubTopic = (topicId, subIndex) => {
-    const updated = localCurriculum.map(t => {
-      if (t.id === topicId) {
-        const newSubs = [...t.subTopics];
-        newSubs.splice(subIndex, 1);
-        return { ...t, subTopics: newSubs };
-      }
-      return t;
-    });
-    setLocalCurriculum(updated);
-    if (onUpdate) onUpdate(updated);
-  };
-
-  const handleSaveSubTopicEdit = (topicId, subIndex) => {
-    if (!editSubTopicName.trim()) return;
-    const updated = localCurriculum.map(t => {
-      if (t.id === topicId) {
-        const newSubs = [...t.subTopics];
-        newSubs[subIndex] = { ...newSubs[subIndex], title: editSubTopicName.trim() };
-        return { ...t, subTopics: newSubs };
-      }
-      return t;
-    });
-    setLocalCurriculum(updated);
-    if (onUpdate) onUpdate(updated);
-    setEditingSubTopic({ topicId: null, subIndex: null });
-  };
-
-  const handleToggleSubComplete = (topicId, subIndex) => {
-    const updated = localCurriculum.map(t => {
-      if (t.id === topicId) {
-        const newSubs = t.subTopics.map((s, idx) => {
-          if (idx === subIndex) {
-            return { ...s, isCompleted: !s.isCompleted };
-          }
-          return s;
+    const calculateOverallProgress = () => {
+        if (!localCurriculum.length) return 0;
+        let totalItems = 0; let completedItems = 0;
+        localCurriculum.forEach(t => { 
+            if (t.subTopics && t.subTopics.length > 0) { 
+                totalItems += t.subTopics.length; 
+                completedItems += t.subTopics.filter(st => st.isCompleted).length; 
+            } else { 
+                totalItems += 1; 
+                if (t.isCompleted) completedItems += 1; 
+            } 
         });
-        return { ...t, subTopics: newSubs };
-      }
-      return t;
-    });
-    setLocalCurriculum(updated);
-    if (onUpdate) onUpdate(updated);
-  };
+        return totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
+    };
 
-  return (
-    <div className="space-y-6 text-slate-800">
-      {/* Yeni Ana Başlık Ekleme */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          placeholder="Yeni Ana Başlık (Örn: TYT Matematik)"
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 transition-colors"
-          value={newTopicName}
-          onChange={(e) => setNewTopicName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAddTopic()}
-        />
-        <button
-          onClick={handleAddTopic}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Plus size={20} />
-          Ekle
-        </button>
-      </div>
+    const getTopicProgress = (topic) => {
+        if (topic.subTopics && topic.subTopics.length > 0) { const comp = topic.subTopics.filter(st => st.isCompleted).length; return Math.round((comp / topic.subTopics.length) * 100); }
+        return topic.isCompleted ? 100 : 0;
+    };
 
-      {/* Sürükle Bırak Bağlamı */}
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable droppableId="board" type="topic">
-          {(provided) => (
-            <div 
-              {...provided.droppableProps} 
-              ref={provided.innerRef}
-              className="space-y-4"
-            >
-              {localCurriculum.map((topic, index) => (
-                <Draggable key={topic.id} draggableId={topic.id} index={index}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      className={`bg-slate-800 rounded-xl border transition-all duration-200 ${
-                        snapshot.isDragging 
-                          ? 'border-indigo-500 shadow-2xl shadow-indigo-500/20 scale-[1.02] z-50' 
-                          : 'border-slate-700'
-                      }`}
-                    >
-                      <div className="p-4 border-b border-slate-700 flex items-center justify-between group">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div 
-                            {...provided.dragHandleProps}
-                            className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-400 transition-colors p-1"
-                          >
-                            <GripVertical size={20} />
-                          </div>
-                          
-                          {editingTopicId === topic.id ? (
-                            <div className="flex items-center gap-2 flex-1">
-                              <input
-                                type="text"
-                                className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white focus:outline-none focus:border-indigo-500"
-                                value={editTopicName}
-                                onChange={(e) => setEditTopicName(e.target.value)}
-                                autoFocus
-                                onKeyDown={(e) => e.key === 'Enter' && handleSaveTopicEdit(topic.id)}
-                              />
-                              <button onClick={() => handleSaveTopicEdit(topic.id)} className="text-green-500 hover:text-green-400 p-1">
-                                <Save size={18} />
-                              </button>
-                              <button onClick={() => setEditingTopicId(null)} className="text-red-500 hover:text-red-400 p-1">
-                                <X size={18} />
-                              </button>
-                            </div>
-                          ) : (
-                            <h3 className="text-lg font-semibold text-white flex-1">{topic.title}</h3>
-                          )}
+    const overallProgress = calculateOverallProgress();
+
+    // ==========================================
+    // 🚀 SÜRÜKLE BIRAK (DND) MANTIĞI
+    // ==========================================
+    const handleDragEnd = (result) => {
+        const { source, destination, type } = result;
+
+        if (!destination) return;
+        if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+        const newCurriculum = Array.from(localCurriculum);
+
+        // 1. ANA KONU (ÜNİTE) TAŞIMA İŞLEMİ
+        if (type === 'topic') {
+            const [movedTopic] = newCurriculum.splice(source.index, 1);
+            newCurriculum.splice(destination.index, 0, movedTopic);
+            
+            setLocalCurriculum(newCurriculum);
+            updateClassInDb({ ...cls, curriculum: newCurriculum });
+            return;
+        }
+
+        // 2. ALT BAŞLIK (KONU) TAŞIMA İŞLEMİ
+        if (type === 'subtopic') {
+            const sourceTopicIndex = newCurriculum.findIndex(t => t.id === source.droppableId);
+            const destTopicIndex = newCurriculum.findIndex(t => t.id === destination.droppableId);
+
+            if (sourceTopicIndex === -1 || destTopicIndex === -1) return;
+
+            const sourceTopic = newCurriculum[sourceTopicIndex];
+            const destTopic = newCurriculum[destTopicIndex];
+
+            const sourceSubTopics = Array.from(sourceTopic.subTopics || []);
+            const destSubTopics = source.droppableId === destination.droppableId 
+                ? sourceSubTopics 
+                : Array.from(destTopic.subTopics || []);
+
+            const [movedSub] = sourceSubTopics.splice(source.index, 1);
+            destSubTopics.splice(destination.index, 0, movedSub);
+
+            newCurriculum[sourceTopicIndex] = { ...sourceTopic, subTopics: sourceSubTopics };
+            if (source.droppableId !== destination.droppableId) {
+                newCurriculum[destTopicIndex] = { ...destTopic, subTopics: destSubTopics };
+            }
+
+            setLocalCurriculum(newCurriculum);
+            updateClassInDb({ ...cls, curriculum: newCurriculum });
+        }
+    };
+
+    // ==========================================
+    // CRUD İŞLEMLERİ
+    // ==========================================
+    const addTopic = (title) => { 
+        if(!title.trim()) return; 
+        const updated = [...localCurriculum, { id: generateId('curr'), title: title.trim(), isCompleted: false, subTopics: [] }]; 
+        updateClassInDb({ ...cls, curriculum: updated }); 
+        setNewTopicTitle(""); 
+    };
+
+    const addSubTopic = (topicId) => { 
+        const title = newSubTopicTitles[topicId]; 
+        if(!title || !title.trim()) return; 
+        const updated = localCurriculum.map(t => { 
+            if(t.id === topicId) return { ...t, subTopics: [...(t.subTopics||[]), { id: generateId('sub'), title: title.trim(), isCompleted: false }] }; 
+            return t; 
+        }); 
+        updateClassInDb({ ...cls, curriculum: updated }); 
+        setNewSubTopicTitles(p => ({...p, [topicId]: ""})); 
+    };
+
+    const toggleTopic = (topicId) => { 
+        if(!isTeacherMode) return; 
+        const updated = localCurriculum.map(t => { 
+            if(t.id === topicId) { 
+                const newStatus = !t.isCompleted; 
+                return { ...t, isCompleted: newStatus, subTopics: (t.subTopics || []).map(st => ({ ...st, isCompleted: newStatus })) }; 
+            } 
+            return t; 
+        }); 
+        updateClassInDb({ ...cls, curriculum: updated }); 
+    };
+
+    const toggleSubTopic = (topicId, subTopicId) => { 
+        if(!isTeacherMode) return; 
+        const updated = localCurriculum.map(t => { 
+            if(t.id === topicId) { 
+                const newSubs = (t.subTopics || []).map(st => st.id === subTopicId ? { ...st, isCompleted: !st.isCompleted } : st); 
+                const allDone = newSubs.length > 0 && newSubs.every(st => st.isCompleted); 
+                return { ...t, isCompleted: allDone, subTopics: newSubs }; 
+            } 
+            return t; 
+        }); 
+        updateClassInDb({ ...cls, curriculum: updated }); 
+    };
+
+    const deleteTopic = (topicId) => {
+        const updated = localCurriculum.filter(t => t.id !== topicId);
+        updateClassInDb({ ...cls, curriculum: updated });
+    };
+
+    const deleteSubTopic = (topicId, subTopicId) => { 
+        const updated = localCurriculum.map(t => { 
+            if(t.id === topicId) return { ...t, subTopics: (t.subTopics || []).filter(st => st.id !== subTopicId) }; 
+            return t; 
+        }); 
+        updateClassInDb({ ...cls, curriculum: updated }); 
+    };
+
+    const startEditTopic = (id, title) => { setEditingTopicId(id); setEditVal(title); setEditingSubTopicId(null); };
+    const saveEditTopic = (id) => {
+        if(!editVal.trim()) { setEditingTopicId(null); return; }
+        const updated = localCurriculum.map(t => t.id === id ? { ...t, title: editVal.trim() } : t);
+        updateClassInDb({ ...cls, curriculum: updated });
+        setEditingTopicId(null);
+    };
+
+    const startEditSub = (id, title) => { setEditingSubTopicId(id); setEditVal(title); setEditingTopicId(null); };
+    const saveEditSub = (topicId, subId) => {
+        if(!editVal.trim()) { setEditingSubTopicId(null); return; }
+        const updated = localCurriculum.map(t => { 
+            if(t.id === topicId) { 
+                return { ...t, subTopics: t.subTopics.map(st => st.id === subId ? { ...st, title: editVal.trim() } : st) }; 
+            } 
+            return t; 
+        });
+        updateClassInDb({ ...cls, curriculum: updated });
+        setEditingSubTopicId(null);
+    };
+
+    return (
+        <div className="animate-scale-in max-w-4xl mx-auto mt-4 relative z-10">
+            {/* Üst İlerleme Kartı */}
+            <div className={`p-8 rounded-3xl mb-8 ${isVip ? 'bg-slate-700 border border-slate-600 shadow-lg' : 'bg-white border border-slate-100 shadow-float'}`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                        <div className={`p-4 rounded-2xl ${isVip ? 'bg-slate-800 text-vipGold' : 'bg-purple-50 text-brandPurple'}`}>
+                            <BookOpen size={32}/>
                         </div>
-
-                        {!editingTopicId && (
-                          <div className="flex items-center gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                            <button 
-                              onClick={() => { setEditingTopicId(topic.id); setEditTopicName(topic.title); }}
-                              className="text-slate-400 hover:text-indigo-400 p-1"
-                              title="Başlığı Düzenle"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteTopic(topic.id)}
-                              className="text-slate-400 hover:text-red-400 p-1"
-                              title="Başlığı Sil"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="p-4 bg-slate-800/50 rounded-b-xl">
-                        <Droppable droppableId={topic.id} type="subtopic">
-                          {(provided, snapshot) => (
-                            <div 
-                              {...provided.droppableProps} 
-                              ref={provided.innerRef}
-                              className={`space-y-2 min-h-[50px] transition-colors rounded-lg p-2 ${
-                                snapshot.isDraggingOver ? 'bg-slate-700/50 border border-dashed border-indigo-500/50' : ''
-                              }`}
-                            >
-                              {topic.subTopics?.map((sub, subIndex) => {
-                                const subKey = `sub-${topic.id}-${subIndex}`;
-                                return (
-                                  <Draggable 
-                                    key={subKey} 
-                                    draggableId={subKey} 
-                                    index={subIndex}
-                                  >
-                                    {(provided, snapshot) => (
-                                      <div
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        className={`flex items-center gap-2 p-2 rounded-lg transition-all duration-200 group/sub ${
-                                          snapshot.isDragging 
-                                            ? 'bg-indigo-900/40 border border-indigo-500 shadow-lg scale-[1.02] z-50' 
-                                            : 'bg-slate-900 border border-slate-700/50 hover:border-slate-600'
-                                        }`}
-                                      >
-                                        <div 
-                                          {...provided.dragHandleProps}
-                                          className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-400 p-1"
-                                        >
-                                          <GripHorizontal size={16} />
-                                        </div>
-
-                                        {/* Tamamlama Checkbox Alanı */}
-                                        <button
-                                          type="button"
-                                          onClick={() => handleToggleSubComplete(topic.id, subIndex)}
-                                          className={`transition-colors p-1 rounded ${sub.isCompleted ? 'text-green-400' : 'text-slate-500 hover:text-green-400'}`}
-                                        >
-                                          {sub.isCompleted ? <CheckCircle size={16} /> : <Circle size={16} />}
-                                        </button>
-
-                                        {editingSubTopic.topicId === topic.id && editingSubTopic.subIndex === subIndex ? (
-                                          <div className="flex items-center gap-2 flex-1">
-                                            <input
-                                              type="text"
-                                              className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-indigo-500"
-                                              value={editSubTopicName}
-                                              onChange={(e) => setEditSubTopicName(e.target.value)}
-                                              autoFocus
-                                              onKeyDown={(e) => e.key === 'Enter' && handleSaveSubTopicEdit(topic.id, subIndex)}
-                                            />
-                                            <button onClick={() => handleSaveSubTopicEdit(topic.id, subIndex)} className="text-green-500 hover:text-green-400">
-                                              <Save size={16} />
-                                            </button>
-                                            <button onClick={() => setEditingSubTopic({ topicId: null, subIndex: null })} className="text-red-500 hover:text-red-400">
-                                              <X size={16} />
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <>
-                                            <span className={`text-sm flex-1 ${sub.isCompleted ? 'line-through text-slate-500' : 'text-slate-300'}`}>
-                                              {sub.title}
-                                            </span>
-                                            <div className="flex items-center gap-1 opacity-0 group-hover/sub:opacity-100 transition-opacity">
-                                              <button 
-                                                onClick={() => {
-                                                  setEditingSubTopic({ topicId: topic.id, subIndex });
-                                                  setEditSubTopicName(sub.title);
-                                                }}
-                                                className="text-slate-500 hover:text-indigo-400 p-1"
-                                              >
-                                                <Edit2 size={14} />
-                                              </button>
-                                              <button 
-                                                onClick={() => handleDeleteSubTopic(topic.id, subIndex)}
-                                                className="text-slate-500 hover:text-red-400 p-1"
-                                              >
-                                                <Trash2 size={14} />
-                                              </button>
-                                            </div>
-                                          </>
-                                        )}
-                                      </div>
-                                    )}
-                                  </Draggable>
-                                );
-                              })}
-                              {provided.placeholder}
-                            </div>
-                          )}
-                        </Droppable>
-
-                        {addingSubTo === topic.id ? (
-                          <div className="mt-3 flex items-center gap-2 pl-8">
-                            <input
-                              type="text"
-                              placeholder="Alt başlık adı..."
-                              className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-                              value={newSubName}
-                              onChange={(e) => setNewSubName(e.target.value)}
-                              autoFocus
-                              onKeyDown={(e) => e.key === 'Enter' && handleAddSubTopic(topic.id)}
-                            />
-                            <button 
-                              onClick={() => handleAddSubTopic(topic.id)}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-lg transition-colors"
-                            >
-                              <Plus size={16} />
-                            </button>
-                            <button 
-                              onClick={() => { setAddingSubTo(null); setNewSubName(""); }}
-                              className="bg-slate-700 hover:bg-slate-600 text-white p-1.5 rounded-lg transition-colors"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setAddingSubTo(topic.id)}
-                            className="mt-3 ml-8 text-sm text-slate-400 hover:text-indigo-400 flex items-center gap-1 transition-colors"
-                          >
-                            <Plus size={14} />
-                            Alt Başlık Ekle
-                          </button>
-                        )}
-                      </div>
+                        <div>
+                            <h2 className={`text-2xl md:text-3xl font-black tracking-tight ${isVip ? 'text-white' : 'text-slate-800'}`}>Müfredat Takibi</h2>
+                            <p className={`font-medium mt-1 ${isVip ? 'text-slate-300' : 'text-slate-500'}`}>{cls.className} sınıfı için konu listesi</p>
+                        </div>
                     </div>
-                  )}
-                </Draggable>
-              ))}
-              {provided.placeholder}
+                    
+                    <div className="w-full md:w-64">
+                        <div className="flex justify-between text-sm font-black mb-2">
+                            <span className={isVip ? 'text-slate-300' : 'text-slate-600'}>Genel İlerleme</span>
+                            <span className={isVip ? 'text-vipGold' : 'text-brandPurple'}>%{overallProgress}</span>
+                        </div>
+                        <div className={`h-3 w-full rounded-full overflow-hidden ${isVip ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                            <div className={`h-full transition-all duration-700 ${isVip ? 'bg-gradient-to-r from-vipGold to-yellow-400 shadow-vip-glow' : 'bg-brandPurple shadow-glow'}`} style={{width: `${overallProgress}%`}}></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-          )}
-        </Droppable>
-      </DragDropContext>
-    </div>
-  );
+
+            {/* Yeni Konu Ekleme Barı */}
+            {isTeacherMode && (
+                <div className="flex flex-col md:flex-row gap-3 mb-8">
+                    <input type="text" placeholder="Yeni Ana Konu Başlığı (Örn: Türev)..." className="flex-1 hover-lift bg-white border-2 border-slate-200 rounded-2xl px-6 py-4 text-lg focus:border-brandPurple outline-none font-bold text-slate-800 shadow-sm transition-all" value={newTopicTitle} onChange={e => setNewTopicTitle(e.target.value)} onKeyDown={e => e.key==='Enter' && addTopic(newTopicTitle)}/>
+                    <div className="flex gap-2">
+                        <button onClick={()=>setShowLibModal(true)} className="bg-purple-50 hover:bg-purple-100 text-brandPurple hover-lift px-6 py-4 md:py-0 rounded-2xl font-black shadow-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap">
+                            <Library size={20}/> KÜTÜPHANE
+                        </button>
+                        <button onClick={()=>addTopic(newTopicTitle)} className="bg-brandPurple hover:bg-purple-700 text-white hover-lift px-8 py-4 md:py-0 rounded-2xl font-black shadow-glow transition-all flex items-center justify-center gap-2 whitespace-nowrap">
+                            <Plus size={24}/> EKLE
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Müfredat Listesi Paneli (Sürükle Bırak) */}
+            <div className={`rounded-3xl p-6 md:p-10 ${isVip ? 'bg-slate-700 border border-slate-600 shadow-lg' : 'bg-white border border-slate-100 shadow-float'}`}>
+                {localCurriculum.length === 0 ? (
+                    <div className="text-center py-12 font-bold text-slate-400">
+                        Henüz hiç konu eklenmemiş.
+                    </div>
+                ) : (
+                    <DragDropContext onDragEnd={handleDragEnd}>
+                        <Droppable droppableId="curriculum-list" type="topic">
+                            {(provided) => (
+                                <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-8">
+                                    {localCurriculum.map((topic, index) => {
+                                        const tProgress = getTopicProgress(topic);
+                                        const isEditingThisTopic = editingTopicId === topic.id;
+                                        
+                                        return (
+                                            <Draggable key={topic.id} draggableId={topic.id} index={index}>
+                                                {(provided, snapshot) => (
+                                                    <div
+                                                        ref={provided.innerRef}
+                                                        {...provided.draggableProps}
+                                                        className={`flex flex-col group/topic p-2 rounded-2xl transition-all ${snapshot.isDragging ? (isVip ? 'bg-slate-800/80 border border-indigo-500/50 shadow-2xl scale-[1.01]' : 'bg-purple-50/50 border border-brandPurple/30 shadow-2xl scale-[1.01]') : ''}`}
+                                                    >
+                                                        <div className="flex items-start gap-4">
+                                                            {/* Ana Başlık Sürükleme Tutamacı */}
+                                                            {isTeacherMode && (
+                                                                <div {...provided.dragHandleProps} className="mt-2 text-slate-400 hover:text-brandPurple cursor-grab active:cursor-grabbing transition-colors">
+                                                                    <GripVertical size={20} />
+                                                                </div>
+                                                            )}
+                                                            
+                                                            <button onClick={() => toggleTopic(topic.id)} className={`mt-1 flex-shrink-0 transition-colors ${topic.isCompleted ? (isVip ? 'text-vipGold' : 'text-brandPurple') : (isVip ? 'text-slate-400 hover:text-vipGold' : 'text-slate-400 hover:text-brandPurple')} ${!isTeacherMode && 'cursor-default pointer-events-none'}`}>
+                                                                {topic.isCompleted ? <CheckSquare size={28} strokeWidth={2.5} /> : <Square size={28} strokeWidth={2.5} />}
+                                                            </button>
+                                                            
+                                                            <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-3 w-full md:w-auto flex-1">
+                                                                    {isEditingThisTopic ? (
+                                                                        <div className="flex items-center gap-2 w-full max-w-md">
+                                                                            <input type="text" autoFocus className="flex-1 bg-white border-2 border-brandPurple rounded-xl px-4 py-2 text-lg font-black text-slate-800 outline-none shadow-sm" value={editVal} onChange={e => setEditVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveEditTopic(topic.id)} />
+                                                                            <button onClick={() => saveEditTopic(topic.id)} className="p-2.5 bg-successGreen text-white rounded-xl hover:bg-green-600 shadow-sm transition-colors"><Check size={18}/></button>
+                                                                            <button onClick={() => setEditingTopicId(null)} className="p-2.5 bg-slate-200 text-slate-600 rounded-xl hover:bg-slate-300 transition-colors"><X size={18}/></button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <h3 className={`text-2xl font-black transition-all ${topic.isCompleted ? (isVip ? 'text-slate-500 line-through decoration-2' : 'text-slate-400/50 line-through decoration-2') : (isVip ? 'text-white' : 'text-slate-800')}`}>
+                                                                            {topic.title}
+                                                                        </h3>
+                                                                    )}
+                                                                    {!isEditingThisTopic && (
+                                                                        <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${topic.isCompleted ? 'bg-successGreen/10 text-successGreen border-successGreen/20' : (isVip ? 'bg-slate-800 text-vipGold border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200')}`}>
+                                                                            %{tProgress}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {isTeacherMode && !isEditingThisTopic && (
+                                                                    <div className="opacity-0 group-hover/topic:opacity-100 flex items-center gap-1 transition-all">
+                                                                        <button onClick={() => { if(saveToLibrary) { saveToLibrary(topic); alert("Tüm blok başarıyla kütüphaneye kaydedildi!"); } }} className="p-2 text-slate-400 hover:text-blue-500 transition-colors" title="Blok Olarak Kütüphaneye Kaydet"><Save size={20}/></button>
+                                                                        <button onClick={() => startEditTopic(topic.id, topic.title)} className="p-2 text-slate-400 hover:text-brandPurple transition-colors" title="Başlığı Düzenle"><Pencil size={20}/></button>
+                                                                        <button onClick={() => deleteTopic(topic.id)} className="p-2 text-slate-400 hover:text-errorRed transition-colors" title="Konuyu Sil"><Trash2 size={20}/></button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Alt Başlıklar Droppable Alanı */}
+                                                        <Droppable droppableId={topic.id} type="subtopic">
+                                                            {(provided) => (
+                                                                <div {...provided.droppableProps} ref={provided.innerRef} className="pl-11 mt-3 space-y-3 min-h-[5px]">
+                                                                    {topic.subTopics?.map((sub, subIndex) => {
+                                                                        const isEditingThisSub = editingSubTopicId === sub.id;
+                                                                        return (
+                                                                            <Draggable key={sub.id} draggableId={sub.id} index={subIndex}>
+                                                                                {(provided, snapshot) => (
+                                                                                    <div
+                                                                                        ref={provided.innerRef}
+                                                                                        {...provided.draggableProps}
+                                                                                        className={`flex items-center gap-3 group/sub hover-lift p-1.5 rounded-xl transition-all ${snapshot.isDragging ? (isVip ? 'bg-slate-900/60 shadow-md' : 'bg-slate-100 shadow-sm') : ''}`}
+                                                                                    >
+                                                                                        {/* Alt Başlık Sürükleme Tutamacı */}
+                                                                                        {isTeacherMode && (
+                                                                                            <div {...provided.dragHandleProps} className="text-slate-400 hover:text-brandPurple cursor-grab active:cursor-grabbing transition-colors">
+                                                                                                <GripVertical size={16} />
+                                                                                            </div>
+                                                                                        )}
+
+                                                                                        <button onClick={() => toggleSubTopic(topic.id, sub.id)} className={`flex-shrink-0 transition-colors ${sub.isCompleted ? (isVip ? 'text-vipGold' : 'text-brandPurple') : (isVip ? 'text-slate-400 hover:text-vipGold' : 'text-slate-400 hover:text-brandPurple')} ${!isTeacherMode && 'cursor-default pointer-events-none'}`}>
+                                                                                            {sub.isCompleted ? <CheckSquare size={20} strokeWidth={2.5} /> : <Square size={20} strokeWidth={2.5} />}
+                                                                                        </button>
+                                                                                        
+                                                                                        <div className="flex-1 flex items-center justify-between">
+                                                                                            {isEditingThisSub ? (
+                                                                                                <div className="flex items-center gap-2 w-full max-w-sm">
+                                                                                                    <input type="text" autoFocus className="flex-1 bg-white border border-brandPurple rounded-lg px-3 py-1.5 text-base font-bold text-slate-800 outline-none shadow-sm" value={editVal} onChange={e => setEditVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveEditSub(topic.id, sub.id)} />
+                                                                                                    <button onClick={() => saveEditSub(topic.id, sub.id)} className="p-1.5 bg-successGreen text-white rounded-lg hover:bg-green-600 transition-colors"><Check size={16}/></button>
+                                                                                                    <button onClick={() => setEditingSubTopicId(null)} className="p-1.5 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-colors"><X size={16}/></button>
+                                                                                                </div>
+                                                                                            ) : (
+                                                                                                <span className={`text-lg font-bold transition-all ${sub.isCompleted ? (isVip ? 'text-slate-500 line-through' : 'text-slate-400/50 line-through') : (isVip ? 'text-slate-300' : 'text-slate-600')}`}>
+                                                                                                    {sub.title}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            
+                                                                                            {isTeacherMode && !isEditingThisSub && (
+                                                                                                <div className="opacity-0 group-hover/sub:opacity-100 flex items-center gap-1 transition-all">
+                                                                                                    <button onClick={() => startEditSub(sub.id, sub.title)} className="p-1.5 text-slate-300 hover:text-brandPurple transition-colors"><Pencil size={16}/></button>
+                                                                                                    <button onClick={() => deleteSubTopic(topic.id, sub.id)} className="p-1.5 text-slate-300 hover:text-errorRed transition-colors"><Trash2 size={16}/></button>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </Draggable>
+                                                                        );
+                                                                    })}
+                                                                    {provided.placeholder}
+
+                                                                    {/* Yeni Alt Başlık Ekleme Inputu */}
+                                                                    {isTeacherMode && (
+                                                                        <div className="flex items-center gap-3 mt-2 opacity-50 focus-within:opacity-100 transition-opacity">
+                                                                            <CornerDownRight size={20} className="text-slate-400" />
+                                                                            <input type="text" placeholder="Alt başlık ekle..." className="flex-1 bg-transparent border-none text-base font-bold text-slate-600 focus:outline-none focus:ring-0 placeholder:text-slate-400" value={newSubTopicTitles[topic.id] || ""} onChange={e => setNewSubTopicTitles(p => ({...p, [topic.id]: e.target.value}))} onKeyDown={e => e.key==='Enter' && addSubTopic(topic.id)}/>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </Droppable>
+                                                    </div>
+                                                )}
+                                            </Draggable>
+                                        );
+                                    })}
+                                    {provided.placeholder}
+                                </div>
+                            )}
+                        </pubble>
+                    </DragDropContext>
+                )}
+            </div>
+
+            {/* 📚 KÜTÜPHANEDEN BLOK EKLEME MODALI */}
+            {showLibModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[80vh] border border-slate-200 animate-scale-in">
+                        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-black text-lg text-slate-800 flex items-center gap-2"><Library className="text-brandPurple"/> Kütüphaneden Konu Bloğu Seç</h3>
+                            <button onClick={() => setShowLibModal(false)} className="text-slate-400 hover:text-rose-600 bg-white p-1.5 rounded-full shadow-sm transition-colors"><X size={20}/></button>
+                        </div>
+                        <div className="p-4 overflow-y-auto bg-slate-50 flex-1 space-y-3">
+                            {libraryItems.length === 0 ? (
+                                <div className="text-center text-slate-400 py-8 font-medium text-sm">
+                                    Müfredat kütüphanesi boş.<br/>Lütfen önce mevcut konulardan birini "Kayıt" ikonuna basarak kütüphaneye ekleyin.
+                                </div>
+                            ) : (
+                                libraryItems.map(item => (
+                                    <div key={item.id} className="bg-white border border-slate-200 p-4 rounded-2xl flex justify-between items-center hover:border-brandPurple transition-colors group">
+                                        <div>
+                                            <h4 className="font-bold text-slate-800 text-base">{item.text}</h4>
+                                            <p className="text-xs text-slate-400 mt-1">{item.subTopics?.length || 0} Alt Başlık İçeriyor</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => {
+                                                const newTopic = {
+                                                    id: generateId('curr'),
+                                                    title: item.text,
+                                                    isCompleted: false,
+                                                    subTopics: (item.subTopics || []).map(st => ({ 
+                                                        id: generateId('sub'), 
+                                                        title: typeof st === 'object' ? (st.title || '') : String(st), 
+                                                        isCompleted: false 
+                                                    }))
+                                                };
+                                                updateClassInDb({ ...cls, curriculum: [...localCurriculum, newTopic] });
+                                                setShowLibModal(false);
+                                            }}
+                                            className="px-4 py-2 bg-purple-50 text-brandPurple font-bold text-sm rounded-xl md:opacity-0 group-hover:opacity-100 transition-all hover:bg-brandPurple hover:text-white"
+                                        >
+                                            Seç ve Ekle
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 };
 
 export default CurriculumTracker;
