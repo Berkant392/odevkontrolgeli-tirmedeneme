@@ -93,7 +93,7 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                                                 return ( 
                                                     <React.Fragment key={topic.id}>
                                                         <td className={`border-r border-slate-100 ${theme.cell}`}></td>
-                                                        {topic.subTopics?.map(col => ( 
+                                                        {topic.subColumns?.map(col => ( 
                                                             <td key={col.id} className={`p-2 border-r border-slate-100 text-center ${theme.cell}`} onContextMenu={(e) => { e.preventDefault(); openCellNoteModal(selectedClass.id, std.id, col.id, std.assignmentNotes?.[col.id]); }}>
                                                                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={(e) => { e.stopPropagation(); setActiveCell({ classId: selectedClass.id, studentId: std.id, colId: col.id, anchorEl: e.currentTarget }); }} className="cursor-pointer inline-block"><StatusBadge status={std.grades?.[col.id] || 'assigned'} hasNote={!!std.assignmentNotes?.[col.id]} /></motion.div>
                                                             </td> 
@@ -105,7 +105,7 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                                     ))}
                                     <tr>
                                         <td className="sticky-col-left p-4 border-r border-slate-200 border-t border-slate-200 bg-slate-50"><div className="flex gap-2"><div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-400 shrink-0"><UserPlus size={16}/></div><input type="text" placeholder="Yeni Öğrenci Ekle..." className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-sm text-slate-700 w-full focus:border-brandPurple outline-none font-medium shadow-sm" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') addStudent(selectedClass.id); }} /><motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => addStudent(selectedClass.id)} className={`text-white px-3 rounded-xl text-xs font-bold shadow-md transition-colors ${selectedClass.type === 'vip' ? 'real-gold-bg text-slate-900' : 'bg-brandPurple'}`}>EKLE</motion.button></div></td>
-                                        {reversedTopics.map((t, i) => <td key={i} colSpan={Math.max(1, t.subColumns.length + 1)} className="border-t border-slate-200 bg-slate-50/50"></td>)}
+                                        {reversedTopics.map((t, i) => <td key={i} colSpan={Math.max(1, (t.subColumns?.length || 0) + 1)} className="border-t border-slate-200 bg-slate-50/50"></td>)}
                                     </tr>
                                 </tbody>
                             </table>
@@ -117,11 +117,10 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
             {activeTab === 'curriculum' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-slate-50/50 border-t border-slate-100">
                     <CurriculumTracker 
-                        curriculum={selectedClass.curriculum || []} 
-                        onUpdate={(newCurriculum) => {
-                            updateClassInDb({ ...selectedClass, curriculum: newCurriculum });
-                        }} 
-                        libraryItems={libraryItems} 
+                        cls={selectedClass} 
+                        updateClassInDb={updateClassInDb}
+                        isTeacherMode={isTeacherMode}
+                        libraryItems={libraryItems.filter(i => i.type === 'curriculum')} 
                         saveToLibrary={saveToLibrary} 
                     />
                 </motion.div> 
