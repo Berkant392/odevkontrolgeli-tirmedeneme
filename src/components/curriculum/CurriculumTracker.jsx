@@ -3,14 +3,15 @@ import { Plus, Trash2, BookOpen, CheckSquare, Square, CornerDownRight, Pencil, C
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { generateId } from '../../utils/helpers';
 
-// 🛡️ MUTLAK METİN KALKANI: Asla React Object Render hatası verdirmez!
+// 🛡️ MUTLAK ZIRH: React Object Render Hatasını Sonsuza Dek Engeller
 const getSafeText = (val) => {
-    if (!val) return "";
+    if (val === null || val === undefined) return "";
     if (typeof val === 'string' || typeof val === 'number') return String(val);
     if (typeof val === 'object') {
-        if (typeof val.title === 'string') return val.title;
-        if (typeof val.text === 'string') return val.text;
-        return "Bozuk Veri";
+        if (val.title) return getSafeText(val.title);
+        if (val.text) return getSafeText(val.text);
+        if (val.name) return getSafeText(val.name);
+        return "İsimsiz";
     }
     return String(val);
 };
@@ -29,31 +30,24 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
 
     const isVip = cls?.type === 'vip' && !isTeacherMode;
 
-    // 🛡️ SABİT ID VE VERİ TEMİZLEME ALGORİTMASI
+    // Veri Kalkanı (Sanitizer)
     useEffect(() => {
         if (cls && cls.curriculum && Array.isArray(cls.curriculum)) {
             const sanitized = cls.curriculum.map((topic, tIdx) => {
-                // Sürükle bırakın çökmemesi için Date.now yerine sabit indeks bazlı fallback
-                const topicId = topic.id ? String(topic.id) : `curr_auto_${tIdx}`;
-                
+                const topicId = (topic && topic.id && typeof topic.id !== 'object') ? String(topic.id) : `curr_${tIdx}_${Math.random().toString(36).substr(2, 9)}`;
                 return {
                     ...topic,
                     id: topicId,
-                    title: getSafeText(topic.title),
-                    isCompleted: !!topic.isCompleted,
-                    subTopics: Array.isArray(topic.subTopics)
-                        ? topic.subTopics.map((sub, sIdx) => {
-                            const subId = (sub && typeof sub === 'object' && sub.id) 
-                                ? String(sub.id) 
-                                : `sub_auto_${topicId}_${sIdx}`;
-                            
-                            return {
-                                id: subId,
-                                title: getSafeText(typeof sub === 'object' ? (sub.title || sub.text) : sub),
-                                isCompleted: typeof sub === 'object' ? !!sub.isCompleted : false
-                            };
-                        })
-                        : []
+                    title: getSafeText(topic),
+                    isCompleted: !!topic?.isCompleted,
+                    subTopics: Array.isArray(topic?.subTopics) ? topic.subTopics.map((sub, sIdx) => {
+                        const subId = (sub && sub.id && typeof sub.id !== 'object') ? String(sub.id) : `sub_${topicId}_${sIdx}_${Math.random().toString(36).substr(2, 9)}`;
+                        return {
+                            id: subId,
+                            title: getSafeText(sub),
+                            isCompleted: typeof sub === 'object' ? !!sub?.isCompleted : false
+                        };
+                    }) : []
                 };
             });
             setLocalCurriculum(sanitized);
@@ -78,21 +72,15 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
     };
 
     const getTopicProgress = (topic) => {
-        if (topic.subTopics && topic.subTopics.length > 0) { 
-            const comp = topic.subTopics.filter(st => st.isCompleted).length; 
-            return Math.round((comp / topic.subTopics.length) * 100); 
-        }
+        if (topic.subTopics && topic.subTopics.length > 0) { const comp = topic.subTopics.filter(st => st.isCompleted).length; return Math.round((comp / topic.subTopics.length) * 100); }
         return topic.isCompleted ? 100 : 0;
     };
 
     const overallProgress = calculateOverallProgress();
 
-    // ==========================================
-    // 🚀 KUSURSUZ SÜRÜKLE BIRAK (DND) MANTIĞI
-    // ==========================================
+    // DND MANTIĞI
     const handleDragEnd = (result) => {
         const { source, destination, type } = result;
-
         if (!destination) return;
         if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
@@ -109,16 +97,12 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
         if (type === 'subtopic') {
             const sourceTopicIndex = newCurriculum.findIndex(t => t.id === source.droppableId);
             const destTopicIndex = newCurriculum.findIndex(t => t.id === destination.droppableId);
-
             if (sourceTopicIndex === -1 || destTopicIndex === -1) return;
 
             const sourceTopic = newCurriculum[sourceTopicIndex];
             const destTopic = newCurriculum[destTopicIndex];
-
             const sourceSubTopics = Array.from(sourceTopic.subTopics || []);
-            const destSubTopics = source.droppableId === destination.droppableId 
-                ? sourceSubTopics 
-                : Array.from(destTopic.subTopics || []);
+            const destSubTopics = source.droppableId === destination.droppableId ? sourceSubTopics : Array.from(destTopic.subTopics || []);
 
             const [movedSub] = sourceSubTopics.splice(source.index, 1);
             destSubTopics.splice(destination.index, 0, movedSub);
@@ -133,15 +117,11 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
         }
     };
 
-    // ==========================================
     // CRUD İŞLEMLERİ
-    // ==========================================
     const addTopic = (title) => { 
         if(!title.trim()) return; 
         const updated = [...localCurriculum, { id: generateId('curr'), title: getSafeText(title.trim()), isCompleted: false, subTopics: [] }]; 
-        setLocalCurriculum(updated);
-        updateClassInDb({ ...cls, curriculum: updated }); 
-        setNewTopicTitle(""); 
+        setLocalCurriculum(updated); updateClassInDb({ ...cls, curriculum: updated }); setNewTopicTitle(""); 
     };
 
     const addSubTopic = (topicId) => { 
@@ -151,22 +131,16 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
             if(t.id === topicId) return { ...t, subTopics: [...(t.subTopics||[]), { id: generateId('sub'), title: getSafeText(title.trim()), isCompleted: false }] }; 
             return t; 
         }); 
-        setLocalCurriculum(updated);
-        updateClassInDb({ ...cls, curriculum: updated }); 
-        setNewSubTopicTitles(p => ({...p, [topicId]: ""})); 
+        setLocalCurriculum(updated); updateClassInDb({ ...cls, curriculum: updated }); setNewSubTopicTitles(p => ({...p, [topicId]: ""})); 
     };
 
     const toggleTopic = (topicId) => { 
         if(!isTeacherMode) return; 
         const updated = localCurriculum.map(t => { 
-            if(t.id === topicId) { 
-                const newStatus = !t.isCompleted; 
-                return { ...t, isCompleted: newStatus, subTopics: (t.subTopics || []).map(st => ({ ...st, isCompleted: newStatus })) }; 
-            } 
+            if(t.id === topicId) { const newStatus = !t.isCompleted; return { ...t, isCompleted: newStatus, subTopics: (t.subTopics || []).map(st => ({ ...st, isCompleted: newStatus })) }; } 
             return t; 
         }); 
-        setLocalCurriculum(updated);
-        updateClassInDb({ ...cls, curriculum: updated }); 
+        setLocalCurriculum(updated); updateClassInDb({ ...cls, curriculum: updated }); 
     };
 
     const toggleSubTopic = (topicId, subTopicId) => { 
@@ -179,47 +153,45 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
             } 
             return t; 
         }); 
-        setLocalCurriculum(updated);
-        updateClassInDb({ ...cls, curriculum: updated }); 
+        setLocalCurriculum(updated); updateClassInDb({ ...cls, curriculum: updated }); 
     };
 
     const deleteTopic = (topicId) => {
         const updated = localCurriculum.filter(t => t.id !== topicId);
-        setLocalCurriculum(updated);
-        updateClassInDb({ ...cls, curriculum: updated });
+        setLocalCurriculum(updated); updateClassInDb({ ...cls, curriculum: updated });
     };
 
     const deleteSubTopic = (topicId, subTopicId) => { 
-        const updated = localCurriculum.map(t => { 
-            if(t.id === topicId) return { ...t, subTopics: (t.subTopics || []).filter(st => st.id !== subTopicId) }; 
-            return t; 
-        }); 
-        setLocalCurriculum(updated);
-        updateClassInDb({ ...cls, curriculum: updated }); 
+        const updated = localCurriculum.map(t => { if(t.id === topicId) return { ...t, subTopics: (t.subTopics || []).filter(st => st.id !== subTopicId) }; return t; }); 
+        setLocalCurriculum(updated); updateClassInDb({ ...cls, curriculum: updated }); 
     };
 
     const startEditTopic = (id, title) => { setEditingTopicId(id); setEditVal(getSafeText(title)); setEditingSubTopicId(null); };
     const saveEditTopic = (id) => {
         if(!editVal.trim()) { setEditingTopicId(null); return; }
         const updated = localCurriculum.map(t => t.id === id ? { ...t, title: getSafeText(editVal.trim()) } : t);
-        setLocalCurriculum(updated);
-        updateClassInDb({ ...cls, curriculum: updated });
-        setEditingTopicId(null);
+        setLocalCurriculum(updated); updateClassInDb({ ...cls, curriculum: updated }); setEditingTopicId(null);
     };
 
     const startEditSub = (id, title) => { setEditingSubTopicId(id); setEditVal(getSafeText(title)); setEditingTopicId(null); };
     const saveEditSub = (topicId, subId) => {
         if(!editVal.trim()) { setEditingSubTopicId(null); return; }
         const updated = localCurriculum.map(t => { 
-            if(t.id === topicId) { 
-                return { ...t, subTopics: t.subTopics.map(st => st.id === subId ? { ...st, title: getSafeText(editVal.trim()) } : st) }; 
-            } 
+            if(t.id === topicId) { return { ...t, subTopics: t.subTopics.map(st => st.id === subId ? { ...st, title: getSafeText(editVal.trim()) } : st) }; } 
             return t; 
         });
-        setLocalCurriculum(updated);
-        updateClassInDb({ ...cls, curriculum: updated });
-        setEditingSubTopicId(null);
+        setLocalCurriculum(updated); updateClassInDb({ ...cls, curriculum: updated }); setEditingSubTopicId(null);
     };
+
+    // YENİ EKLENEN: Sürüklenen elemanın fare imlecinden kaçmasını önleyen özel stil yaması
+    const getItemStyle = (isDragging, draggableStyle) => ({
+        // Bazı tarayıcılarda farenin kenara itilmesini engeller
+        ...draggableStyle,
+        ...(isDragging && {
+            left: "auto !important",
+            top: "auto !important",
+        })
+    });
 
     return (
         <div className="animate-scale-in max-w-4xl mx-auto mt-4 relative z-10">
@@ -251,21 +223,15 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                 <div className="flex flex-col md:flex-row gap-3 mb-8">
                     <input type="text" placeholder="Yeni Ana Konu Başlığı (Örn: Türev)..." className="flex-1 hover-lift bg-white border-2 border-slate-200 rounded-2xl px-6 py-4 text-lg focus:border-brandPurple outline-none font-bold text-slate-800 shadow-sm transition-all" value={newTopicTitle} onChange={e => setNewTopicTitle(e.target.value)} onKeyDown={e => e.key==='Enter' && addTopic(newTopicTitle)}/>
                     <div className="flex gap-2">
-                        <button onClick={()=>setShowLibModal(true)} className="bg-purple-50 hover:bg-purple-100 text-brandPurple hover-lift px-6 py-4 md:py-0 rounded-2xl font-black shadow-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap">
-                            <Library size={20}/> KÜTÜPHANE
-                        </button>
-                        <button onClick={()=>addTopic(newTopicTitle)} className="bg-brandPurple hover:bg-purple-700 text-white hover-lift px-8 py-4 md:py-0 rounded-2xl font-black shadow-glow transition-all flex items-center justify-center gap-2 whitespace-nowrap">
-                            <Plus size={24}/> EKLE
-                        </button>
+                        <button onClick={()=>setShowLibModal(true)} className="bg-purple-50 hover:bg-purple-100 text-brandPurple hover-lift px-6 py-4 md:py-0 rounded-2xl font-black shadow-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap"><Library size={20}/> KÜTÜPHANE</button>
+                        <button onClick={()=>addTopic(newTopicTitle)} className="bg-brandPurple hover:bg-purple-700 text-white hover-lift px-8 py-4 md:py-0 rounded-2xl font-black shadow-glow transition-all flex items-center justify-center gap-2 whitespace-nowrap"><Plus size={24}/> EKLE</button>
                     </div>
                 </div>
             )}
 
             <div className={`rounded-3xl p-6 md:p-10 ${isVip ? 'bg-slate-700 border border-slate-600 shadow-lg' : 'bg-white border border-slate-100 shadow-float'}`}>
                 {localCurriculum.length === 0 ? (
-                    <div className={`text-center py-12 font-bold ${isVip ? 'text-slate-400' : 'text-slate-400'}`}>
-                        Henüz hiç konu eklenmemiş.
-                    </div>
+                    <div className={`text-center py-12 font-bold ${isVip ? 'text-slate-400' : 'text-slate-400'}`}>Henüz hiç konu eklenmemiş.</div>
                 ) : (
                     <DragDropContext onDragEnd={handleDragEnd}>
                         <Droppable droppableId="curriculum-board" type="topic">
@@ -274,26 +240,20 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                     {localCurriculum.map((topic, index) => {
                                         const tProgress = getTopicProgress(topic);
                                         const isEditingThisTopic = editingTopicId === topic.id;
-                                        
                                         return (
                                             <Draggable key={topic.id} draggableId={topic.id} index={index} isDragDisabled={!isTeacherMode}>
                                                 {(provided, snapshot) => (
                                                     <div 
                                                         ref={provided.innerRef} 
                                                         {...provided.draggableProps} 
+                                                        style={getItemStyle(snapshot.isDragging, provided.draggableProps.style)}
                                                         className={`flex flex-col group/topic rounded-2xl transition-all ${snapshot.isDragging ? (isVip ? 'bg-slate-800/80 shadow-2xl scale-[1.01]' : 'bg-slate-50 shadow-2xl scale-[1.01] ring-1 ring-brandPurple/20') : ''}`}
                                                     >
                                                         <div className="flex items-start gap-4 p-2">
-                                                            {isTeacherMode && (
-                                                                <div {...provided.dragHandleProps} className="mt-1 cursor-grab active:cursor-grabbing text-slate-400 hover:text-brandPurple transition-colors">
-                                                                    <GripVertical size={24} />
-                                                                </div>
-                                                            )}
-                                                            
+                                                            {isTeacherMode && ( <div {...provided.dragHandleProps} className="mt-1 cursor-grab active:cursor-grabbing text-slate-400 hover:text-brandPurple transition-colors"><GripVertical size={24} /></div> )}
                                                             <button onClick={() => toggleTopic(topic.id)} className={`mt-1 flex-shrink-0 transition-colors ${topic.isCompleted ? (isVip ? 'text-vipGold' : 'text-brandPurple') : (isVip ? 'text-slate-400 hover:text-vipGold' : 'text-slate-400 hover:text-brandPurple')} ${!isTeacherMode && 'cursor-default pointer-events-none'}`}>
                                                                 {topic.isCompleted ? <CheckSquare size={28} strokeWidth={2.5} /> : <Square size={28} strokeWidth={2.5} />}
                                                             </button>
-                                                            
                                                             <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between gap-2">
                                                                 <div className="flex items-center gap-3 w-full md:w-auto flex-1">
                                                                     {isEditingThisTopic ? (
@@ -303,15 +263,9 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                                             <button onClick={() => setEditingTopicId(null)} className="p-2.5 bg-slate-200 text-slate-600 rounded-xl hover:bg-slate-300 transition-colors"><X size={18}/></button>
                                                                         </div>
                                                                     ) : (
-                                                                        <h3 className={`text-2xl font-black transition-all ${topic.isCompleted ? (isVip ? 'text-slate-500 line-through decoration-2' : 'text-slate-400/50 line-through decoration-2') : (isVip ? 'text-white' : 'text-slate-800')}`}>
-                                                                            {topic.title}
-                                                                        </h3>
+                                                                        <h3 className={`text-2xl font-black transition-all ${topic.isCompleted ? (isVip ? 'text-slate-500 line-through decoration-2' : 'text-slate-400/50 line-through decoration-2') : (isVip ? 'text-white' : 'text-slate-800')}`}>{topic.title}</h3>
                                                                     )}
-                                                                    {!isEditingThisTopic && (
-                                                                        <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${topic.isCompleted ? 'bg-successGreen/10 text-successGreen border-successGreen/20' : (isVip ? 'bg-slate-800 text-vipGold border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200')}`}>
-                                                                            %{tProgress}
-                                                                        </span>
-                                                                    )}
+                                                                    {!isEditingThisTopic && ( <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${topic.isCompleted ? 'bg-successGreen/10 text-successGreen border-successGreen/20' : (isVip ? 'bg-slate-800 text-vipGold border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200')}`}>%{tProgress}</span> )}
                                                                 </div>
                                                                 {isTeacherMode && !isEditingThisTopic && (
                                                                     <div className="opacity-0 group-hover/topic:opacity-100 flex items-center gap-1 transition-all">
@@ -323,7 +277,6 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                             </div>
                                                         </div>
 
-                                                        {/* Alt Başlıklar Alanı */}
                                                         <Droppable droppableId={topic.id} type="subtopic">
                                                             {(provided) => (
                                                                 <div {...provided.droppableProps} ref={provided.innerRef} className="pl-11 mt-1 space-y-2 min-h-[5px]">
@@ -335,18 +288,13 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                                                     <div 
                                                                                         ref={provided.innerRef} 
                                                                                         {...provided.draggableProps} 
+                                                                                        style={getItemStyle(snapshot.isDragging, provided.draggableProps.style)}
                                                                                         className={`flex items-center gap-3 group/sub p-1.5 rounded-xl transition-all ${snapshot.isDragging ? (isVip ? 'bg-slate-900/50 shadow-md scale-[1.01]' : 'bg-slate-50 shadow-md scale-[1.01]') : 'hover-lift'}`}
                                                                                     >
-                                                                                        {isTeacherMode && (
-                                                                                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-brandPurple transition-colors">
-                                                                                                <GripVertical size={16} />
-                                                                                            </div>
-                                                                                        )}
-
+                                                                                        {isTeacherMode && ( <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-brandPurple transition-colors"><GripVertical size={16} /></div> )}
                                                                                         <button onClick={() => toggleSubTopic(topic.id, sub.id)} className={`flex-shrink-0 transition-colors ${sub.isCompleted ? (isVip ? 'text-vipGold' : 'text-brandPurple') : (isVip ? 'text-slate-400 hover:text-vipGold' : 'text-slate-400 hover:text-brandPurple')} ${!isTeacherMode && 'cursor-default pointer-events-none'}`}>
                                                                                             {sub.isCompleted ? <CheckSquare size={20} strokeWidth={2.5} /> : <Square size={20} strokeWidth={2.5} />}
                                                                                         </button>
-                                                                                        
                                                                                         <div className="flex-1 flex items-center justify-between">
                                                                                             {isEditingThisSub ? (
                                                                                                 <div className="flex items-center gap-2 w-full max-w-sm">
@@ -354,12 +302,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                                                                     <button onClick={() => saveEditSub(topic.id, sub.id)} className="p-1.5 bg-successGreen text-white rounded-lg hover:bg-green-600 transition-colors"><Check size={16}/></button>
                                                                                                     <button onClick={() => setEditingSubTopicId(null)} className="p-1.5 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-colors"><X size={16}/></button>
                                                                                                 </div>
-                                                                                            ) : (
-                                                                                                <span className={`text-lg font-bold transition-all ${sub.isCompleted ? (isVip ? 'text-slate-500 line-through' : 'text-slate-400/50 line-through') : (isVip ? 'text-slate-300' : 'text-slate-600')}`}>
-                                                                                                    {sub.title}
-                                                                                                </span>
-                                                                                            )}
-                                                                                            
+                                                                                            ) : ( <span className={`text-lg font-bold transition-all ${sub.isCompleted ? (isVip ? 'text-slate-500 line-through' : 'text-slate-400/50 line-through') : (isVip ? 'text-slate-300' : 'text-slate-600')}`}>{sub.title}</span> )}
                                                                                             {isTeacherMode && !isEditingThisSub && (
                                                                                                 <div className="opacity-0 group-hover/sub:opacity-100 flex items-center gap-1 transition-all">
                                                                                                     <button onClick={() => startEditSub(sub.id, sub.title)} className="p-1.5 text-slate-300 hover:text-brandPurple transition-colors"><Pencil size={16}/></button>
@@ -373,8 +316,6 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                                         );
                                                                     })}
                                                                     {provided.placeholder}
-
-                                                                    {/* Yeni Alt Başlık Ekleme Inputu */}
                                                                     {isTeacherMode && (
                                                                         <div className="flex items-center gap-3 mt-2 pl-[28px] opacity-50 focus-within:opacity-100 transition-opacity">
                                                                             <CornerDownRight size={20} className="text-slate-400" />
@@ -397,47 +338,37 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                 )}
             </div>
 
-            {/* 📚 KÜTÜPHANEDEN BLOK EKLEME MODALI */}
+            {/* KÜTÜPHANEDEN BLOK EKLEME MODALI */}
             {showLibModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[80vh] border border-slate-200 animate-scale-in">
                         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-black text-lg text-slate-800 flex items-center gap-2"><Library className="text-brandPurple"/> Kütüphaneden Konu Bloğu Seç</h3>
+                            <h3 className="font-black text-lg text-slate-800 flex items-center gap-2"><Library className="text-brandPurple"/> Kütüphaneden Konu Seç</h3>
                             <button onClick={() => setShowLibModal(false)} className="text-slate-400 hover:text-rose-600 bg-white p-1.5 rounded-full shadow-sm transition-colors"><X size={20}/></button>
                         </div>
                         <div className="p-4 overflow-y-auto bg-slate-50 flex-1 space-y-3">
                             {libraryItems.length === 0 ? (
-                                <div className="text-center text-slate-400 py-8 font-medium text-sm">
-                                    Müfredat kütüphanesi boş.<br/>Lütfen önce mevcut konulardan birini "Kayıt" ikonuna basarak kütüphaneye ekleyin.
-                                </div>
+                                <div className="text-center text-slate-400 py-8 font-medium text-sm">Kütüphane boş.</div>
                             ) : (
                                 libraryItems.map(item => (
                                     <div key={item.id} className="bg-white border border-slate-200 p-4 rounded-2xl flex justify-between items-center hover:border-brandPurple transition-colors group">
                                         <div>
-                                            <h4 className="font-bold text-slate-800 text-base">{getSafeText(item.text)}</h4>
-                                            <p className="text-xs text-slate-400 mt-1">{item.subTopics?.length || 0} Alt Başlık İçeriyor</p>
+                                            <h4 className="font-bold text-slate-800 text-base">{getSafeText(item)}</h4>
+                                            <p className="text-xs text-slate-400 mt-1">{item.subTopics?.length || 0} Alt Başlık</p>
                                         </div>
                                         <button 
                                             onClick={() => {
                                                 const newTopic = {
                                                     id: generateId('curr'),
-                                                    title: getSafeText(item.text),
+                                                    title: getSafeText(item),
                                                     isCompleted: false,
-                                                    subTopics: (item.subTopics || []).map(st => ({ 
-                                                        id: generateId('sub'), 
-                                                        title: getSafeText(typeof st === 'object' ? (st.title || st.text || st) : st), 
-                                                        isCompleted: false 
-                                                    }))
+                                                    subTopics: (item.subTopics || []).map(st => ({ id: generateId('sub'), title: getSafeText(st), isCompleted: false }))
                                                 };
                                                 const updated = [...localCurriculum, newTopic];
-                                                setLocalCurriculum(updated);
-                                                updateClassInDb({ ...cls, curriculum: updated });
-                                                setShowLibModal(false);
+                                                setLocalCurriculum(updated); updateClassInDb({ ...cls, curriculum: updated }); setShowLibModal(false);
                                             }}
                                             className="px-4 py-2 bg-purple-50 text-brandPurple font-bold text-sm rounded-xl md:opacity-0 group-hover:opacity-100 transition-all hover:bg-brandPurple hover:text-white"
-                                        >
-                                            Seç ve Ekle
-                                        </button>
+                                        >Ekle</button>
                                     </div>
                                 ))
                             )}
