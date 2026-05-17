@@ -120,7 +120,7 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                         cls={selectedClass} 
                         updateClassInDb={updateClassInDb}
                         isTeacherMode={isTeacherMode}
-                        libraryItems={libraryItems.filter(i => i.type === 'curriculum')} 
+                        libraryItems={libraryItems} 
                         saveToLibrary={saveToLibrary} 
                     />
                 </motion.div> 
