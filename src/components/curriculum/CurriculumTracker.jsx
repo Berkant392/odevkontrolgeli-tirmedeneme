@@ -16,13 +16,13 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   const [addingSubTo, setAddingSubTo] = useState(null);
   const [newSubName, setNewSubName] = useState("");
 
-  // Dışarıdan gelen veriyi kontrol edip eksik ID varsa tamamlayarak local state'e alıyoruz
+  // Veritabanından gelen veriyi güvenli hale getirip (Sanitize) ID'leri string'e zorluyoruz
   useEffect(() => {
     if (curriculum && Array.isArray(curriculum)) {
-      const sanitized = JSON.parse(JSON.stringify(curriculum)).map((topic, index) => ({
+      const sanitized = curriculum.map((topic, index) => ({
         ...topic,
         id: topic.id ? String(topic.id) : `topic_auto_${index}_${Date.now()}`,
-        subTopics: topic.subTopics || []
+        subTopics: Array.isArray(topic.subTopics) ? topic.subTopics : []
       }));
       setLocalCurriculum(sanitized);
     } else {
@@ -31,7 +31,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   }, [curriculum]);
 
   // ==========================================
-  // SÜRÜKLE BIRAK (DND) MANTIĞI
+  // 🚀 SÜRÜKLE BIRAK (DND) MANTIĞI
   // ==========================================
   const handleDragEnd = (result) => {
     const { source, destination, type } = result;
@@ -41,7 +41,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
 
     const newCurriculum = Array.from(localCurriculum);
 
-    // 1. ANA BAŞLIK TAŞIMA İŞLEMİ
+    // 1. ANA BAŞLIK (ÜNİTE) TAŞIMA İŞLEMİ
     if (type === 'topic') {
       const [movedTopic] = newCurriculum.splice(source.index, 1);
       newCurriculum.splice(destination.index, 0, movedTopic);
@@ -51,7 +51,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
       return;
     }
 
-    // 2. ALT BAŞLIK TAŞIMA İŞLEMİ
+    // 2. ALT BAŞLIK (KONU) TAŞIMA İŞLEMİ
     if (type === 'subtopic') {
       const sourceTopicIndex = newCurriculum.findIndex(t => t.id === source.droppableId);
       const destTopicIndex = newCurriculum.findIndex(t => t.id === destination.droppableId);
@@ -80,7 +80,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   };
 
   // ==========================================
-  // CRUD İŞLEMLERİ (Ekleme, Silme, Düzenleme)
+  // CRUD İŞLEMLERİ
   // ==========================================
   const handleAddTopic = () => {
     if (!newTopicName.trim()) return;
@@ -156,7 +156,8 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-slate-800">
+      {/* Yeni Ana Başlık Ekleme */}
       <div className="flex gap-2">
         <input
           type="text"
@@ -175,6 +176,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
         </button>
       </div>
 
+      {/* Sürükle Bırak Panosu */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="board" type="topic">
           {(provided) => (
@@ -195,6 +197,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                           : 'border-slate-700'
                       }`}
                     >
+                      {/* Ana Başlık Kart Başlığı */}
                       <div className="p-4 border-b border-slate-700 flex items-center justify-between group">
                         <div className="flex items-center gap-3 flex-1">
                           <div 
@@ -246,6 +249,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                         )}
                       </div>
 
+                      {/* Alt Başlıklar Konu Alanı */}
                       <div className="p-4 bg-slate-800/50 rounded-b-xl">
                         <Droppable droppableId={topic.id} type="subtopic">
                           {(provided, snapshot) => (
@@ -258,8 +262,8 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                             >
                               {topic.subTopics?.map((sub, subIndex) => (
                                 <Draggable 
-                                  key={`${topic.id}-${subIndex}-${sub}`} 
-                                  draggableId={`${topic.id}-${subIndex}-${sub}`} 
+                                  key={`sub-${topic.id}-${subIndex}`} 
+                                  draggableId={`sub-${topic.id}-${subIndex}`} 
                                   index={subIndex}
                                 >
                                   {(provided, snapshot) => (
@@ -327,6 +331,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                           )}
                         </Droppable>
 
+                        {/* Yeni Alt Başlık Ekleme */}
                         {addingSubTo === topic.id ? (
                           <div className="mt-3 flex items-center gap-2 pl-8">
                             <input
