@@ -41,7 +41,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
       newCurriculum.splice(destination.index, 0, movedTopic);
       
       setLocalCurriculum(newCurriculum);
-      onUpdate(newCurriculum); // Firebase'i güncelle
+      if (onUpdate) onUpdate(newCurriculum);
       return;
     }
 
@@ -73,7 +73,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
       }
 
       setLocalCurriculum(newCurriculum);
-      onUpdate(newCurriculum); // Firebase'i güncelle
+      if (onUpdate) onUpdate(newCurriculum);
     }
   };
 
@@ -89,7 +89,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
     };
     const updated = [...localCurriculum, newTopic];
     setLocalCurriculum(updated);
-    onUpdate(updated);
+    if (onUpdate) onUpdate(updated);
     setNewTopicName("");
   };
 
@@ -97,7 +97,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
     if(window.confirm('Bu ana başlığı ve tüm alt başlıklarını silmek istediğinize emin misiniz?')) {
         const updated = localCurriculum.filter(t => t.id !== topicId);
         setLocalCurriculum(updated);
-        onUpdate(updated);
+        if (onUpdate) onUpdate(updated);
     }
   };
 
@@ -107,7 +107,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
       t.id === topicId ? { ...t, title: editTopicName.trim() } : t
     );
     setLocalCurriculum(updated);
-    onUpdate(updated);
+    if (onUpdate) onUpdate(updated);
     setEditingTopicId(null);
   };
 
@@ -120,7 +120,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
       return t;
     });
     setLocalCurriculum(updated);
-    onUpdate(updated);
+    if (onUpdate) onUpdate(updated);
     setNewSubName("");
     setAddingSubTo(null);
   };
@@ -135,7 +135,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
       return t;
     });
     setLocalCurriculum(updated);
-    onUpdate(updated);
+    if (onUpdate) onUpdate(updated);
   };
 
   const handleSaveSubTopicEdit = (topicId, subIndex) => {
@@ -149,7 +149,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
       return t;
     });
     setLocalCurriculum(updated);
-    onUpdate(updated);
+    if (onUpdate) onUpdate(updated);
     setEditingSubTopic({ topicId: null, subIndex: null });
   };
 
@@ -163,7 +163,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
           className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 transition-colors"
           value={newTopicName}
           onChange={(e) => setNewTopicName(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleAddTopic()}
+          onKeyDown={(e) => e.key === 'Enter' && handleAddTopic()}
         />
         <button
           onClick={handleAddTopic}
@@ -213,7 +213,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                                 value={editTopicName}
                                 onChange={(e) => setEditTopicName(e.target.value)}
                                 autoFocus
-                                onKeyPress={(e) => e.key === 'Enter' && handleSaveTopicEdit(topic.id)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSaveTopicEdit(topic.id)}
                               />
                               <button onClick={() => handleSaveTopicEdit(topic.id)} className="text-green-500 hover:text-green-400 p-1">
                                 <Save size={18} />
@@ -289,7 +289,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                                             value={editSubTopicName}
                                             onChange={(e) => setEditSubTopicName(e.target.value)}
                                             autoFocus
-                                            onKeyPress={(e) => e.key === 'Enter' && handleSaveSubTopicEdit(topic.id, subIndex)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleSaveSubTopicEdit(topic.id, subIndex)}
                                           />
                                           <button onClick={() => handleSaveSubTopicEdit(topic.id, subIndex)} className="text-green-500 hover:text-green-400">
                                             <Save size={16} />
@@ -339,7 +339,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                               value={newSubName}
                               onChange={(e) => setNewSubName(e.target.value)}
                               autoFocus
-                              onKeyPress={(e) => e.key === 'Enter' && handleAddSubTopic(topic.id)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleAddSubTopic(topic.id)}
                             />
                             <button 
                               onClick={() => handleAddSubTopic(topic.id)}
