@@ -3,54 +3,54 @@ import { Plus, Trash2, BookOpen, CheckSquare, Square, CornerDownRight, Pencil, C
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { generateId } from '../../utils/helpers';
 
+// 🛡️ MUTLAK METİN KALKANI: Asla React Object Render hatası verdirmez!
+const getSafeText = (val) => {
+    if (!val) return "";
+    if (typeof val === 'string' || typeof val === 'number') return String(val);
+    if (typeof val === 'object') {
+        if (typeof val.title === 'string') return val.title;
+        if (typeof val.text === 'string') return val.text;
+        return "Bozuk Veri";
+    }
+    return String(val);
+};
+
 const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems = [], saveToLibrary }) => {
     const [localCurriculum, setLocalCurriculum] = useState([]);
     const [newTopicTitle, setNewTopicTitle] = useState("");
     const [newSubTopicTitles, setNewSubTopicTitles] = useState({});
     
-    // Düzenleme (Edit) State'leri
+    // Düzenleme State'leri
     const [editingTopicId, setEditingTopicId] = useState(null);
     const [editingSubTopicId, setEditingSubTopicId] = useState(null);
     const [editVal, setEditVal] = useState("");
 
-    // Kütüphane Modal State'i
     const [showLibModal, setShowLibModal] = useState(false);
 
     const isVip = cls?.type === 'vip' && !isTeacherMode;
 
-    // 🛡️ VERİ KALKANI: Firebase'deki bozuk "nesne" kayıtlarını temizleyip uygulamayı çökmeden korur.
+    // 🛡️ SABİT ID VE VERİ TEMİZLEME ALGORİTMASI
     useEffect(() => {
         if (cls && cls.curriculum && Array.isArray(cls.curriculum)) {
             const sanitized = cls.curriculum.map((topic, tIdx) => {
-                const topicId = topic.id ? String(topic.id) : `curr_${tIdx}_${Date.now()}`;
+                // Sürükle bırakın çökmemesi için Date.now yerine sabit indeks bazlı fallback
+                const topicId = topic.id ? String(topic.id) : `curr_auto_${tIdx}`;
                 
-                // Eğer başlık yanlışlıkla object kaydedilmişse onu metne çevirir
-                let tTitle = topic.title;
-                if (typeof tTitle === 'object' && tTitle !== null) { tTitle = tTitle.title || tTitle.text || "İsimsiz Konu"; }
-                if (tTitle === undefined || tTitle === null) { tTitle = ""; }
-
                 return {
                     ...topic,
                     id: topicId,
-                    title: String(tTitle),
+                    title: getSafeText(topic.title),
                     isCompleted: !!topic.isCompleted,
                     subTopics: Array.isArray(topic.subTopics)
                         ? topic.subTopics.map((sub, sIdx) => {
-                            if (typeof sub === 'object' && sub !== null) {
-                                let sTitle = sub.title;
-                                if (typeof sTitle === 'object' && sTitle !== null) { sTitle = sTitle.title || sTitle.text || "İsimsiz Alt Başlık"; }
-                                if (sTitle === undefined || sTitle === null) { sTitle = ""; }
-
-                                return {
-                                    id: sub.id ? String(sub.id) : `sub_${topicId}_${sIdx}_${Date.now()}`,
-                                    title: String(sTitle),
-                                    isCompleted: !!sub.isCompleted
-                                };
-                            }
+                            const subId = (sub && typeof sub === 'object' && sub.id) 
+                                ? String(sub.id) 
+                                : `sub_auto_${topicId}_${sIdx}`;
+                            
                             return {
-                                id: `sub_${topicId}_${sIdx}_${Date.now()}`,
-                                title: String(sub),
-                                isCompleted: false
+                                id: subId,
+                                title: getSafeText(typeof sub === 'object' ? (sub.title || sub.text) : sub),
+                                isCompleted: typeof sub === 'object' ? !!sub.isCompleted : false
                             };
                         })
                         : []
@@ -78,14 +78,17 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
     };
 
     const getTopicProgress = (topic) => {
-        if (topic.subTopics && topic.subTopics.length > 0) { const comp = topic.subTopics.filter(st => st.isCompleted).length; return Math.round((comp / topic.subTopics.length) * 100); }
+        if (topic.subTopics && topic.subTopics.length > 0) { 
+            const comp = topic.subTopics.filter(st => st.isCompleted).length; 
+            return Math.round((comp / topic.subTopics.length) * 100); 
+        }
         return topic.isCompleted ? 100 : 0;
     };
 
     const overallProgress = calculateOverallProgress();
 
     // ==========================================
-    // 🚀 SÜRÜKLE BIRAK (DND) MANTIĞI
+    // 🚀 KUSURSUZ SÜRÜKLE BIRAK (DND) MANTIĞI
     // ==========================================
     const handleDragEnd = (result) => {
         const { source, destination, type } = result;
@@ -135,7 +138,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
     // ==========================================
     const addTopic = (title) => { 
         if(!title.trim()) return; 
-        const updated = [...localCurriculum, { id: generateId('curr'), title: title.trim(), isCompleted: false, subTopics: [] }]; 
+        const updated = [...localCurriculum, { id: generateId('curr'), title: getSafeText(title.trim()), isCompleted: false, subTopics: [] }]; 
         setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated }); 
         setNewTopicTitle(""); 
@@ -145,7 +148,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
         const title = newSubTopicTitles[topicId]; 
         if(!title || !title.trim()) return; 
         const updated = localCurriculum.map(t => { 
-            if(t.id === topicId) return { ...t, subTopics: [...(t.subTopics||[]), { id: generateId('sub'), title: title.trim(), isCompleted: false }] }; 
+            if(t.id === topicId) return { ...t, subTopics: [...(t.subTopics||[]), { id: generateId('sub'), title: getSafeText(title.trim()), isCompleted: false }] }; 
             return t; 
         }); 
         setLocalCurriculum(updated);
@@ -195,21 +198,21 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
         updateClassInDb({ ...cls, curriculum: updated }); 
     };
 
-    const startEditTopic = (id, title) => { setEditingTopicId(id); setEditVal(title); setEditingSubTopicId(null); };
+    const startEditTopic = (id, title) => { setEditingTopicId(id); setEditVal(getSafeText(title)); setEditingSubTopicId(null); };
     const saveEditTopic = (id) => {
         if(!editVal.trim()) { setEditingTopicId(null); return; }
-        const updated = localCurriculum.map(t => t.id === id ? { ...t, title: editVal.trim() } : t);
+        const updated = localCurriculum.map(t => t.id === id ? { ...t, title: getSafeText(editVal.trim()) } : t);
         setLocalCurriculum(updated);
         updateClassInDb({ ...cls, curriculum: updated });
         setEditingTopicId(null);
     };
 
-    const startEditSub = (id, title) => { setEditingSubTopicId(id); setEditVal(title); setEditingTopicId(null); };
+    const startEditSub = (id, title) => { setEditingSubTopicId(id); setEditVal(getSafeText(title)); setEditingTopicId(null); };
     const saveEditSub = (topicId, subId) => {
         if(!editVal.trim()) { setEditingSubTopicId(null); return; }
         const updated = localCurriculum.map(t => { 
             if(t.id === topicId) { 
-                return { ...t, subTopics: t.subTopics.map(st => st.id === subId ? { ...st, title: editVal.trim() } : st) }; 
+                return { ...t, subTopics: t.subTopics.map(st => st.id === subId ? { ...st, title: getSafeText(editVal.trim()) } : st) }; 
             } 
             return t; 
         });
@@ -228,7 +231,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                         </div>
                         <div>
                             <h2 className={`text-2xl md:text-3xl font-black tracking-tight ${isVip ? 'text-white' : 'text-slate-800'}`}>Müfredat Takibi</h2>
-                            <p className={`font-medium mt-1 ${isVip ? 'text-slate-300' : 'text-slate-500'}`}>{cls?.className} sınıfı için konu listesi</p>
+                            <p className={`font-medium mt-1 ${isVip ? 'text-slate-300' : 'text-slate-500'}`}>{getSafeText(cls?.className)} sınıfı için konu listesi</p>
                         </div>
                     </div>
                     
@@ -411,27 +414,20 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                 libraryItems.map(item => (
                                     <div key={item.id} className="bg-white border border-slate-200 p-4 rounded-2xl flex justify-between items-center hover:border-brandPurple transition-colors group">
                                         <div>
-                                            <h4 className="font-bold text-slate-800 text-base">{item.text}</h4>
+                                            <h4 className="font-bold text-slate-800 text-base">{getSafeText(item.text)}</h4>
                                             <p className="text-xs text-slate-400 mt-1">{item.subTopics?.length || 0} Alt Başlık İçeriyor</p>
                                         </div>
                                         <button 
                                             onClick={() => {
                                                 const newTopic = {
                                                     id: generateId('curr'),
-                                                    title: item.text,
+                                                    title: getSafeText(item.text),
                                                     isCompleted: false,
-                                                    // 🛡️ KALKAN: Kütüphaneden eklerken falsy string hatasını engeller.
-                                                    subTopics: (item.subTopics || []).map((st, idx) => {
-                                                        let safeTitle = "";
-                                                        if (typeof st === 'object' && st !== null) { safeTitle = st.title || st.text || "İsimsiz"; }
-                                                        else { safeTitle = String(st); }
-                                                        
-                                                        return { 
-                                                            id: generateId('sub'), 
-                                                            title: safeTitle, 
-                                                            isCompleted: false 
-                                                        };
-                                                    })
+                                                    subTopics: (item.subTopics || []).map(st => ({ 
+                                                        id: generateId('sub'), 
+                                                        title: getSafeText(typeof st === 'object' ? (st.title || st.text || st) : st), 
+                                                        isCompleted: false 
+                                                    }))
                                                 };
                                                 const updated = [...localCurriculum, newTopic];
                                                 setLocalCurriculum(updated);
