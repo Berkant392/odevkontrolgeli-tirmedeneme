@@ -8,7 +8,6 @@ import PdfDownloadButton from '../ui/PdfButton';
 import StatusBadge from '../ui/StatusBadge';
 import CurriculumTracker from '../curriculum/CurriculumTracker';
 
-// 🛡️ MODAL KALKANI
 const getSafeText = (val) => {
     if (!val) return "";
     if (typeof val === 'string' || typeof val === 'number') return String(val);
@@ -21,9 +20,16 @@ const getSafeText = (val) => {
     return String(val);
 };
 
-const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStudentName, setNewStudentName, addStudent, updateGrade, openCellNoteModal, setModalData, setModalInputVal, setModalDateVal, setModalPdfVal, setModalType, deleteStudent, handlePrintStudentReport, openStudent, setActiveTopicMenu, setActiveColMenu, setActiveCell, deleteColumn, updateClassInDb, handleOpenRisk, handlePrintPasswords, deleteClass, libraryItems, saveToLibrary }) => {
+const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStudentName, setNewStudentName, addStudent, updateGrade, openCellNoteModal, setModalData, setModalInputVal, setModalDateVal, setModalPdfVal, setModalType, deleteStudent, handlePrintStudentReport, openStudent, setActiveTopicMenu, activeTopicMenu, setActiveColMenu, activeColMenu, setActiveCell, deleteColumn, deleteTopic, updateClassInDb, handleOpenRisk, handlePrintPasswords, deleteClass, libraryItems, saveToLibrary }) => {
     
     const reversedTopics = selectedClass.topics ? [...selectedClass.topics].reverse() : [];
+
+    // Menüleri dışarı tıklayınca kapatma
+    React.useEffect(() => {
+        const handleClickOutside = () => { setActiveTopicMenu(null); setActiveColMenu(null); };
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
+    }, []);
 
     return (
         <motion.div key="class-detail" initial={{ opacity: 0, y: 30, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: "spring", stiffness: 260, damping: 20 }} className="bg-white rounded-[2rem] shadow-float border border-slate-200 overflow-hidden relative z-10">
@@ -50,7 +56,7 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                                 <div className="space-y-4">
                                     {reversedTopics.map(topic => (
                                         <div key={topic.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                            <div className="flex justify-between items-center mb-3 pb-3 border-b border-slate-200"><span className="font-black text-slate-700 text-sm uppercase tracking-wide truncate pr-2">{getSafeText(topic.title)}</span><div className="flex gap-1.5 shrink-0"><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id, currentTitle: getSafeText(topic.title) }); setModalInputVal(getSafeText(topic.title)); setModalDateVal(topic.date || ''); setModalType('edit-topic'); }} className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-brandPurple rounded-xl shadow-sm transition-colors hover-lift"><Pencil size={16}/></button><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id }); setModalType('source'); }} className="px-3 py-2 bg-brandPurple text-white rounded-xl shadow-glow flex items-center gap-1.5 text-xs font-black tracking-wider transition-colors hover-lift"><Plus size={14}/> KAYNAK</button></div></div>
+                                            <div className="flex justify-between items-center mb-3 pb-3 border-b border-slate-200"><span className="font-black text-slate-700 text-sm uppercase tracking-wide truncate pr-2">{getSafeText(topic.title)}</span><div className="flex gap-1.5 shrink-0"><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id, currentTitle: getSafeText(topic.title) }); setModalInputVal(getSafeText(topic.title)); setModalDateVal(topic.date || ''); setModalType('edit-topic'); }} className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-brandPurple rounded-xl shadow-sm transition-colors hover-lift"><Pencil size={16}/></button><button onClick={() => deleteTopic(selectedClass.id, topic.id)} className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-lg transition-colors"><Trash2 size={14}/></button><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id }); setModalType('source'); }} className="px-3 py-2 bg-brandPurple text-white rounded-xl shadow-glow flex items-center gap-1.5 text-xs font-black tracking-wider transition-colors hover-lift"><Plus size={14}/> KAYNAK</button></div></div>
                                             <div className="flex flex-col gap-2">
                                                 {topic.subColumns?.map(col => (
                                                     <div key={col.id} className="flex justify-between items-center text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200 shadow-sm"><span className="font-bold truncate pr-2">{getSafeText(col.title)}</span><div className="flex gap-1 shrink-0"><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id, colId: col.id, currentTitle: getSafeText(col.title) }); setModalInputVal(getSafeText(col.title)); setModalPdfVal(col.pdfLink || ""); setModalType('edit-source'); }} className="p-2 bg-slate-50 text-slate-500 hover:text-brandPurple rounded-lg transition-colors"><Pencil size={14}/></button><button onClick={() => deleteColumn(selectedClass.id, topic.id, col.id)} className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-lg transition-colors"><Trash2 size={14}/></button></div></div>
@@ -74,8 +80,16 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                                         {reversedTopics.map((topic, i) => {
                                             const theme = TOPIC_THEMES[i % TOPIC_THEMES.length];
                                             return ( 
-                                                <th key={topic.id} colSpan={Math.max(1, (topic.subColumns?.length || 0) + 1)} className={`text-center p-3 border-b border-r border-slate-200 sticky-header-top ${theme.main} min-w-[280px]`}>
-                                                    <div className="flex flex-col justify-center items-center gap-1.5">{topic.date && ( <motion.div whileHover={{ scale: 1.05 }} className="text-[10px] bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full text-slate-600 font-bold flex items-center gap-1 cursor-pointer hover:bg-white shadow-sm border border-white/50 mb-1 transition-colors" onContextMenu={(e) => { e.preventDefault(); setModalData({ classId: selectedClass.id, topicId: topic.id }); setModalDateVal(topic.date); setModalType('edit-date'); }}><Calendar size={12}/> Son Teslim: <span className={theme.text}>{formatDate(topic.date)}</span></motion.div> )}<div className={`flex items-center gap-2 text-sm font-black uppercase tracking-wider mt-1`}>{getSafeText(topic.title)}<button onClick={(e) => { e.stopPropagation(); setActiveTopicMenu({ classId: selectedClass.id, topicId: topic.id, anchorEl: e.currentTarget }); }} className="p-1 rounded-md hover:bg-black/5 transition-colors"><MoreVertical size={16}/></button></div></div>
+                                                <th key={topic.id} colSpan={Math.max(1, (topic.subColumns?.length || 0) + 1)} className={`text-center p-3 border-b border-r border-slate-200 sticky-header-top ${theme.main} min-w-[280px] relative`}>
+                                                    <div className="flex flex-col justify-center items-center gap-1.5">{topic.date && ( <motion.div whileHover={{ scale: 1.05 }} className="text-[10px] bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full text-slate-600 font-bold flex items-center gap-1 cursor-pointer hover:bg-white shadow-sm border border-white/50 mb-1 transition-colors" onContextMenu={(e) => { e.preventDefault(); setModalData({ classId: selectedClass.id, topicId: topic.id }); setModalDateVal(topic.date); setModalType('edit-date'); }}><Calendar size={12}/> Son Teslim: <span className={theme.text}>{formatDate(topic.date)}</span></motion.div> )}<div className={`flex items-center gap-2 text-sm font-black uppercase tracking-wider mt-1`}>{getSafeText(topic.title)}<button onClick={(e) => { e.stopPropagation(); setActiveTopicMenu(topic.id === activeTopicMenu ? null : topic.id); }} className="p-1 rounded-md hover:bg-black/5 transition-colors"><MoreVertical size={16}/></button></div></div>
+                                                    
+                                                    {/* ÖDEV DÜZENLEME MENÜSÜ */}
+                                                    {activeTopicMenu === topic.id && (
+                                                        <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-white border border-slate-200 shadow-xl rounded-xl w-32 py-1 z-50 text-sm overflow-hidden">
+                                                            <button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id, currentTitle: getSafeText(topic.title) }); setModalInputVal(getSafeText(topic.title)); setModalDateVal(topic.date || ''); setModalType('edit-topic'); setActiveTopicMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 font-bold"><Pencil size={14}/> Düzenle</button>
+                                                            <button onClick={() => deleteTopic(selectedClass.id, topic.id)} className="w-full text-left px-4 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2 font-bold"><Trash2 size={14}/> Sil</button>
+                                                        </div>
+                                                    )}
                                                 </th> 
                                             );
                                         })}
@@ -87,7 +101,16 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                                                 <React.Fragment key={topic.id}>
                                                     <th className={`p-0 border-b border-r border-slate-200 w-16 text-center sticky-header-sub ${theme.sub}`}><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id }); setModalType('source'); }} className={`w-full h-full flex items-center justify-center transition-colors ${theme.btn} bg-white/30 hover:bg-white`} title="Kaynak Ekle"><Plus size={20}/></button></th>
                                                     {topic.subColumns?.map(col => ( 
-                                                        <th key={col.id} className={`p-3 border-b border-r border-slate-200 sticky-header-sub ${theme.sub} min-w-[150px] align-top`}><div className="flex flex-col items-center justify-between h-full min-h-[50px]"><span className="font-bold text-xs text-slate-700 whitespace-normal text-center leading-tight mb-2 break-words max-w-[140px]">{getSafeText(col.title)}</span><div className="flex items-center gap-1 shrink-0">{col.pdfLink && <PdfDownloadButton link={col.pdfLink} isTeacher={true} />}<button onClick={(e) => { e.stopPropagation(); setActiveColMenu({ classId: selectedClass.id, topicId: topic.id, colId: col.id, anchorEl: e.currentTarget }); }} className="text-slate-400 hover:text-brandPurple bg-white/50 p-1.5 rounded-full shadow-sm transition-colors"><MoreVertical size={14}/></button></div></div></th> 
+                                                        <th key={col.id} className={`p-3 border-b border-r border-slate-200 sticky-header-sub ${theme.sub} min-w-[150px] align-top relative`}><div className="flex flex-col items-center justify-between h-full min-h-[50px]"><span className="font-bold text-xs text-slate-700 whitespace-normal text-center leading-tight mb-2 break-words max-w-[140px]">{getSafeText(col.title)}</span><div className="flex items-center gap-1 shrink-0">{col.pdfLink && <PdfDownloadButton link={col.pdfLink} isTeacher={true} />}<button onClick={(e) => { e.stopPropagation(); setActiveColMenu(col.id === activeColMenu ? null : col.id); }} className="text-slate-400 hover:text-brandPurple bg-white/50 p-1.5 rounded-full shadow-sm transition-colors"><MoreVertical size={14}/></button></div></div>
+                                                            
+                                                            {/* KAYNAK DÜZENLEME MENÜSÜ */}
+                                                            {activeColMenu === col.id && (
+                                                                <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-white border border-slate-200 shadow-xl rounded-xl w-32 py-1 z-50 text-sm overflow-hidden">
+                                                                    <button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id, colId: col.id, currentTitle: getSafeText(col.title) }); setModalInputVal(getSafeText(col.title)); setModalPdfVal(col.pdfLink || ""); setModalType('edit-source'); setActiveColMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 font-bold"><Pencil size={14}/> Düzenle</button>
+                                                                    <button onClick={() => deleteColumn(selectedClass.id, topic.id, col.id)} className="w-full text-left px-4 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2 font-bold"><Trash2 size={14}/> Sil</button>
+                                                                </div>
+                                                            )}
+                                                        </th> 
                                                     ))} 
                                                 </React.Fragment> 
                                             );
@@ -126,7 +149,6 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                 </motion.div>
             )}
 
-            {/* 🔥 KESİN ÇÖZÜM: isTeacherMode={true} olarak sabitlendi */}
             {activeTab === 'curriculum' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-slate-50/50 border-t border-slate-100">
                     <CurriculumTracker 
