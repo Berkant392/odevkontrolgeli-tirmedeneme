@@ -16,7 +16,8 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
     // Kütüphane Modal State'i
     const [showLibModal, setShowLibModal] = useState(false);
 
-    const isVip = cls.type === 'vip' && !isTeacherMode;
+    // Güvenli Okuma: cls henüz yüklenmediyse çökmeyi engeller
+    const isVip = cls?.type === 'vip' && !isTeacherMode;
 
     // Veritabanından gelen veriyi güvenli (ID çakışması yaratmayacak) şekilde normalize edip local state'e alıyoruz
     useEffect(() => {
@@ -214,7 +215,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                         </div>
                         <div>
                             <h2 className={`text-2xl md:text-3xl font-black tracking-tight ${isVip ? 'text-white' : 'text-slate-800'}`}>Müfredat Takibi</h2>
-                            <p className={`font-medium mt-1 ${isVip ? 'text-slate-300' : 'text-slate-500'}`}>{cls.className} sınıfı için konu listesi</p>
+                            <p className={`font-medium mt-1 ${isVip ? 'text-slate-300' : 'text-slate-500'}`}>{cls?.className} sınıfı için konu listesi</p>
                         </div>
                     </div>
                     
@@ -379,7 +380,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                     {provided.placeholder}
                                 </div>
                             )}
-                        </pubble>
+                        </Droppable>
                     </DragDropContext>
                 )}
             </div>
@@ -410,8 +411,8 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                     id: generateId('curr'),
                                                     title: item.text,
                                                     isCompleted: false,
-                                                    subTopics: (item.subTopics || []).map(st => ({ 
-                                                        id: generateId('sub'), 
+                                                    subTopics: (item.subTopics || []).map((st, idx) => ({ 
+                                                        id: `sub_lib_${idx}_${Date.now()}`, 
                                                         title: typeof st === 'object' ? (st.title || '') : String(st), 
                                                         isCompleted: false 
                                                     }))
