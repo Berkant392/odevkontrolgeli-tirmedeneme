@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Save, X, GripVertical, GripHorizontal } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, GripVertical, GripHorizontal, CheckCircle, Circle } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
@@ -16,13 +16,21 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   const [addingSubTo, setAddingSubTo] = useState(null);
   const [newSubName, setNewSubName] = useState("");
 
-  // Veritabanından gelen veriyi kontrol edip eksik ID varsa tamamlayarak local state'e alıyoruz
+  // Girişte veriyi tamamen normalize ediyoruz. Böylece alt başlıklar kesinlikle nesne { title, isCompleted } oluyor.
   useEffect(() => {
     if (curriculum && Array.isArray(curriculum)) {
       const sanitized = curriculum.map((topic, index) => ({
         ...topic,
         id: topic.id ? String(topic.id) : `topic_auto_${index}_${Date.now()}`,
-        subTopics: Array.isArray(topic.subTopics) ? topic.subTopics : []
+        title: topic.title || "",
+        subTopics: Array.isArray(topic.subTopics) 
+          ? topic.subTopics.map(s => {
+              if (typeof s === 'object' && s !== null) {
+                return { title: s.title || '', isCompleted: !!s.isCompleted };
+              }
+              return { title: String(s), isCompleted: false };
+            }) 
+          : []
       }));
       setLocalCurriculum(sanitized);
     } else {
@@ -117,7 +125,10 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
     if (!newSubName.trim()) return;
     const updated = localCurriculum.map(t => {
       if (t.id === topicId) {
-        return { ...t, subTopics: [...(t.subTopics || []), newSubName.trim()] };
+        return { 
+          ...t, 
+          subTopics: [...(t.subTopics || []), { title: newSubName.trim(), isCompleted: false }] 
+        };
       }
       return t;
     });
@@ -145,7 +156,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
     const updated = localCurriculum.map(t => {
       if (t.id === topicId) {
         const newSubs = [...t.subTopics];
-        newSubs[subIndex] = editSubTopicName.trim();
+        newSubs[subIndex] = { ...newSubs[subIndex], title: editSubTopicName.trim() };
         return { ...t, subTopics: newSubs };
       }
       return t;
@@ -153,6 +164,23 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
     setLocalCurriculum(updated);
     if (onUpdate) onUpdate(updated);
     setEditingSubTopic({ topicId: null, subIndex: null });
+  };
+
+  const handleToggleSubComplete = (topicId, subIndex) => {
+    const updated = localCurriculum.map(t => {
+      if (t.id === topicId) {
+        const newSubs = t.subTopics.map((s, idx) => {
+          if (idx === subIndex) {
+            return { ...s, isCompleted: !s.isCompleted };
+          }
+          return s;
+        });
+        return { ...t, subTopics: newSubs };
+      }
+      return t;
+    });
+    setLocalCurriculum(updated);
+    if (onUpdate) onUpdate(updated);
   };
 
   return (
@@ -197,7 +225,6 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                           : 'border-slate-700'
                       }`}
                     >
-                      {/* Header */}
                       <div className="p-4 border-b border-slate-700 flex items-center justify-between group">
                         <div className="flex items-center gap-3 flex-1">
                           <div 
@@ -249,7 +276,6 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                         )}
                       </div>
 
-                      {/* Alt Başlıklar Alanı */}
                       <div className="p-4 bg-slate-800/50 rounded-b-xl">
                         <Droppable droppableId={topic.id} type="subtopic">
                           {(provided, snapshot) => (
@@ -260,72 +286,86 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
                                 snapshot.isDraggingOver ? 'bg-slate-700/50 border border-dashed border-indigo-500/50' : ''
                               }`}
                             >
-                              {topic.subTopics?.map((sub, subIndex) => (
-                                <Draggable 
-                                  key={`sub-${topic.id}-${subIndex}`} 
-                                  draggableId={`sub-${topic.id}-${subIndex}`} 
-                                  index={subIndex}
-                                >
-                                  {(provided, snapshot) => (
-                                    <div
-                                      ref={provided.innerRef}
-                                      {...provided.draggableProps}
-                                      className={`flex items-center gap-2 p-2 rounded-lg transition-all duration-200 group/sub ${
-                                        snapshot.isDragging 
-                                          ? 'bg-indigo-900/40 border border-indigo-500 shadow-lg scale-[1.02] z-50' 
-                                          : 'bg-slate-900 border border-slate-700/50 hover:border-slate-600'
-                                      }`}
-                                    >
-                                      <div 
-                                        {...provided.dragHandleProps}
-                                        className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-400 p-1"
+                              {topic.subTopics?.map((sub, subIndex) => {
+                                const subKey = `sub-${topic.id}-${subIndex}`;
+                                return (
+                                  <Draggable 
+                                    key={subKey} 
+                                    draggableId={subKey} 
+                                    index={subIndex}
+                                  >
+                                    {(provided, snapshot) => (
+                                      <div
+                                        ref={provided.innerRef}
+                                        {...provided.draggableProps}
+                                        className={`flex items-center gap-2 p-2 rounded-lg transition-all duration-200 group/sub ${
+                                          snapshot.isDragging 
+                                            ? 'bg-indigo-900/40 border border-indigo-500 shadow-lg scale-[1.02] z-50' 
+                                            : 'bg-slate-900 border border-slate-700/50 hover:border-slate-600'
+                                        }`}
                                       >
-                                        <GripHorizontal size={16} />
-                                      </div>
-
-                                      {editingSubTopic.topicId === topic.id && editingSubTopic.subIndex === subIndex ? (
-                                        <div className="flex items-center gap-2 flex-1">
-                                          <input
-                                            type="text"
-                                            className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-indigo-500"
-                                            value={editSubTopicName}
-                                            onChange={(e) => setEditSubTopicName(e.target.value)}
-                                            autoFocus
-                                            onKeyDown={(e) => e.key === 'Enter' && handleSaveSubTopicEdit(topic.id, subIndex)}
-                                          />
-                                          <button onClick={() => handleSaveSubTopicEdit(topic.id, subIndex)} className="text-green-500 hover:text-green-400">
-                                            <Save size={16} />
-                                          </button>
-                                          <button onClick={() => setEditingSubTopic({ topicId: null, subIndex: null })} className="text-red-500 hover:text-red-400">
-                                            <X size={16} />
-                                          </button>
+                                        <div 
+                                          {...provided.dragHandleProps}
+                                          className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-400 p-1"
+                                        >
+                                          <GripHorizontal size={16} />
                                         </div>
-                                      ) : (
-                                        <>
-                                          <span className="text-sm text-slate-300 flex-1">{sub}</span>
-                                          <div className="flex items-center gap-1 opacity-0 group-hover/sub:opacity-100 transition-opacity">
-                                            <button 
-                                              onClick={() => {
-                                                setEditingSubTopic({ topicId: topic.id, subIndex });
-                                                setEditSubTopicName(sub);
-                                              }}
-                                              className="text-slate-500 hover:text-indigo-400 p-1"
-                                            >
-                                              <Edit2 size={14} />
+
+                                        {/* Tamamlama Checkbox Alanı */}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleSubComplete(topic.id, subIndex)}
+                                          className={`transition-colors p-1 rounded ${sub.isCompleted ? 'text-green-400' : 'text-slate-500 hover:text-green-400'}`}
+                                        >
+                                          {sub.isCompleted ? <CheckCircle size={16} /> : <Circle size={16} />}
+                                        </button>
+
+                                        {editingSubTopic.topicId === topic.id && editingSubTopic.subIndex === subIndex ? (
+                                          <div className="flex items-center gap-2 flex-1">
+                                            <input
+                                              type="text"
+                                              className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-indigo-500"
+                                              value={editSubTopicName}
+                                              onChange={(e) => setEditSubTopicName(e.target.value)}
+                                              autoFocus
+                                              onKeyDown={(e) => e.key === 'Enter' && handleSaveSubTopicEdit(topic.id, subIndex)}
+                                            />
+                                            <button onClick={() => handleSaveSubTopicEdit(topic.id, subIndex)} className="text-green-500 hover:text-green-400">
+                                              <Save size={16} />
                                             </button>
-                                            <button 
-                                              onClick={() => handleDeleteSubTopic(topic.id, subIndex)}
-                                              className="text-slate-500 hover:text-red-400 p-1"
-                                            >
-                                              <Trash2 size={14} />
+                                            <button onClick={() => setEditingSubTopic({ topicId: null, subIndex: null })} className="text-red-500 hover:text-red-400">
+                                              <X size={16} />
                                             </button>
                                           </div>
-                                        </>
-                                      )}
-                                    </div>
-                                  )}
-                                </Draggable>
-                              ))}
+                                        ) : (
+                                          <>
+                                            <span className={`text-sm flex-1 ${sub.isCompleted ? 'line-through text-slate-500' : 'text-slate-300'}`}>
+                                              {sub.title}
+                                            </span>
+                                            <div className="flex items-center gap-1 opacity-0 group-hover/sub:opacity-100 transition-opacity">
+                                              <button 
+                                                onClick={() => {
+                                                  setEditingSubTopic({ topicId: topic.id, subIndex });
+                                                  setEditSubTopicName(sub.title);
+                                                }}
+                                                className="text-slate-500 hover:text-indigo-400 p-1"
+                                              >
+                                                <Edit2 size={14} />
+                                              </button>
+                                              <button 
+                                                onClick={() => handleDeleteSubTopic(topic.id, subIndex)}
+                                                className="text-slate-500 hover:text-red-400 p-1"
+                                              >
+                                                <Trash2 size={14} />
+                                              </button>
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                    )}
+                                  </Draggable>
+                                );
+                              })}
                               {provided.placeholder}
                             </div>
                           )}
