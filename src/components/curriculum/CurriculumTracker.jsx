@@ -22,7 +22,7 @@ const CurriculumTracker = ({ curriculum = [], onUpdate }) => {
   }, [curriculum]);
 
   // ==========================================
-  // 🚀 SÜRÜKLE BIRAK (DND) MANTIĞI
+  // SÜRÜKLE BIRAK (DND) MANTIĞI
   // ==========================================
   const handleDragEnd = (result) => {
     const { source, destination, type } = result;
