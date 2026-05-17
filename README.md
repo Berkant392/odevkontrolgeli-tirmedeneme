@@ -1,1 +1,1 @@
-# odevkontrolgeli-tirmedeneme
+# odevkontroluygulamam1
