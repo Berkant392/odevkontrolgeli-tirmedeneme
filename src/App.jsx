@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, GraduationCap, Library, Settings, LogOut, Mic, X, Megaphone, Edit3, Pencil, Trash2, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { ChevronLeft, GraduationCap, Library, Settings, LogOut, Mic, X, Megaphone, Edit3, Pencil, Trash2, AlertTriangle, CheckCircle, Info, RefreshCw, WifiOff } from 'lucide-react';
+
+// 🔥 PWA GÜNCELLEME MOTORU İÇİN VİTE-PWA HOOK'U
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
 // FİREBASE
 import { db } from './config/firebase'; 
@@ -45,11 +48,11 @@ const App = () => {
     const [modalDateVal, setModalDateVal] = useState("");
     const [modalPdfVal, setModalPdfVal] = useState("");
     
-    // 🔥 ÖĞRENCİ DÜZENLEME İÇİN YENİ STATE'LER
+    // ÖĞRENCİ DÜZENLEME İÇİN STATE'LER
     const [modalEditUsername, setModalEditUsername] = useState("");
     const [modalEditPassword, setModalEditPassword] = useState("");
     
-    // 🔐 ÖĞRENCİNİN KENDİ AYARLARI İÇİN GEREKLİ INPUT STATE'LERİ
+    // ÖĞRENCİNİN KENDİ AYARLARI İÇİN GEREKLİ INPUT STATE'LERİ
     const [studentUsernameInput, setStudentUsernameInput] = useState("");
     const [studentPasswordInput, setStudentPasswordInput] = useState("");
     const [studentConfirmPasswordInput, setStudentConfirmPasswordInput] = useState("");
@@ -67,13 +70,41 @@ const App = () => {
     
     const [showAssistant, setShowAssistant] = useState(false);
 
-    // 🔥 ÖZEL UYARI MODALI STATE'İ
+    // CUSTOM ALERT / DIALOG MODALI STATE'İ
     const [dialogData, setDialogData] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: null });
+
+    // 🔥 PWA YAŞAM DÖNGÜSÜ VE İNTERNET KONTROLÜ STATE'LERİ
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+    const {
+        needRefresh: [needRefresh, setNeedRefresh],
+        updateServiceWorker,
+    } = useRegisterSW({
+        onRegisteredSW(swUrl, r) {
+            if (r) {
+                // Her 15 dakikada bir sunucuda yeni güncelleme paketleri var mı diye kontrol et
+                setInterval(() => {
+                    r.update();
+                }, 15 * 60 * 1000);
+            }
+        }
+    });
+
+    // İnternet durum takibini sağlayan donanımsal dinleyici (Çevrimdışı çalışmayı engeller)
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     const regularClasses = classes.filter(c => c.type !== 'vip');
     const vipClasses = classes.filter(c => c.type === 'vip');
 
-    // 🔥 ŞIK UYARI (MODAL) YÖNETİCİSİ
     const showAlert = (type, title, message, onConfirm = null) => { setDialogData({ isOpen: true, type, title, message, onConfirm }); };
     const closeAlert = () => { setDialogData({ isOpen: false, type: 'info', title: '', message: '', onConfirm: null }); };
 
@@ -129,7 +160,7 @@ const App = () => {
         showAlert('warning', 'Emin misiniz?', 'Bu öğe kütüphaneden silinecek.', async () => { await deleteDoc(doc(db, LIBRARY_COLLECTION, id)); }); 
     };
     
-    const addStudent = (classId) => { if(!newStudentName.trim()) return; const cls = classes.find(c => c.id === classId); const username = newStudentName.toLowerCase().replace(/\s+/g, '.') + Math.floor(Math.random()*1000); const password = Math.random().toString(36).slice(-6); const newStd = { id: generateId('std'), name: newStudentName, username, password, grades: {}, assignmentNotes: {} }; updateClassInDb({ ...cls, students: [...(cls.students || []), newStd] }); setNewStudentName(""); };
+    const addStudent = (classId) => { if(!newStudentName.trim()) return; const cls = classes.find(classId ? c => c.id === classId : c => c.id === selectedClass?.id); const username = newStudentName.toLowerCase().replace(/\s+/g, '.') + Math.floor(Math.random()*1000); const password = Math.random().toString(36).slice(-6); const newStd = { id: generateId('std'), name: newStudentName, username, password, grades: {}, assignmentNotes: {} }; updateClassInDb({ ...cls, students: [...(cls.students || []), newStd] }); setNewStudentName(""); };
     
     const deleteStudent = (e, classId, studentId) => { 
         e.stopPropagation(); 
@@ -170,7 +201,6 @@ const App = () => {
     
     const openCellNoteModal = (classId, studentId, colId, currentNote) => { setCellNoteModal({ classId, studentId, colId, note: currentNote || "" }); };
     
-    // 🔥 ÖĞRENCİNİN KENDİ BİLGİLERİNİ GÜNCELLEME SİSTEMİ
     const handleOpenStudentSettings = () => {
         if (loggedInStudent) {
             setStudentUsernameInput(loggedInStudent.username || "");
@@ -196,15 +226,12 @@ const App = () => {
 
             const updatedStudents = cls.students.map(s => 
                 s.id === loggedInStudent.id 
-                    ? { ...s, username: studentUsernameInput.trim(), password: studentPasswordInput.trim() } 
+                    ? { ...s, username: studentUsernameInput.trim().toLowerCase(), password: studentPasswordInput.trim() } 
                     : s
             );
 
             await updateClassInDb({ ...cls, students: updatedStudents });
-            
-            // Yerel oturum state'ini de güncelle ki çıkış yapana kadar güncel kalsın
-            setLoggedInStudent(prev => ({ ...prev, username: studentUsernameInput.trim(), password: studentPasswordInput.trim() }));
-            
+            setLoggedInStudent(prev => ({ ...prev, username: studentUsernameInput.trim().toLowerCase(), password: studentPasswordInput.trim() }));
             setStudentSettingsModal(false);
             showAlert('success', 'Başarılı', 'Hesap bilgileriniz başarıyla güncellendi ve kaydedildi.');
         } catch (e) {
@@ -232,7 +259,7 @@ const App = () => {
         else if (modalType === 'edit-student') { 
             const cls = classes.find(c => c.id === modalData.classId); 
             const updatedStudents = cls.students.map(s => 
-                s.id === modalData.studentId ? { ...s, name: modalInputVal, username: modalEditUsername, password: modalEditPassword } : s
+                s.id === modalData.studentId ? { ...s, name: modalInputVal, username: modalEditUsername.trim().toLowerCase(), password: modalEditPassword.trim() } : s
             ); 
             updateClassInDb({ ...cls, students: updatedStudents }); 
         } 
@@ -426,7 +453,7 @@ const App = () => {
                 </div>
             )}
 
-            {/* 🔐 ÖĞRENCİ KENDİ HESAP AYARLARI MODALI */}
+            {/* ÖĞRENCİ KENDİ HESAP AYARLARI MODALI */}
             <AnimatePresence>
                 {studentSettingsModal && (
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
@@ -437,17 +464,17 @@ const App = () => {
                             
                             <div className="mb-4">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kullanıcı Adı</label>
-                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={studentUsernameInput} onChange={e => setStudentUsernameInput(e.target.value)} />
+                                <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck="false" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={studentUsernameInput} onChange={e => setStudentUsernameInput(e.target.value)} />
                             </div>
 
                             <div className="mb-4">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Yeni Şifre</label>
-                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Yeni şifrenizi girin" value={studentPasswordInput} onChange={e => setStudentPasswordInput(e.target.value)} />
+                                <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck="false" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Yeni şifrenizi girin" value={studentPasswordInput} onChange={e => setStudentPasswordInput(e.target.value)} />
                             </div>
 
                             <div className="mb-4">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Yeni Şifre (Tekrar)</label>
-                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Şifrenizi doğrulayın" value={studentConfirmPasswordInput} onChange={e => setStudentConfirmPasswordInput(e.target.value)} />
+                                <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck="false" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Şifrenizi doğrulayın" value={studentConfirmPasswordInput} onChange={e => setStudentConfirmPasswordInput(e.target.value)} />
                             </div>
 
                             <div className="flex gap-2 justify-end mt-2">
@@ -500,6 +527,68 @@ const App = () => {
                             </div>
                         </motion.div>
                     </div>
+                )}
+            </AnimatePresence>
+
+            {/* 🔴 YENİ: İNTERNETSİZ ÇALIŞMAYI ENGELLEYEN TAM SAYFA KAPLAMA (OVERLAY) */}
+            <AnimatePresence>
+                {!isOnline && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        exit={{ opacity: 0 }} 
+                        className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[99999] flex flex-col items-center justify-center p-6 text-center select-none"
+                    >
+                        <motion.div 
+                            animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }}
+                            transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+                            className="w-24 h-24 bg-rose-500/10 border border-rose-500/30 rounded-full flex items-center justify-center text-rose-500 mb-6 shadow-[0_0_50px_rgba(239,68,68,0.2)]"
+                        >
+                            <WifiOff size={44} />
+                        </motion.div>
+                        <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide uppercase">Bağlantı Kesildi</h2>
+                        <p className="text-slate-400 text-sm md:text-base mt-3 max-w-sm font-medium leading-relaxed">
+                            Berkant Hoca Eğitim Platformu aktif bir internet bağlantısı gerektirir. Lütfen ağ ayarlarınızı kontrol edin.
+                        </p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* 🚀 YENİ: KAÇIŞI OLMAYAN ZORUNLU GÜNCELLEME EKRANI (UPDATE PROMPT) */}
+            <AnimatePresence>
+                {needRefresh && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[99998] flex items-center justify-center p-4 select-none"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, y: 30 }} 
+                            animate={{ scale: 1, y: 0 }}
+                            className="bg-slate-900 border-2 border-brandPurple/40 p-6 md:p-8 rounded-[2.5rem] w-full max-w-md text-center shadow-[0_0_80px_rgba(147,51,234,0.25)] relative overflow-hidden"
+                        >
+                            {/* Parlama efekti */}
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full bg-brandPurple/10 blur-3xl pointer-events-none"></div>
+
+                            <div className="w-16 h-16 bg-purple-500/10 border border-purple-500/30 text-brandPurple rounded-full flex items-center justify-center mx-auto mb-6 shadow-glow">
+                                <RefreshCw size={28} className="animate-spin" style={{ animationDuration: '6s' }} />
+                            </div>
+
+                            <h3 className="text-2xl font-black text-white tracking-wide uppercase">Sistem Güncellemesi</h3>
+                            <p className="text-slate-300 text-xs md:text-sm font-medium mt-3 leading-relaxed">
+                                Sizin için uygulamayı geliştirdik ve yeni akıllı özellikler ekledik! Kesintisiz ve hatasız bir deneyim için devam etmeden önce lütfen güncelleyin.
+                            </p>
+
+                            <motion.button 
+                                whileHover={{ scale: 1.03 }} 
+                                whileTap={{ scale: 0.97 }} 
+                                onClick={() => updateServiceWorker(true)}
+                                className="w-full mt-8 bg-brandPurple hover:bg-purple-600 text-white font-black py-4 rounded-2xl shadow-glow tracking-widest text-sm transition-colors flex items-center justify-center gap-2"
+                            >
+                                <RefreshCw size={16} /> UYGULAMAYI GÜNCELLE
+</motion.button>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 
