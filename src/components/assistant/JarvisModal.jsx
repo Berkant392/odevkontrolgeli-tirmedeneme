@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Calendar, StickyNote, AlertTriangle, Save, User, CheckCircle2, Keyboard, Send, ChevronRight, HelpCircle, TerminalSquare } from 'lucide-react';
+import { X, Mic, RefreshCw, Save, User, CheckCircle2, TerminalSquare, ChevronRight, HelpCircle } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
-import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
 
-// 🛡️ ÇÖKME ENGELLEYİCİ GÜVENLİK KALKANI
 const getSafeText = (val) => {
     if (!val) return "";
     if (typeof val === 'string' || typeof val === 'number') return String(val);
@@ -18,7 +16,6 @@ const getSafeText = (val) => {
     return String(val);
 };
 
-// Kurumsal beyaz tema için modern durum renk matrisi
 const lightStatusStyles = {
     'done': 'bg-emerald-50 border-emerald-200 text-emerald-600 font-bold shadow-sm',
     'missing': 'bg-rose-50 border-rose-200 text-rose-600 font-bold shadow-sm',
@@ -29,27 +26,24 @@ const lightStatusStyles = {
 const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) => {
     const [isListening, setIsListening] = useState(false);
     const [speechTranscript, setSpeechTranscript] = useState("");
-    const [textCommand, setTextCommand] = useState("");
     
-    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem hazır. Komutunuzu dinliyorum.");
+    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem aktif. Komutunuzu bekliyorum efendim.");
     
     const [foundStudents, setFoundStudents] = useState(initialStudent ? [initialStudent] : []);
     const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
     const [foundTopics, setFoundTopics] = useState([]);
     
-    // Eksik veri durumunda açılacak akıllı etkileşim panelleri
+    // Eksik veri durumlarında kullanılacak dinamik seçim alanları
     const [pendingAction, setPendingAction] = useState(null); 
     const [pendingSources, setPendingSources] = useState([]); 
     const [pendingStatusSelect, setPendingStatusSelect] = useState(null); 
     
     const [draftGrades, setDraftGrades] = useState({});
-    
     const recognitionRef = useRef(null);
-    const inputRef = useRef(null);
 
     const sortedFoundTopics = Array.isArray(foundTopics) ? [...foundTopics].filter(Boolean).reverse() : [];
 
-    // Başlangıç Kurulumu ve Otomatik Mikrofon Tetikleyicisi
+    // Başlangıç Ayarları ve Otomatik Mikrofon Aktivasyonu
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         
@@ -57,10 +51,9 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             const safeClasses = Array.isArray(classes) ? classes.filter(Boolean) : [];
             const targetClass = safeClasses.find(c => c.id === initialStudent.classId);
             setFoundTopics(targetClass?.topics || []);
-            setJarvisFeedback(`Aktif Profil: ${initialStudent.name}. Komut bekliyorum.`);
+            setJarvisFeedback(`${initialStudent.name} profili kilitlendi. Ödev durumunu söyleyebilirsiniz.`);
         }
 
-        // Modal açılır açılmaz mikrafonu anında aktif et
         const autoStartTimer = setTimeout(() => {
             startListening();
         }, 300);
@@ -72,10 +65,22 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         };
     }, [initialStudent, classes]);
 
-    // 🎯 GELİŞMİŞ HİBRİT TOKEN VE METİN EŞLEŞTİRME MOTORU (ÖN OKUMA DESTEKLİ)
+    // ⚡ YENİ ÖĞRENCİ ARAMA FONKSİYONU (RESET MANTIĞI)
+    const handleResetStudent = () => {
+        setSelectedStudent(null);
+        setFoundStudents([]);
+        setFoundTopics([]);
+        setPendingAction(null);
+        setPendingSources([]);
+        setPendingStatusSelect(null);
+        setJarvisFeedback("Öğrenci seçimi sıfırlandı. Lütfen yeni öğrenci adını söyleyin.");
+        setTimeout(() => startListening(), 400);
+    };
+
+    // 🧠 SİSTEMDEKİ TÜM VERİLERİ ÖNCEDEN OKUYAN DİNAMİK SÖZLÜK MOTORU (LEXICON)
     const findBestComponentLocal = (items, targetProperty, inputTranscript) => {
         if (!items || items.length === 0 || !inputTranscript) return null;
-        let normalizedInput = inputTranscript.toLocaleLowerCase('tr-TR');
+        let text = inputTranscript.toLocaleLowerCase('tr-TR');
         
         let bestItem = null;
         let highestScore = 0;
@@ -83,50 +88,50 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         items.forEach(item => {
             let targetText = getSafeText(item[targetProperty]).toLocaleLowerCase('tr-TR');
             
-            // 1. Tam İçerme Kontrolü (Işık hızı doğrudan eşleşme)
-            if (normalizedInput.includes(targetText) || targetText.includes(normalizedInput)) {
+            // 1. Birebir veya İç İçe Geçme Durumu
+            if (text.includes(targetText) || targetText.includes(text)) {
                 highestScore = 100;
                 bestItem = item;
                 return;
             }
             
-            // 2. Ses Tanıma Hataları İçin Özel Kısaltma ve Akustik Tolerans Matrisi (VDD / SB)
-            if (targetText.includes("video ders defteri") && (normalizedInput.includes("vdd") || normalizedInput.includes("video ders") || normalizedInput.includes("ve de") || normalizedInput.includes("ve d "))) {
+            // 2. Akustik Ses Tanıma Hataları Tolerans Filtresi (Ön Okuma Destekli)
+            if (targetText.includes("video ders defteri") && (text.includes("vdd") || text.includes("video ders") || text.includes("ve de") || text.includes("ve d") || text.includes("bide"))) {
                 highestScore = 98;
                 bestItem = item;
                 return;
             }
-            if (targetText.includes("soru bankası") && (normalizedInput.includes("sb") || normalizedInput.includes("soru banka") || normalizedInput.includes("se be"))) {
+            if (targetText.includes("soru bankası") && (text.includes("sb") || text.includes("soru banka") || text.includes("se be"))) {
                 highestScore = 98;
                 bestItem = item;
                 return;
             }
             
-            // 3. Kelime Tabanlı Token Kesişimi (Turkish Suffix Stripping)
+            // 3. Ek Temizleme ve Kök Analizi
             let targetTokens = targetText.split(/\s+/).filter(t => t.length > 1);
             let matchedTokens = targetTokens.filter(token => {
                 let strippedToken = token.replace(/ı|i|u|ü|a|e|ın|in|un|ün$/g, "");
-                return normalizedInput.includes(token) || normalizedInput.includes(strippedToken);
+                return text.includes(token) || text.includes(strippedToken);
             });
             
             let tokenScore = (matchedTokens.length / targetTokens.length) * 85;
-            if (tokenScore > highestScore && tokenScore >= 40) {
+            if (tokenScore > highestScore && tokenScore >= 35) {
                 highestScore = tokenScore;
                 bestItem = item;
             }
         });
         
-        // 4. Yedek Koruma Duvarı: Fuse.js Bulanık Arama Fallback'i
+        // 4. Fallback: Fuse.js Bulanık Eşleştirme
         if (highestScore < 50) {
             const fuse = new Fuse(items, { keys: [targetProperty], threshold: 0.55, ignoreLocation: true });
-            const results = fuse.search(normalizedInput);
+            const results = fuse.search(text);
             if (results.length > 0) bestItem = results[0].item;
         }
         
         return bestItem;
     };
 
-    // 🧠 YEREL NLP ANALİZ MERKEZİ
+    // 🔬 YEREL DOĞAL DİL İŞLEME (LOCAL NLP) MERKEZİ
     const analyzeCommandLocal = (transcript, isFinalFallback = true) => {
         let text = transcript.toLocaleLowerCase('tr-TR').trim();
         
@@ -136,36 +141,31 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             setPendingStatusSelect(null);
         }
         
-        // Sistem direktifleri kontrolü
-        if (text.match(/kaydet|onayla|sisteme işle/)) {
-            applyChanges();
-            return true;
-        }
-        if (text === 'kapat' || text === 'çık') {
-            onClose();
-            return true;
-        }
+        // Sistem direktifleri yönetimi
+        if (text.match(/kaydet|onayla|sisteme işle/)) { applyChanges(); return true; }
+        if (text === 'kapat' || text === 'çık') { onClose(); return true; }
+        if (text.match(/öğrenci değiştir|yeni öğrenci|öğrenci ara/)) { handleResetStudent(); return true; }
 
-        // Sayısal düzeltmeler
         text = text.replace(/birinci/g, '1').replace(/ikinci/g, '2').replace(/üçüncü/g, '3')
                    .replace(/\bbir\b/g, '1').replace(/\biki\b/g, '2').replace(/\b[uü]ç\b/g, '3');
 
-        // Durum kelimeleri tespiti
+        // Durum (Status) yönetimi
         let status = null;
-        if (text.match(/çözmemiş|yapmamış|yapmadı|eksik|boş|yok|çözmüyor|yapılmadı|çözülmedi|hiçbiri|hiçbirini/)) status = 'missing';
-        else if (text.match(/çözdü|yaptı|tamamladı|bitirdi|full|bitti|çözmüş|yapmış|yapıldı|çözuledü|tamamlandı|yapıyoruz/)) status = 'done';
-        else if (text.match(/verdim|verildi|atadım|ödev ver|çözecek|yapacak/)) status = 'assigned';
-        else if (text.match(/muaf|gerek yok|çözmesin|pas geç/)) status = 'exempt';
+        if (text.match(/çözmemiş|yapmamış|yapmadı|eksik|boş|yok|çözmüyor|yapılmadı|çözülmedi/)) status = 'missing';
+        else if (text.match(/çözdü|yaptı|tamamladı|bitirdi|full|bitti|çözmüş|yapmış|yapıldı|çözüldü|yapıyoruz/)) status = 'done';
+        else if (text.match(/verdim|verildi|atadım|ödev ver/)) status = 'assigned';
+        else if (text.match(/muaf|gerek yok|pas geç/)) status = 'exempt';
 
-        // Toplu işlem kelimeleri tespiti
-        const isAllSources = text.match(/tümünü|tamamını|hepsini|bütün kaynaklar|tümü|tamamı|hepsi|hiçbiri|hiçbirini/);
+        // 🌟 "TÜMÜ / HİÇBİRİ" TOPLU İŞLEM PARSERI
+        const isAllSources = text.match(/tümünü|tamamını|hepsini|bütün kaynaklar|tümü|tamamı|hepsi/);
+        const isNoneSources = text.match(/hiçbiri|hiçbirini/);
 
         const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
         const allStudents = safeClasses.flatMap(cls => 
             Array.isArray(cls.students) ? cls.students.filter(std => std && std.name).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })) : []
         );
 
-        // Öğrenci Bulma
+        // Öğrenci bağlam kontrolü
         let bestStudent = findBestComponentLocal(allStudents, 'name', text);
 
         if (bestStudent && isFinalFallback) {
@@ -197,17 +197,21 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         
         if (isFinalFallback) setFoundTopics(topics);
 
-        // Konu Eşleştirme (Ön Okuma Destekli)
+        // Konu Eşleştirme
         const bestTopic = findBestComponentLocal(topics, 'title', text);
-        if (!bestTopic) return false;
+        if (!bestTopic) {
+            if (isFinalFallback) setJarvisFeedback(`${bestStudent.name} profili kilitlendi. Lütfen ödev konusunu söyleyin.`);
+            return false;
+        }
 
-        // Karar ve İcra Algoritması
-        if (isAllSources && status) {
+        // 🌟 TOPLU DURUM ATAMA İŞLEMLERİ (Kusursuzlaştırıldı)
+        if ((isAllSources || isNoneSources) && (status || isNoneSources)) {
+            let targetStatus = isNoneSources ? 'missing' : status;
             if (isFinalFallback) {
                 (bestTopic.subColumns || []).forEach(col => {
-                    handleDraftGradeChange(bestStudent.id, col.id, status);
+                    handleDraftGradeChange(bestStudent.id, col.id, targetStatus);
                 });
-                setJarvisFeedback(`Toplu İşlem Başarılı: ${bestTopic.title} altındaki tüm kaynaklar güncellendi.`);
+                setJarvisFeedback(`İşlem Başarılı: ${bestTopic.title} altındaki tüm kaynaklar güncellendi.`);
             }
             return true;
         } 
@@ -217,18 +221,19 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             if (bestCol) {
                 if (isFinalFallback) {
                     handleDraftGradeChange(bestStudent.id, bestCol.id, status);
-                    setJarvisFeedback(`İşlem Onaylandı: ${bestTopic.title} -> ${bestCol.title} güncellendi.`);
+                    setJarvisFeedback(`Onaylandı: ${bestTopic.title} -> ${bestCol.title} güncellendi.`);
                 }
                 return true;
             } else if (isFinalFallback) {
+                // Kaynak anlaşılamadıysa alt tarafta butonları aç
                 setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: status });
                 setPendingSources(bestTopic.subColumns || []);
-                setJarvisFeedback(`"${bestTopic.title}" anlaşıldı. Uygulanacak kaynağı alttan seçin.`);
+                setJarvisFeedback(`"${bestTopic.title}" konusu anlaşıldı. Uygulanacak kaynağı alttan seçin.`);
             }
             return false;
         }
 
-        // Durum kelimesi yoksa ama konu ve kaynak belliyse durumu aşağıda sor
+        // Durum belirtilmediyse ama kaynak belliyse durumu sor
         const bestCol = findBestComponentLocal(bestTopic.subColumns || [], 'title', text) || bestTopic.subColumns?.[0];
         if (bestCol && isFinalFallback) {
             setPendingStatusSelect({ studentId: bestStudent.id, topicId: bestTopic.id, colId: bestCol.id, colTitle: bestCol.title });
@@ -239,32 +244,28 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         return false;
     };
 
-    // 🎙️ COKLU ALTERNATİF SES TARAYICI KONTROLÜ
     const handleCommandAlternatives = (alternatives) => {
-        // En yüksek netlikteki 3 ses sonucunu sırayla dene, hangisi tam başarı sağlarsa orada dur!
         for (const transcript of alternatives) {
-            let hasProcessed = analyzeCommandLocal(transcript, false); // test modu
+            let hasProcessed = analyzeCommandLocal(transcript, false);
             if (hasProcessed) {
                 setSpeechTranscript(transcript);
-                analyzeCommandLocal(transcript, true); // asıl icra modu
+                analyzeCommandLocal(transcript, true);
                 return;
             }
         }
-        // Eğer hiçbir alternatif tam oturmadıysa, ilk alternatifi temel alarak alt panelleri açtır
         setSpeechTranscript(alternatives[0]);
         analyzeCommandLocal(alternatives[0], true);
     };
 
     const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) { setJarvisFeedback("Ses modülü tarayıcınızda desteklenmiyor."); return; }
+        if (!SpeechRecognition) { setJarvisFeedback("Ses modülü aktif değil."); return; }
         if (recognitionRef.current) recognitionRef.current.abort();
         
         const recognition = new SpeechRecognition();
         recognitionRef.current = recognition;
         recognition.lang = 'tr-TR';
         recognition.continuous = false;
-        // Akıllı çoklu alternatif katmanı aktif edildi
         recognition.maxAlternatives = 3; 
 
         recognition.onstart = () => { setIsListening(true); setSpeechTranscript(""); setJarvisFeedback("Dinliyorum..."); };
@@ -279,13 +280,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
     const stopListening = () => {
         if (recognitionRef.current) { recognitionRef.current.abort(); setIsListening(false); }
-    };
-
-    const handleManualSubmit = () => {
-        if (!textCommand.trim()) return;
-        setSpeechTranscript(textCommand);
-        analyzeCommandLocal(textCommand, true);
-        setTextCommand(""); 
     };
 
     const handleManualSourceSelect = (col) => {
@@ -326,8 +320,8 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 exit={{ opacity: 0, scale: 0.97, y: 12 }} 
                 className="bg-white border border-slate-200 rounded-[2.2rem] w-full max-w-2xl overflow-hidden shadow-float flex flex-col max-h-[85vh]"
             >
-                {/* ÜST RADAR VE KONTROL ALANI */}
-                <div className="relative overflow-hidden bg-slate-50/80 border-b border-slate-100 p-6 flex flex-col items-center justify-center shrink-0">
+                {/* ÜST RADAR VE YENİ ÖĞRENCİ SEKMELİ KONTROL ALANI */}
+                <div className="relative overflow-hidden bg-slate-50/70 border-b border-slate-100 p-6 flex flex-col items-center justify-center shrink-0">
                     <button onClick={onClose} className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors z-30"><X size={20}/></button>
                     <div className="absolute top-5 left-6 flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-widest z-20"><TerminalSquare size={13}/> AKILLI İŞLEM ASİSTANI</div>
                     
@@ -337,21 +331,27 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         <Mic size={28} className={isListening ? 'text-brandPurple animate-pulse' : 'text-slate-400 group-hover:text-brandPurple transition-colors'} />
                     </div>
 
-                    <div className="w-full max-w-xl z-10 relative flex items-center mb-3">
-                        <div className="absolute left-4 text-slate-400 pointer-events-none"><Keyboard size={16} /></div>
-                        <input 
-                            ref={inputRef} type="text" placeholder="Komut yazın veya seslendirin (Örn: Tümü yapıldı)..." 
-                            className="w-full bg-white border border-slate-200 rounded-2xl pl-11 pr-24 py-3.5 text-sm focus:outline-none focus:border-brandPurple focus:ring-2 focus:ring-purple-100 shadow-sm transition-all font-bold text-slate-700 placeholder:text-slate-400"
-                            value={textCommand} onChange={(e) => setTextCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} disabled={isListening}
-                        />
-                        <div className="absolute right-2 flex items-center gap-1">
-                            <button onClick={isListening ? stopListening : startListening} className={`p-2 rounded-xl transition-all ${isListening ? 'bg-purple-50 text-brandPurple' : 'text-slate-400 hover:bg-slate-100 hover:text-brandPurple'}`}><Mic size={16} /></button>
-                            <button onClick={handleManualSubmit} className="p-2 bg-brandPurple hover:bg-purple-700 text-white rounded-xl transition-all shadow-sm" disabled={!textCommand.trim() || isListening}><Send size={16} /></button>
+                    {/* 🔥 KOMUT YAZMA KUTUSU KALKTI, YERİNE PREMIUM DEĞİŞTİRME SEKMESİ GELDİ */}
+                    <div className="w-full max-w-xl z-10 flex gap-2">
+                        <div className="flex-1 bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 flex items-center justify-between shadow-sm">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span className="text-slate-400 font-medium">Aktif Bağlam:</span>
+                                <span className="text-brandPurple font-black">{selectedStudent ? selectedStudent.name : "Öğrenci Seçilmedi"}</span>
+                            </div>
+                            {selectedStudent && (
+                                <button 
+                                    onClick={handleResetStudent}
+                                    className="flex items-center gap-1 text-[11px] font-black bg-purple-50 text-brandPurple border border-purple-100 px-3 py-1.5 rounded-xl hover:bg-brandPurple hover:text-white transition-all shadow-sm"
+                                >
+                                    <RefreshCw size={12}/> YENİ ÖĞRENCİ ARA
+                                </button>
+                            )}
                         </div>
                     </div>
 
-                    {/* BİLGİ VE YARDIMCI BUTON KAPSÜLLERİ */}
-                    <div className="z-10 text-center w-full px-4 min-h-[24px] flex flex-col justify-center items-center">
+                    {/* DİNAMİK FEEDBACK ALANI */}
+                    <div className="z-10 text-center w-full px-4 min-h-[24px] flex flex-col justify-center items-center mt-3">
                         {speechTranscript && <p className="text-[11px] text-slate-400 font-medium italic mb-1">"{speechTranscript}"</p>}
                         <div className="flex items-center gap-1.5 justify-center font-black text-slate-700 text-sm">
                             <span className="text-brandPurple font-black">&gt;</span> {jarvisFeedback}
@@ -395,7 +395,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         <div className="space-y-2 animate-scale-in">
                             <h4 className="text-slate-400 font-bold text-[10px] uppercase tracking-wider ml-1">Eşleşen Öğrenci Kayıtları</h4>
                             {foundStudents.map(student => (
-                                <button key={student.id} onClick={() => { setSelectedStudent(student); setFoundTopics((classes || []).find(c=>c.id===student.classId)?.topics || []); setFoundStudents([student]); setJarvisFeedback(`${student.name} seçildi. Komut bekliyorum.`); }} className="w-full text-left p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-brandPurple hover:bg-purple-50/20 transition-all flex items-center gap-3.5 group shadow-sm">
+                                <button key={student.id} onClick={() => { setSelectedStudent(student); setFoundTopics((classes || []).find(c=>c.id===student.classId)?.topics || []); setFoundStudents([student]); setJarvisFeedback(`${student.name} seçildi. Ödev durumunu söyleyebilirsiniz.`); }} className="w-full text-left p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-brandPurple hover:bg-purple-50/20 transition-all flex items-center gap-3.5 group shadow-sm">
                                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${student.isVip ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-brandPurple'}`}>{getSafeText(student.name).charAt(0)}</div>
                                     <div className="flex flex-col">
                                         <span className="font-bold text-slate-700 group-hover:text-brandPurple transition-all">{getSafeText(student.name)}</span>
@@ -409,12 +409,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
                     {selectedStudent && foundStudents.length === 1 && (
                         <>
-                            <div className="flex items-center gap-3.5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm animate-scale-in">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm border ${selectedStudent.isVip ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-sm' : 'bg-purple-50 text-brandPurple border-purple-200 shadow-sm'}`}>{getSafeText(selectedStudent?.name).charAt(0)}</div>
-                                <div className="flex flex-col"><span className="text-base font-black text-slate-800">{getSafeText(selectedStudent?.name)}</span><span className="text-[10px] font-black uppercase text-slate-400 mt-0.5 tracking-wider">{selectedStudent.isVip ? 'VIP ÖZEL DERS PORTALİ' : getSafeText(selectedStudent?.className)}</span></div>
-                            </div>
-                            
-                            <div className="space-y-4 pb-6">
+                            <div className="space-y-4 pb-6 animate-scale-in">
                                 {sortedFoundTopics.map(topic => (
                                     <div key={topic.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
                                         <h4 className="font-black text-slate-700 text-xs mb-3.5 border-b border-slate-100 pb-2.5 flex items-center gap-2"><div className={`w-1.5 h-3.5 rounded-full ${selectedStudent.isVip ? 'bg-amber-400' : 'bg-brandPurple'}`}></div>{getSafeText(topic?.title)}</h4>
@@ -446,13 +441,13 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     )}
                     
                     {!selectedStudent && foundStudents.length <= 1 && (
-                        <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-slate-400 font-mono py-12"><TerminalSquare size={40} className="text-slate-300 mb-3 animate-pulse"/><p className="text-xs font-black text-slate-400">Komut veya Ses Bekleniyor...</p></div>
+                        <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-slate-400 font-mono py-12"><TerminalSquare size={40} className="text-slate-300 mb-3 animate-pulse"/><p className="text-xs font-black text-slate-400">Öğrenci Seçimi İçin Ses Bekleniyor...</p></div>
                     )}
                 </div>
 
                 {/* ALT PANEL: ONAY VE KAYIT SÜRECİ */}
                 <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-between items-center gap-4 shrink-0">
-                    <span className="text-[11px] font-bold text-slate-400 tracking-wide ml-1">{Object.keys(draftGrades).length} Adet Değişiklik İşlenmeyi Bekliyor</span>
+                    <span className="text-[11px] font-bold text-slate-400 tracking-wide ml-1">{Object.keys(draftGrades).length} Adet Değişiklik Listede Sıralandı</span>
                     <div className="flex gap-2">
                         <button onClick={() => { stopListening(); onClose(); }} className="px-5 py-2.5 text-xs font-bold text-slate-500 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors">İptal</button>
                         <button onClick={applyChanges} disabled={Object.keys(draftGrades).length === 0} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${Object.keys(draftGrades).length > 0 ? 'bg-brandPurple text-white hover:bg-purple-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}><Save size={14} className="inline mr-1" /> DEĞİŞİKLİKLERİ KAYDET</button>
