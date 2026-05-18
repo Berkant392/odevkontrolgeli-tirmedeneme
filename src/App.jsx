@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, GraduationCap, Library, Settings, LogOut, Mic, X, Megaphone, Edit3, Pencil, Trash2, AlertTriangle, CheckCircle, Info, RefreshCw, WifiOff } from 'lucide-react';
+import { ChevronLeft, Library, Settings, LogOut, Mic, X, Megaphone, Edit3, Pencil, Trash2, AlertTriangle, CheckCircle, Info, RefreshCw, WifiOff } from 'lucide-react';
 
 // 🔥 PWA GÜNCELLEME MOTORU İÇİN VİTE-PWA HOOK'U
 import { useRegisterSW } from 'virtual:pwa-register/react';
@@ -73,7 +73,7 @@ const App = () => {
     // CUSTOM ALERT / DIALOG MODALI STATE'İ
     const [dialogData, setDialogData] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: null });
 
-    // 🔥 PWA YAŞAM DÖNGÜSÜ, İNTERNET KONTROLÜ VE NATIVE KURULUM STATE'LERİ
+    // PWA YAŞAM DÖNGÜSÜ, İNTERNET KONTROLÜ VE NATIVE KURULUM STATE'LERİ
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [deferredPrompt, setDeferredPrompt] = useState(null);
     const [isStandalone, setIsStandalone] = useState(false);
@@ -141,22 +141,16 @@ const App = () => {
         return () => { unsubClasses(); unsubLibrary(); unsubConfig(); };
     }, []);
 
-    // 🔥 YENİ: VERİTABANI GÜNCELLENDİĞİNDE SEÇİLİ ÖĞRENCİ VE SINIF VERİLERİNİ ANINDA TAZELEME MOTORU
     useEffect(() => {
         if (classes.length > 0) {
-            // 1. Aktif seçili sınıf varsa verilerini diziden canlı güncelle
             if (selectedClass) {
                 const freshClass = classes.find(c => c.id === selectedClass.id);
                 if (freshClass) {
                     setSelectedClass(freshClass);
-                    
-                    // 2. Aktif görüntülenen öğrenci detay ekranı verisini anında tazeleyin
                     if (selectedStudentForView) {
                         const freshStudent = freshClass.students?.find(s => s.id === selectedStudentForView.id);
                         if (freshStudent) {
                             setSelectedStudentForView(freshStudent);
-                            
-                            // 3. Eğer öğrenci kendi ekranındaysa anlık olarak oturum verisini de tazeleyin
                             if (loggedInStudent && loggedInStudent.id === freshStudent.id) {
                                 setLoggedInStudent(freshStudent);
                             }
@@ -352,7 +346,6 @@ const App = () => {
         setModalEditPassword("");
     };
 
-    // 🔴 KRİTİK DEĞİŞİKLİK 1: İNTERNET KONTROLÜ EN ÜSTE ALINDI (Giriş ekranında da çalışması için)
     if (!isOnline) {
         return (
             <div className="fixed inset-0 bg-slate-950 z-[99999] flex flex-col items-center justify-center p-6 text-center select-none">
@@ -371,7 +364,6 @@ const App = () => {
         );
     }
 
-    // 🔴 KRİTİK DEĞİŞİKLİK 2: EĞER OTURUM YOKSA LOGIN EKRANINA GİT (İnternet kontrolünden hemen sonra)
     if (!currentUserRole) return (
         <LoginScreen 
             onStudentLogin={handleStudentLogin} 
@@ -382,18 +374,29 @@ const App = () => {
     );
 
     return (
-        <div className={`min-h-screen pb-32 relative transition-colors duration-1000 ${currentUserRole === 'vip-student' ? 'bg-slate-900' : 'bg-lightBg'}`}>
+        <div className={`min-h-screen pb-24 md:pb-32 relative transition-colors duration-1000 ${currentUserRole === 'vip-student' ? 'bg-slate-900' : 'bg-lightBg'}`}>
             {currentUserRole === 'vip-student' && ( <div className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"><div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full mix-blend-screen opacity-10" style={{background: 'radial-gradient(circle, rgba(255,215,0,0.4) 0%, transparent 70%)'}}></div><div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] rounded-full mix-blend-screen opacity-[0.05]" style={{background: 'radial-gradient(circle, rgba(255,255,255,0.5) 0%, transparent 70%)'}}></div></div> )}
             
+            {/* 🔥 GÜNCELLEME: Üst bar dikey payı py-4'ten mobilde py-2.5'e düşürülerek daraltıldı */}
             <header className={`no-print relative z-20 transition-all duration-500 ${currentUserRole === 'vip-student' ? 'bg-slate-800/90 border-b border-slate-700 shadow-md' : 'bg-white border-b border-slate-200 shadow-sm'}`}>
-                 <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col items-center gap-2">
+                 <div className="max-w-7xl mx-auto px-3 py-2.5 md:py-4 flex flex-col items-center gap-2">
                     <div className="flex items-center gap-3 w-full justify-between">
-                        {currentUserRole !== 'student' && currentUserRole !== 'vip-student' && view !== 'home' ? ( <button onClick={() => view === 'student-detail' ? setView('class-detail') : goHome()} className={`p-2 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}><ChevronLeft size={24} /></button> ) : <div className="w-10"></div>}
-                        <div className="text-center"><h1 className={`text-xl md:text-3xl font-black tracking-tight flex items-center justify-center gap-3 ${currentUserRole === 'vip-student' ? 'real-gold-text' : 'text-slate-800'}`}><div className={`p-2 rounded-xl shadow-md transition-transform hover:scale-105 hover-lift ${currentUserRole === 'vip-student' ? 'real-gold-bg shadow-vip-glow' : 'bg-gradient-to-tr from-brandPurple to-blue-600 shadow-glow'}`}><GraduationCap className={currentUserRole === 'vip-student' ? 'text-[#111]' : 'text-white'} size={24} strokeWidth={2.5} /></div> BERKANT HOCA</h1></div>
-                        <div className="flex items-center gap-2 min-w-[80px] justify-end">
-                            {isTeacherMode && <button onClick={() => setShowLibraryManager(true)} className="p-2 text-slate-500 hover:text-brandPurple bg-white hover:bg-purple-50 rounded-full transition-colors shadow-sm border border-slate-200 hover-lift"><Library size={20}/></button>}
-                            {(currentUserRole === 'student' || currentUserRole === 'vip-student') && <button onClick={handleOpenStudentSettings} className={`p-2 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'text-slate-300 hover:text-vipGold bg-slate-700 border border-slate-600 shadow-sm' : 'text-slate-500 hover:text-brandPurple bg-white shadow-sm border border-slate-200'}`} title="Hesabım"><Settings size={20}/></button>}
-                            <button onClick={handleLogout} className={`p-2 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'text-rose-400 hover:text-rose-300 bg-slate-700 border border-slate-600 shadow-sm' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 shadow-sm border border-slate-200'}`} title="Çıkış Yap"><LogOut size={20}/></button>
+                        {currentUserRole !== 'student' && currentUserRole !== 'vip-student' && view !== 'home' ? ( <button onClick={() => view === 'student-detail' ? setView('class-detail') : goHome()} className={`p-1.5 md:p-2 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}><ChevronLeft size={20} /></button> ) : <div className="w-8"></div>}
+                        
+                        {/* 🔥 GÜNCELLEME: Lucide başlık şapkası uçuruldu, yerine mikro pwa amblemi entegre edildi */}
+                        <div className="text-center">
+                            <h1 className={`text-md md:text-2xl font-black tracking-tight flex items-center justify-center gap-2 ${currentUserRole === 'vip-student' ? 'real-gold-text' : 'text-slate-800'}`}>
+                                <div className={`p-1 md:p-1.5 rounded-lg shadow-md transition-transform hover:scale-105 hover-lift w-7 h-7 md:w-9 md:h-9 flex items-center justify-center ${currentUserRole === 'vip-student' ? 'real-gold-bg shadow-vip-glow' : 'bg-gradient-to-tr from-brandPurple to-blue-600 shadow-glow'}`}>
+                                    <img src="/pwa-192x192.png" alt="Mini Logo" className="w-full h-full object-contain pointer-events-none select-none" />
+                                </div> 
+                                BERKANT HOCA
+                            </h1>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 min-w-[70px] justify-end">
+                            {isTeacherMode && <button onClick={() => setShowLibraryManager(true)} className="p-1.5 text-slate-500 hover:text-brandPurple bg-white hover:bg-purple-50 rounded-full transition-colors shadow-sm border border-slate-200 hover-lift"><Library size={16}/></button>}
+                            {(currentUserRole === 'student' || currentUserRole === 'vip-student') && <button onClick={handleOpenStudentSettings} className={`p-1.5 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'text-slate-300 hover:text-vipGold bg-slate-700 border border-slate-600 shadow-sm' : 'text-slate-500 hover:text-brandPurple bg-white shadow-sm border border-slate-200'}`} title="Hesabım"><Settings size={16}/></button>}
+                            <button onClick={handleLogout} className={`p-1.5 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'text-rose-400 hover:text-rose-300 bg-slate-700 border border-slate-600 shadow-sm' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 shadow-sm border border-slate-200'}`} title="Çıkış Yap"><LogOut size={16}/></button>
                         </div>
                     </div>
                 </div>
@@ -401,21 +404,23 @@ const App = () => {
 
             {view === 'home' && (
                 <>
-                    <div className="max-w-7xl mx-auto px-4 mt-6 animate-fade-in-up relative z-10">
-                        <div className={`p-5 md:p-6 rounded-[2rem] shadow-sm border flex flex-col md:flex-row gap-4 items-start md:items-center relative overflow-hidden ${currentUserRole === 'vip-student' ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-100'}`}>
-                            <div className={`p-3 rounded-2xl shrink-0 ${currentUserRole === 'vip-student' ? 'bg-slate-700 text-vipGold shadow-vip-glow' : 'bg-white text-brandPurple shadow-sm'}`}><Megaphone size={28} /></div>
-                            <div className="flex-1 z-10 pr-8">
-                                <h4 className={`text-xs font-black uppercase tracking-widest mb-1 ${currentUserRole === 'vip-student' ? 'text-slate-400' : 'text-brandPurple'}`}>{announcementTitle}</h4>
-                                <p className={`text-sm md:text-base font-medium leading-relaxed ${currentUserRole === 'vip-student' ? 'text-slate-200' : 'text-slate-700'}`}>{systemAnnouncement}</p>
+                    {/* 🔥 GÜNCELLEME: Konteyner kenar boşlukları daraltıldı px-4 -> px-2.5 */}
+                    <div className="max-w-7xl mx-auto px-2.5 mt-4 animate-fade-in-up relative z-10">
+                        <div className={`p-4 md:p-6 rounded-2xl md:rounded-[2rem] shadow-sm border flex flex-col md:flex-row gap-3 items-start md:items-center relative overflow-hidden ${currentUserRole === 'vip-student' ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-100'}`}>
+                            <div className={`p-2.5 rounded-xl shrink-0 ${currentUserRole === 'vip-student' ? 'bg-slate-700 text-vipGold shadow-vip-glow' : 'bg-white text-brandPurple shadow-sm'}`}><Megaphone size={22} /></div>
+                            <div className="flex-1 z-10 pr-6">
+                                <h4 className={`text-[10px] md:text-xs font-black uppercase tracking-widest mb-0.5 ${currentUserRole === 'vip-student' ? 'text-slate-400' : 'text-brandPurple'}`}>{announcementTitle}</h4>
+                                <p className={`text-xs md:text-base font-medium leading-relaxed ${currentUserRole === 'vip-student' ? 'text-slate-200' : 'text-slate-700'}`}>{systemAnnouncement}</p>
                             </div>
-                            {isTeacherMode && <button onClick={() => { setModalType('system-settings'); setModalInputVal(systemAnnouncement); setModalTitleVal(announcementTitle); setModalPdfVal(countdownConfig.label); setModalDateVal(countdownConfig.targetDate.split('T')[0]); }} className={`absolute top-4 right-4 p-2 rounded-xl transition-all shadow-sm ${currentUserRole === 'vip-student' ? 'bg-slate-700 text-slate-300 hover:text-vipGold' : 'bg-white text-slate-400 hover:text-brandPurple hover:bg-purple-100'}`} title="Duyuru ve Takvimi Düzenle"><Edit3 size={18} /></button>}
+                            {isTeacherMode && <button onClick={() => { setModalType('system-settings'); setModalInputVal(systemAnnouncement); setModalTitleVal(announcementTitle); setModalPdfVal(countdownConfig.label); setModalDateVal(countdownConfig.targetDate.split('T')[0]); }} className={`absolute top-3 right-3 p-1.5 rounded-lg transition-all shadow-sm ${currentUserRole === 'vip-student' ? 'bg-slate-700 text-slate-300 hover:text-vipGold' : 'bg-white text-slate-400 hover:text-brandPurple hover:bg-purple-100'}`} title="Duyuru ve Takvimi Düzenle"><Edit3 size={15} /></button>}
                         </div>
                     </div>
                     <CountdownTimer targetDateStr={countdownConfig.targetDate} startDateStr={countdownConfig.startDate} targetLabel={countdownConfig.label} />
                 </>
             )}
 
-            <main className="max-w-7xl mx-auto px-4 mt-8 no-print relative z-10">
+            {/* 🔥 GÜNCELLEME: Ana konteyner dolguları mobilde sıkıştırıldı px-4 -> px-2.5 */}
+            <main className="max-w-7xl mx-auto px-2.5 mt-5 no-print relative z-10">
                 <AnimatePresence mode="wait">
                     {isTeacherMode && view === 'home' && <TeacherDashboard regularClasses={regularClasses} vipClasses={vipClasses} onOpenClass={openClass} onNewClass={() => { setModalType('class'); setModalInputVal(''); }} onNewVipClass={() => { setModalType('vip'); setModalInputVal(''); }} />}
                     
@@ -466,69 +471,67 @@ const App = () => {
             {/* BİLGİ GİRİŞ/DÜZENLEME MODALLARI */}
             {modalType && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl">
                         {modalType === 'system-settings' ? (
                             <>
-                                <h3 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2"><Settings size={20} className="text-brandPurple"/> Sistem Ayarları</h3>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Duyuru Başlığı</label>
-                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-bold text-sm outline-none focus:border-brandPurple" value={modalTitleVal} onChange={e => setModalTitleVal(e.target.value)} />
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Duyuru Metni</label>
-                                <textarea rows="3" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-bold text-sm outline-none focus:border-brandPurple" value={modalInputVal} onChange={e => setModalInputVal(e.target.value)}></textarea>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Sayaç Başlığı (Örn: 20 Haziran 2026)</label>
-                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-bold text-sm outline-none focus:border-brandPurple" value={modalPdfVal} onChange={e => setModalPdfVal(e.target.value)} />
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Sayaç Hedef Tarihi</label>
-                                <input type="date" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-bold text-sm outline-none focus:border-brandPurple" value={modalDateVal} onChange={e => setModalDateVal(e.target.value)} />
+                                <h3 className="font-bold text-base mb-3 text-slate-800 flex items-center gap-2"><Settings size={18} className="text-brandPurple"/> Sistem Ayarları</h3>
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Duyuru Başlığı</label>
+                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-2.5 mb-3 font-bold text-xs outline-none focus:border-brandPurple" value={modalTitleVal} onChange={e => setModalTitleVal(e.target.value)} />
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Duyuru Metni</label>
+                                <textarea rows="3" className="w-full border-2 border-slate-200 rounded-xl p-2.5 mb-3 font-bold text-xs outline-none focus:border-brandPurple" value={modalInputVal} onChange={e => setModalInputVal(e.target.value)}></textarea>
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Sayaç Başlığı</label>
+                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-2.5 mb-3 font-bold text-xs outline-none focus:border-brandPurple" value={modalPdfVal} onChange={e => setModalPdfVal(e.target.value)} />
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Sayaç Hedef Tarihi</label>
+                                <input type="date" className="w-full border-2 border-slate-200 rounded-xl p-2.5 mb-3 font-bold text-xs outline-none focus:border-brandPurple" value={modalDateVal} onChange={e => setModalDateVal(e.target.value)} />
                             </>
                         ) : modalType === 'edit-student' ? (
                             <>
-                                <h3 className="font-bold text-lg mb-4 text-slate-800">Öğrenci Bilgilerini Düzenle</h3>
+                                <h3 className="font-bold text-base mb-3 text-slate-800">Öğrenci Bilgilerini Düzenle</h3>
                                 
-                                <div className="mb-4">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Öğrenci Adı</label>
-                                    <input type="text" autoFocus className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={modalInputVal} onChange={e => setModalInputVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
+                                <div className="mb-3">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Öğrenci Adı</label>
+                                    <input type="text" autoFocus className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs outline-none focus:border-brandPurple" value={modalInputVal} onChange={e => setModalInputVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
                                 </div>
                                 
-                                <div className="mb-4">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kullanıcı Adı</label>
-                                    <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={modalEditUsername} onChange={e => setModalEditUsername(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
+                                <div className="mb-3">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kullanıcı Adı</label>
+                                    <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs outline-none focus:border-brandPurple" value={modalEditUsername} onChange={e => setModalEditUsername(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
                                 </div>
 
-                                <div className="mb-4">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Şifre</label>
-                                    <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={modalEditPassword} onChange={e => setModalEditPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
+                                <div className="mb-3">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Şifre</label>
+                                    <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs outline-none focus:border-brandPurple" value={modalEditPassword} onChange={e => setModalEditPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
                                 </div>
                             </>
                         ) : (
                             <>
-                                <h3 className="font-bold text-lg mb-4 text-slate-800">{modalType === 'class' ? 'Yeni Sınıf Oluştur' : modalType === 'vip' ? 'Yeni Özel Ders Oluştur' : modalType === 'topic' ? 'Yeni Ödev Ekle' : 'Düzenle'}</h3>
-                                <input type="text" autoFocus className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Başlık girin..." value={modalInputVal} onChange={e => setModalInputVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
+                                <h3 className="font-bold text-base mb-3 text-slate-800">{modalType === 'class' ? 'Yeni Sınıf Oluştur' : modalType === 'vip' ? 'Yeni Özel Ders' : modalType === 'topic' ? 'Yeni Ödev Ekle' : 'Düzenle'}</h3>
+                                <input type="text" autoFocus className="w-full border-2 border-slate-200 rounded-xl p-2.5 mb-2 font-bold text-xs outline-none focus:border-brandPurple" placeholder="Başlık girin..." value={modalInputVal} onChange={e => setModalInputVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
                                 
                                 {modalType === 'topic' && (
-                                    <div className="mb-4">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Veya Kütüphaneden Seç:</label>
-                                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1">
-                                            {libraryItems.filter(i => i.type === LIBRARY_TYPES.TOPIC).map(item => ( <button key={item.id} onClick={() => setModalInputVal(item.text)} className="text-xs bg-purple-50 hover:bg-purple-100 text-brandPurple px-2.5 py-1.5 rounded-lg transition-colors font-bold border border-purple-100">{item.text}</button> ))}
-                                            {libraryItems.filter(i => i.type === LIBRARY_TYPES.TOPIC).length === 0 && <span className="text-[10px] text-slate-400 italic">Kütüphanede ödev başlığı yok.</span>}
+                                    <div className="mb-3">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vütüphaneden Seç:</label>
+                                        <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto p-0.5">
+                                            {libraryItems.filter(i => i.type === LIBRARY_TYPES.TOPIC).map(item => ( <button key={item.id} onClick={() => setModalInputVal(item.text)} className="text-[11px] bg-purple-50 hover:bg-purple-100 text-brandPurple px-2 py-1 rounded-lg transition-colors font-bold border border-purple-100">{item.text}</button> ))}
                                         </div>
                                     </div>
                                 )}
                                 {modalType === 'source' && (
-                                    <div className="mb-4">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Veya Kütüphaneden Seç:</label>
-                                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1">
-                                            {libraryItems.filter(i => i.type === LIBRARY_TYPES.SOURCE).map(item => ( <button key={item.id} onClick={() => setModalInputVal(item.text)} className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2.5 py-1.5 rounded-lg transition-colors font-bold border border-emerald-100">{item.text}</button> ))}
-                                            {libraryItems.filter(i => i.type === LIBRARY_TYPES.SOURCE).length === 0 && <span className="text-[10px] text-slate-400 italic">Kütüphanede kaynak başlığı yok.</span>}
+                                    <div className="mb-3">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kütüphaneden Seç:</label>
+                                        <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto p-0.5">
+                                            {libraryItems.filter(i => i.type === LIBRARY_TYPES.SOURCE).map(item => ( <button key={item.id} onClick={() => setModalInputVal(item.text)} className="text-[11px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg transition-colors font-bold border border-emerald-100">{item.text}</button> ))}
                                         </div>
                                     </div>
                                 )}
 
-                                {(modalType === 'source' || modalType === 'edit-source') && ( <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-bold text-sm outline-none focus:border-brandPurple" placeholder="Google Drive Linki (İsteğe bağlı)" value={modalPdfVal} onChange={e => setModalPdfVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} /> )}
-                                {(modalType === 'topic' || modalType === 'edit-topic' || modalType === 'edit-date') && ( <input type="date" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-bold text-sm outline-none focus:border-brandPurple" value={modalDateVal} onChange={e => setModalDateVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} /> )}
+                                {(modalType === 'source' || modalType === 'edit-source') && ( <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-2.5 mb-3 font-bold text-xs outline-none focus:border-brandPurple" placeholder="Google Drive Linki" value={modalPdfVal} onChange={e => setModalPdfVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} /> )}
+                                {(modalType === 'topic' || modalType === 'edit-topic' || modalType === 'edit-date') && ( <input type="date" className="w-full border-2 border-slate-200 rounded-xl p-2.5 mb-3 font-bold text-xs outline-none focus:border-brandPurple" value={modalDateVal} onChange={e => setModalDateVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} /> )}
                             </>
                         )}
                         <div className="flex gap-2 justify-end mt-2">
-                            <button onClick={() => { setModalType(null); setModalEditUsername(""); setModalEditPassword(""); }} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button>
-                            <button onClick={handleModalSubmit} className="px-4 py-2 bg-brandPurple text-white font-bold rounded-xl hover:bg-purple-700 shadow-md">Kaydet</button>
+                            <button onClick={() => { setModalType(null); setModalEditUsername(""); setModalEditPassword(""); }} className="px-3.5 py-1.5 font-bold text-xs text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button>
+                            <button onClick={handleModalSubmit} className="px-4 py-1.5 bg-brandPurple text-white font-bold text-xs rounded-xl hover:bg-purple-700 shadow-md">Kaydet</button>
                         </div>
                     </motion.div>
                 </div>
@@ -538,29 +541,29 @@ const App = () => {
             <AnimatePresence>
                 {studentSettingsModal && (
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
-                            <h3 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
-                                <Settings size={20} className="text-brandPurple"/> Hesap Bilgilerini Düzenle
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl">
+                            <h3 className="font-bold text-base mb-3 text-slate-800 flex items-center gap-2">
+                                <Settings size={18} className="text-brandPurple"/> Hesap Bilgilerini Düzenle
                             </h3>
                             
-                            <div className="mb-4">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kullanıcı Adı</label>
-                                <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck="false" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={studentUsernameInput} onChange={e => setStudentUsernameInput(e.target.value)} />
+                            <div className="mb-3">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kullanıcı Adı</label>
+                                <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck="false" className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs outline-none focus:border-brandPurple" value={studentUsernameInput} onChange={e => setStudentUsernameInput(e.target.value)} />
                             </div>
 
-                            <div className="mb-4">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Yeni Şifre</label>
-                                <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck="false" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Yeni şifrenizi girin" value={studentPasswordInput} onChange={e => setStudentPasswordInput(e.target.value)} />
+                            <div className="mb-3">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Yeni Şifre</label>
+                                <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck="false" className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs outline-none focus:border-brandPurple" placeholder="Yeni şifrenizi girin" value={studentPasswordInput} onChange={e => setStudentPasswordInput(e.target.value)} />
                             </div>
 
-                            <div className="mb-4">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Yeni Şifre (Tekrar)</label>
-                                <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck="false" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Şifrenizi doğrulayın" value={studentConfirmPasswordInput} onChange={e => setStudentConfirmPasswordInput(e.target.value)} />
+                            <div className="mb-3">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Yeni Şifre (Tekrar)</label>
+                                <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck="false" className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs outline-none focus:border-brandPurple" placeholder="Şifrenizi doğrulayın" value={studentConfirmPasswordInput} onChange={e => setStudentConfirmPasswordInput(e.target.value)} />
                             </div>
 
                             <div className="flex gap-2 justify-end mt-2">
-                                <button onClick={() => setStudentSettingsModal(false)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button>
-                                <button onClick={handleSaveStudentSettings} className="px-4 py-2 bg-brandPurple text-white font-bold rounded-xl hover:bg-purple-700 shadow-md">Değişiklikleri Kaydet</button>
+                                <button onClick={() => setStudentSettingsModal(false)} className="px-3.5 py-1.5 font-bold text-xs text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button>
+                                <button onClick={handleSaveStudentSettings} className="px-4 py-1.5 bg-brandPurple text-white font-bold text-xs rounded-xl hover:bg-purple-700 shadow-md">Kaydet</button>
                             </div>
                         </motion.div>
                     </div>
@@ -568,42 +571,42 @@ const App = () => {
             </AnimatePresence>
 
             {/* TABLODAKİ BUTON/MENÜ MODALLARI */}
-            {activeCell && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveCell(null)}><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-4 rounded-2xl shadow-xl flex gap-2" onClick={e => e.stopPropagation()}>{STATUS_OPTIONS.map(opt => ( <button key={opt.id} onClick={() => updateGrade(activeCell.classId, activeCell.studentId, activeCell.colId, opt.id)} className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${opt.bg} ${opt.color} hover:scale-105 border ${opt.border}`}><opt.icon size={24} className="mb-2" strokeWidth={2.5}/><span className="text-xs font-black uppercase tracking-wider">{opt.label}</span></button> ))}</motion.div></div>}
+            {activeCell && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveCell(null)}><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-3 rounded-2xl shadow-xl flex gap-1.5" onClick={e => e.stopPropagation()}>{STATUS_OPTIONS.map(opt => ( <button key={opt.id} onClick={() => updateGrade(activeCell.classId, activeCell.studentId, activeCell.colId, opt.id)} className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${opt.bg} ${opt.color} hover:scale-105 border ${opt.border}`}><opt.icon size={20} className="mb-1" strokeWidth={2.5}/><span className="text-[9px] font-black uppercase tracking-wider">{opt.label}</span></button> ))}</motion.div></div>}
             
-            {activeColMenu && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveColMenu(null)}><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-2 rounded-2xl shadow-xl flex flex-col gap-1 w-52" onClick={e => e.stopPropagation()}><button onClick={() => { const cls = classes.find(c => c.id === activeColMenu.classId); const col = cls.topics.find(t => t.id === activeColMenu.topicId).subColumns.find(c => c.id === activeColMenu.colId); setModalData({ classId: cls.id, topicId: activeColMenu.topicId, colId: col.id }); setModalInputVal(col.title); setModalPdfVal(col.pdfLink || ""); setModalType('edit-source'); setActiveColMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"><Pencil size={16}/> Kaynağı Düzenle</button><button onClick={() => { deleteColumn(activeColMenu.classId, activeColMenu.topicId, activeColMenu.colId); setActiveColMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={16}/> Kaynağı Sil</button></motion.div></div>}
+            {activeColMenu && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveColMenu(null)}><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-1.5 rounded-2xl shadow-xl flex flex-col gap-0.5 w-48" onClick={e => e.stopPropagation()}><button onClick={() => { const cls = classes.find(c => c.id === activeColMenu.classId); const col = cls.topics.find(t => t.id === activeColMenu.topicId).subColumns.find(c => c.id === activeColMenu.colId); setModalData({ classId: cls.id, topicId: activeColMenu.topicId, colId: col.id }); setModalInputVal(col.title); setModalPdfVal(col.pdfLink || ""); setModalType('edit-source'); setActiveColMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"><Pencil size={14}/> Kaynağı Düzenle</button><button onClick={() => { deleteColumn(activeColMenu.classId, activeColMenu.topicId, activeColMenu.colId); setActiveColMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={14}/> Kaynağı Sil</button></motion.div></div>}
             
-            {activeTopicMenu && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveTopicMenu(null)}><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-2 rounded-2xl shadow-xl flex flex-col gap-1 w-56" onClick={e => e.stopPropagation()}>
-                <button onClick={() => { const cls = classes.find(c => c.id === activeTopicMenu.classId); const top = cls.topics.find(t => t.id === activeTopicMenu.topicId); setModalData({ classId: cls.id, topicId: top.id }); setModalInputVal(top.title); setModalDateVal(top.date || ""); setModalType('edit-topic'); setActiveTopicMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"><Pencil size={16}/> Başlık / Tarih Düzenle</button>
-                <button onClick={() => { deleteTopic(activeTopicMenu.classId, activeTopicMenu.topicId); setActiveTopicMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={16}/> Ödevi Sil</button>
+            {activeTopicMenu && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveTopicMenu(null)}><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-1.5 rounded-2xl shadow-xl flex flex-col gap-0.5 w-48" onClick={e => e.stopPropagation()}>
+                <button onClick={() => { const cls = classes.find(c => c.id === activeTopicMenu.classId); const top = cls.topics.find(t => t.id === activeTopicMenu.topicId); setModalData({ classId: cls.id, topicId: top.id }); setModalInputVal(top.title); setModalDateVal(top.date || ""); setModalType('edit-topic'); setActiveTopicMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"><Pencil size={14}/> Başlık / Tarih Düzenle</button>
+                <button onClick={() => { deleteTopic(activeTopicMenu.classId, activeTopicMenu.topicId); setActiveTopicMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={14}/> Ödevi Sil</button>
             </motion.div></div>}
             
-            {cellNoteModal && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4"><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"><h3 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2"><Edit3 size={20} className="text-amber-500"/>Öğretmen Notu</h3><textarea autoFocus rows="4" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-medium text-sm outline-none focus:border-amber-400" placeholder="Öğrenci için notunuzu buraya yazın..." value={cellNoteModal.note} onChange={e => setCellNoteModal({ ...cellNoteModal, note: e.target.value })}></textarea><div className="flex gap-2 justify-end mt-2"><button onClick={() => setCellNoteModal(null)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button><button onClick={() => { const cls = classes.find(c => c.id === cellNoteModal.classId); const updatedStudents = cls.students.map(s => s.id === selectedStudentForView.id ? { ...s, assignmentNotes: { ...(s.assignmentNotes || {}), [cellNoteModal.colId]: cellNoteModal.note } } : s); updateClassInDb({ ...cls, students: updatedStudents }); setCellNoteModal(null); }} className="px-4 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 shadow-md">Notu Kaydet</button></div></motion.div></div>}
+            {cellNoteModal && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4"><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl"><h3 className="font-bold text-base mb-3 text-slate-800 flex items-center gap-2"><Edit3 size={18} className="text-amber-500"/>Öğretmen Notu</h3><textarea autoFocus rows="3" className="w-full border-2 border-slate-200 rounded-xl p-2.5 mb-3 font-medium text-xs outline-none focus:border-amber-400" placeholder="Öğrenci için notunuz..." value={cellNoteModal.note} onChange={e => setCellNoteModal({ ...cellNoteModal, note: e.target.value })}></textarea><div className="flex gap-2 justify-end mt-1"><button onClick={() => setCellNoteModal(null)} className="px-3.5 py-1.5 font-bold text-xs text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button><button onClick={() => { const cls = classes.find(c => c.id === cellNoteModal.classId); const updatedStudents = cls.students.map(s => s.id === selectedStudentForView.id ? { ...s, assignmentNotes: { ...(s.assignmentNotes || {}), [cellNoteModal.colId]: cellNoteModal.note } } : s); updateClassInDb({ ...cls, students: updatedStudents }); setCellNoteModal(null); }} className="px-4 py-1.5 bg-amber-500 text-white font-bold text-xs rounded-xl hover:bg-amber-600 shadow-md">Kaydet</button></div></motion.div></div>}
             
-            {isTeacherMode && <button onClick={() => setShowAssistant(true)} className="fab-button bg-brandPurple text-white" title="Akıllı Asistan"><div className="fab-pulse"></div><Mic size={28} /></button>}
+            {isTeacherMode && <button onClick={() => setShowAssistant(true)} className="fab-button bg-brandPurple text-white" title="Akıllı Asistan"><div className="fab-pulse"></div><Mic size={24} /></button>}
 
             {/* 💎 CUSTOM ALERT / DIALOG MODALI */}
             <AnimatePresence>
                 {dialogData.isOpen && (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
-                        <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl">
-                            <div className="p-6 text-center">
-                                <div className="flex justify-center mb-4">
-                                    {dialogData.type === 'warning' && <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center"><AlertTriangle size={32} /></div>}
-                                    {dialogData.type === 'error' && <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center"><AlertTriangle size={32} /></div>}
-                                    {dialogData.type === 'success' && <div className="w-16 h-16 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center"><CheckCircle size={32} /></div>}
-                                    {dialogData.type === 'info' && <div className="w-16 h-16 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center"><Info size={32} /></div>}
+                        <motion.div initial={{ opacity: 0, scale: 0.95, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 15 }} className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl">
+                            <div className="p-5 text-center">
+                                <div className="flex justify-center mb-3">
+                                    {dialogData.type === 'warning' && <div className="w-14 h-14 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center"><AlertTriangle size={28} /></div>}
+                                    {dialogData.type === 'error' && <div className="w-14 h-14 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center"><AlertTriangle size={28} /></div>}
+                                    {dialogData.type === 'success' && <div className="w-14 h-14 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center"><CheckCircle size={28} /></div>}
+                                    {dialogData.type === 'info' && <div className="w-14 h-14 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center"><Info size={28} /></div>}
                                 </div>
-                                <h3 className="text-xl font-black text-slate-800 mb-2">{dialogData.title}</h3>
-                                <p className="text-slate-500 font-medium text-sm whitespace-pre-wrap">{dialogData.message}</p>
+                                <h3 className="text-lg font-black text-slate-800 mb-1.5">{dialogData.title}</h3>
+                                <p className="text-slate-500 font-medium text-xs whitespace-pre-wrap">{dialogData.message}</p>
                             </div>
-                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+                            <div className="p-3 bg-slate-50 border-t border-slate-100 flex gap-2.5">
                                 {dialogData.onConfirm ? (
                                     <>
-                                        <button onClick={closeAlert} className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-100 transition-colors">İptal</button>
-                                        <button onClick={() => { dialogData.onConfirm(); closeAlert(); }} className={`flex-1 py-3 rounded-xl font-bold text-white transition-colors shadow-sm ${dialogData.type === 'warning' || dialogData.type === 'error' ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/30' : 'bg-brandPurple hover:bg-purple-600 shadow-brandPurple/30'}`}>Evet, Onaylıyorum</button>
+                                        <button onClick={closeAlert} className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-100 transition-colors">İptal</button>
+                                        <button onClick={() => { dialogData.onConfirm(); closeAlert(); }} className={`flex-1 py-2.5 rounded-xl font-bold text-xs text-white transition-colors shadow-sm ${dialogData.type === 'warning' || dialogData.type === 'error' ? 'bg-rose-500 hover:bg-rose-600' : 'bg-brandPurple hover:bg-purple-600'}`}>Onaylıyorum</button>
                                     </>
                                 ) : (
-                                    <button onClick={closeAlert} className="w-full py-3 bg-brandPurple text-white rounded-xl font-bold shadow-glow hover:bg-purple-600 transition-colors">Tamam</button>
+                                    <button onClick={closeAlert} className="w-full py-2.5 bg-brandPurple text-white rounded-xl font-bold text-xs shadow-glow hover:bg-purple-600 transition-colors">Tamam</button>
                                 )}
                             </div>
                         </motion.div>
@@ -620,28 +623,28 @@ const App = () => {
                         className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[99998] flex items-center justify-center p-4 select-none"
                     >
                         <motion.div 
-                            initial={{ scale: 0.9, y: 30 }} 
+                            initial={{ scale: 0.95, y: 20 }} 
                             animate={{ scale: 1, y: 0 }}
-                            className="bg-slate-900 border-2 border-brandPurple/40 p-6 md:p-8 rounded-[2.5rem] w-full max-w-md text-center shadow-[0_0_80px_rgba(147,51,234,0.25)] relative overflow-hidden"
+                            className="bg-slate-900 border-2 border-brandPurple/40 p-5 md:p-8 rounded-[2.5rem] w-full max-w-md text-center shadow-[0_0_80px_rgba(147,51,234,0.25)] relative overflow-hidden"
                         >
                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full bg-brandPurple/10 blur-3xl pointer-events-none"></div>
 
-                            <div className="w-16 h-16 bg-purple-500/10 border border-purple-500/30 text-brandPurple rounded-full flex items-center justify-center mx-auto mb-6 shadow-glow">
-                                <RefreshCw size={28} className="animate-spin" style={{ animationDuration: '6s' }} />
+                            <div className="w-14 h-14 bg-purple-500/10 border border-purple-500/30 text-brandPurple rounded-full flex items-center justify-center mx-auto mb-5 shadow-glow">
+                                <RefreshCw size={24} className="animate-spin" style={{ animationDuration: '6s' }} />
                             </div>
 
-                            <h3 className="text-2xl font-black text-white tracking-wide uppercase">Sistem Güncellemesi</h3>
-                            <p className="text-slate-300 text-xs md:text-sm font-medium mt-3 leading-relaxed">
+                            <h3 className="text-xl font-black text-white tracking-wide uppercase">Sistem Güncellemesi</h3>
+                            <p className="text-slate-300 text-xs font-medium mt-2.5 leading-relaxed">
                                 Sizin için uygulamayı geliştirdik ve yeni akıllı özellikler ekledik! Kesintisiz ve hatasız bir deneyim için devam etmeden önce lütfen güncelleyin.
                             </p>
 
                             <motion.button 
-                                whileHover={{ scale: 1.03 }} 
-                                whileTap={{ scale: 0.97 }} 
+                                whileHover={{ scale: 1.02 }} 
+                                whileTap={{ scale: 0.98 }} 
                                 onClick={() => updateServiceWorker(true)}
-                                className="w-full mt-8 bg-brandPurple hover:bg-purple-600 text-white font-black py-4 rounded-2xl shadow-glow tracking-widest text-sm transition-colors flex items-center justify-center gap-2"
+                                className="w-full mt-6 bg-brandPurple hover:bg-purple-600 text-white font-black py-3.5 rounded-2xl shadow-glow tracking-widest text-xs transition-colors flex items-center justify-center gap-2"
                             >
-                                <RefreshCw size={16} /> UYGULAMAYI GÜNCELLE
+                                <RefreshCw size={14} /> UYGULAMAYI GÜNCELLE
                             </motion.button>
                         </motion.div>
                     </motion.div>
