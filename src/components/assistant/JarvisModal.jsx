@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, X, TerminalSquare, Mic, Send, User, Activity, Calendar, HelpCircle, Save, CheckCircle2 } from 'lucide-react';
+import { Zap, X, TerminalSquare, Keyboard, Mic, Send, User, Activity, Calendar, StickyNote, AlertTriangle, Save, ChevronRight, HelpCircle } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
@@ -28,7 +28,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [isListening, setIsListening] = useState(false);
     const [isThinking, setIsThinking] = useState(false); 
     const [speechTranscript, setSpeechTranscript] = useState("");
-    const [jarvisFeedback, setJarvisFeedback] = useState("Bağlantı kuruldu. Sizi dinliyorum efendim...");
+    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem çevrimiçi. Size nasıl yardımcı olabilirim efendim?");
     
     const [foundStudents, setFoundStudents] = useState([]);
     const [foundTopics, setFoundTopics] = useState([]);
@@ -41,97 +41,126 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [draftNotes, setDraftNotes] = useState({});
     
     const recognitionRef = useRef(null);
-
-    // En yeni ödevleri en üstte listelemek için sıralama
     const sortedFoundTopics = [...foundTopics].reverse();
 
-    // 🔒 ARKA PLAN SCROLL KİLİDİ
+    // 🔒 ARKA PLAN SCROLL KİLİDİ VE OTO-DİNLEME
     useEffect(() => {
         document.body.style.overflow = 'hidden';
-        // OTOMATİK DİNLEME AKTİVASYONU
-        setTimeout(() => {
-            toggleListening();
-        }, 400);
+        setTimeout(() => { startListening(); }, 500);
         return () => { 
             document.body.style.overflow = ''; 
             if (recognitionRef.current) recognitionRef.current.abort();
+            window.speechSynthesis.cancel();
         };
     }, []);
 
-    // 🗣️ YENİ NESİL SESLİ CEP CEVAP SİSTEMİ
-    const speakFeedback = (text) => {
+    // 🗣️ DİNAMİK SESLİ YANIT VE OTOMATİK DİNLEME (Auto-Resume)
+    const speakFeedback = (text, autoListenAfter = false) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'tr-TR';
         utterance.rate = 1.0;
+        
+        // Seslendirme bitince mikrafonu otomatik aç (Eksik bilgi sorulmuşsa)
+        utterance.onend = () => {
+            if (autoListenAfter) {
+                startListening();
+            }
+        };
+        
         window.speechSynthesis.speak(utterance);
     };
 
-    const updateFeedbackAndSpeak = (msg) => {
+    const updateFeedbackAndSpeak = (msg, autoListenAfter = false) => {
         setJarvisFeedback(msg);
-        speakFeedback(msg);
+        speakFeedback(msg, autoListenAfter);
     };
 
-    // 🧠 HAFIZALI GROQ NLP YAPISI
+    // 🧠 YAPAY ZEKA: VERİ HAZIRLIĞI (LLM'in Öğrencilerin Eksiklerini Görebilmesi İçin)
+    const getStudentReadableGrades = (student, cls) => {
+        let records = [];
+        cls.topics.forEach(t => {
+            t.subColumns.forEach(col => {
+                const status = draftGrades[student.id]?.[col.id] || student.grades?.[col.id];
+                if (status) {
+                    const statusTR = status === 'done' ? 'Yapıldı' : status === 'missing' ? 'Eksik' : status === 'assigned' ? 'Verildi' : 'Muaf';
+                    records.push(`${t.title} - ${col.title}: ${statusTR}`);
+                }
+            });
+        });
+        return records;
+    };
+
     const callGroqAPI = async (transcript) => {
         const apiKey = import.meta.env.VITE_GROQ_API_KEY;
         if (!apiKey) {
-            updateFeedbackAndSpeak("API Anahtarı Netlify veya ortamda bulunamadı.");
+            updateFeedbackAndSpeak("API Anahtarı bulunamadı.");
             setIsThinking(false);
             return null;
         }
 
+        // LLM'in sınıfı ve kimin ne eksiği olduğunu bilmesi için özel veri yapısı
         const contextData = classes.map(c => ({
             className: c.className,
-            students: c.students.map(s => s.name),
-            topics: c.topics.map(t => t.title)
+            students: c.students.map(s => ({
+                name: s.name,
+                records: getStudentReadableGrades(s, c)
+            })),
+            topics: c.topics.map(t => ({
+                title: t.title,
+                sources: t.subColumns.map(col => col.title)
+            }))
         }));
 
-        // Eğer halihazırda seçili bir öğrenci varsa prompt içerisine enjekte ediyoruz (Context Memory)
         const currentStudentContext = selectedStudent 
-            ? `Şu an aktif olarak seçili öğrenci ve odaklandığımız kişi: "${selectedStudent.name}". Eğer kullanıcı yeni bir isim belirtmediyse, bu öğrenci üzerinden işlem yapmaya devam et.`
-            : `Şu an seçili bir öğrenci yok. Kullanıcının cümlesinden ismi bulmalısın.`;
+            ? `Şu an ekranda seçili aktif öğrenci: "${selectedStudent.name}". Eğer komutta yeni bir isim yoksa, bu komutu ${selectedStudent.name} için uygula.`
+            : `Şu an seçili bir öğrenci yok. Komuttan öğrenci ismini bul.`;
 
         const systemPrompt = `
-Sen lüks bir eğitim yapay zekasısın. Adın J.A.R.V.I.S.
-Sana öğretmenin veya öğrencinin söylediği bir komut verilecek. Bu komutun içinden "Öğrenci Adı", "Konu Adı", "Kaynak (Test/Kitap)", ve "Durum" bilgilerini çıkar.
-Durumlar: "done" (çözdü/yaptı/bitirdi), "missing" (yapmadı/eksik/boş/unuttu), "assigned" (verildi/ödev atandı), "exempt" (muaf/es geçti).
+Sen "J.A.R.V.I.S" adında, son derece zeki, profesyonel ve saygılı bir eğitim yapay zekasısın.
+Sana verilen komutu analiz et ve SADECE aşağıdaki JSON formatında yanıt ver. Asla JSON dışında düz metin yazma!
+
+Veritabanı:
+${JSON.stringify(contextData)}
 
 ${currentStudentContext}
 
-Eğer bir bilgi cümlede yoksa değerini null yap.
-SADECE GEÇERLİ BİR JSON DÖNDÜR, BAŞKA METİN YAZMA!
+Kullanıcı Komutu 3 Farklı Niyette Olabilir:
+1. "update": Not girme (Örn: Ahmet üslü sayıları çözmüş).
+2. "query": Bilgi sorma (Örn: Ahmet'in eksikleri neler?).
+3. "save": Onaylama (Örn: Değişiklikleri onayla, kaydet).
 
-Mevcut Eğitim Veritabanı Yapısı:
-${JSON.stringify(contextData)}
+Eğer "update" yapılıyorsa ama "Kaynak (source)" veya "Konu" eksikse, işlemi "need_info" yap.
 
-Örnek Yanıt:
+JSON FORMATIN:
 {
-  "student": "Merve Şen",
-  "topic": "Çarpanlara Ayırma",
-  "source": "Video Ders Defteri",
-  "status": "done"
-}`;
+  "action": "update" | "query" | "save" | "need_info",
+  "student": "Öğrenci Adı veya null",
+  "topic": "Konu veya null",
+  "source": "Kaynak veya null",
+  "status": "done" | "missing" | "assigned" | "exempt" | null,
+  "feedback": "Bana sesli olarak vereceğin, çok doğal, karizmatik ve duruma uygun Türkçe cevap."
+}
+
+Kurallar:
+- "feedback" alanı çok önemlidir. Mekanik değil, akıcı konuş. "Efendim" kelimesini ara sıra kullan.
+- Eğer eylem "query" ise, veritabanına bakıp Ahmet'in eksiklerini bularak "feedback" içine yaz (Örn: "Ahmet'in Üslü Sayılar testinden eksiği bulunuyor efendim.").
+- Eğer "need_info" ise "feedback" içinde eksik olan bilgiyi karizmatikçe sor (Örn: "Ahmet'in Köklü Sayılar ödevi için hangi kaynağı işaretlememi istersiniz efendim?").
+- Durumlar İngilizce döndürülmelidir: yapıldı->done, eksik->missing, verildi->assigned, muaf->exempt.
+`;
 
         try {
             const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: 'llama-3.3-70b-versatile',
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: transcript }
-                    ],
+                    messages: [ { role: 'system', content: systemPrompt }, { role: 'user', content: transcript } ],
                     response_format: { type: 'json_object' },
-                    temperature: 0.1
+                    temperature: 0.2
                 })
             });
-
             const data = await response.json();
             return JSON.parse(data.choices[0].message.content);
         } catch (error) {
@@ -151,68 +180,84 @@ ${JSON.stringify(contextData)}
     const processGroqResult = (aiResult) => {
         if (!aiResult) return;
 
-        // 1. ÖĞRENCİ BELİRLEME (Hafızadan veya Gelen Veriden)
-        const allStudents = classes.flatMap(cls => (cls.students || []).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })));
-        
-        let bestStudent = findBestMatch(allStudents, 'name', aiResult.student);
-        if (!bestStudent && selectedStudent) {
-            bestStudent = selectedStudent; // Hafızadaki öğrenciyi koru
-        }
-
-        if (!bestStudent) {
-            updateFeedbackAndSpeak(`${aiResult.student || 'Belirtilen'} isminde bir öğrenci profili eşleşmedi.`);
+        // 1. ONAYLA VE KAYDET EYLEMİ (Kullanıcı "Kaydet" dediyse)
+        if (aiResult.action === 'save') {
+            updateFeedbackAndSpeak(aiResult.feedback || "Değişiklikler sisteme kaydediliyor efendim.");
+            applyChanges();
             return;
         }
 
-        setFoundStudents([bestStudent]);
-        setSelectedStudent(bestStudent);
+        // 2. ÖĞRENCİ BELİRLEME (Update, Query veya Need Info için)
+        const allStudents = classes.flatMap(cls => (cls.students || []).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })));
+        let bestStudent = findBestMatch(allStudents, 'name', aiResult.student);
         
-        const targetClass = classes.find(c => c.id === bestStudent.classId); 
-        const topics = targetClass?.topics || []; 
-        setFoundTopics(topics);
+        if (!bestStudent && selectedStudent) bestStudent = selectedStudent;
 
-        // 2. GÖREV VE DURUM İŞLEME
-        const bestTopic = findBestMatch(topics, 'title', aiResult.topic);
-        let bestCol = null;
-        if (bestTopic && aiResult.source) {
-            bestCol = findBestMatch(bestTopic.subColumns || [], 'title', aiResult.source);
-        }
+        if (bestStudent) {
+            setFoundStudents([bestStudent]);
+            setSelectedStudent(bestStudent);
+            const targetClass = classes.find(c => c.id === bestStudent.classId); 
+            const topics = targetClass?.topics || []; 
+            setFoundTopics(topics);
 
-        if (bestTopic && bestCol && aiResult.status) {
-            handleDraftGradeChange(bestStudent.id, bestCol.id, aiResult.status);
-            const statusLabels = { 'done': 'Yapıldı', 'missing': 'Eksik', 'assigned': 'Verildi', 'exempt': 'Muaf' };
-            updateFeedbackAndSpeak(`${getSafeText(bestStudent.name)} için ${getSafeText(bestTopic.title)} konusu güncellendi.`);
-        } 
-        else if (bestTopic && !bestCol && aiResult.status) { 
-            setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: aiResult.status });
-            setPendingSources(bestTopic.subColumns || []);
-            updateFeedbackAndSpeak("Ödev konusunu onayladım. Lütfen ekrandan kaynağı seçin."); 
-        } 
-        else {
-            updateFeedbackAndSpeak(`${getSafeText(bestStudent.name)} profili kilitlendi. Ödev veya kaynak bilgisini söyleyebilirsiniz.`);
+            // KONU VE KAYNAK EŞLEŞTİRME
+            const bestTopic = findBestMatch(topics, 'title', aiResult.topic);
+            let bestCol = null;
+            if (bestTopic && aiResult.source) {
+                bestCol = findBestMatch(bestTopic.subColumns || [], 'title', aiResult.source);
+            }
+
+            // A. EKSİK BİLGİ SORMA (Need Info) -> Otomatik Dinleme Başlatır
+            if (aiResult.action === 'need_info') {
+                if (bestTopic) {
+                    setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: aiResult.status });
+                    setPendingSources(bestTopic.subColumns || []);
+                }
+                // J.A.R.V.I.S eksik bilgiyi sorar ve cevabı dinlemek için mikrofonu otomatik açar!
+                updateFeedbackAndSpeak(aiResult.feedback, true); 
+                return;
+            }
+
+            // B. BİLGİ SORGULAMA (Query) -> J.A.R.V.I.S raporu okur
+            if (aiResult.action === 'query') {
+                updateFeedbackAndSpeak(aiResult.feedback);
+                return;
+            }
+
+            // C. NOT GÜNCELLEME (Update) -> İşlemi taslağa ekler
+            if (aiResult.action === 'update' && bestTopic && bestCol && aiResult.status) {
+                handleDraftGradeChange(bestStudent.id, bestCol.id, aiResult.status);
+                updateFeedbackAndSpeak(aiResult.feedback);
+            } else {
+                updateFeedbackAndSpeak(aiResult.feedback || "İstediğiniz işlemi veritabanında eşleştiremedim efendim.");
+            }
+
+        } else {
+            // Hiçbir öğrenci bulunamadı
+            updateFeedbackAndSpeak(aiResult.feedback || "Sistemde böyle bir öğrenci kaydı bulamadım efendim.");
         }
     };
 
     const handleCommand = async (transcript) => {
         if (!transcript.trim()) return;
+        setPendingAction(null);
+        setPendingSources([]);
+        
         setIsThinking(true);
-        setJarvisFeedback("Matris taranıyor...");
+        setJarvisFeedback("Analiz ediliyor...");
         
         const aiResult = await callGroqAPI(transcript);
         setIsThinking(false);
+        
         processGroqResult(aiResult);
     };
 
-    const toggleListening = () => {
+    // MİKROFON KONTROLÜ
+    const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) { setJarvisFeedback("Ses modülü desteklenmiyor."); return; }
+        if (!SpeechRecognition) return;
+        if (recognitionRef.current) recognitionRef.current.abort();
         
-        if (isListening) {
-            if (recognitionRef.current) recognitionRef.current.stop();
-            setIsListening(false);
-            return;
-        }
-
         const recognition = new SpeechRecognition();
         recognitionRef.current = recognition;
         recognition.lang = 'tr-TR';
@@ -224,15 +269,26 @@ ${JSON.stringify(contextData)}
             setSpeechTranscript(transcript); 
             handleCommand(transcript); 
         };
-        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Ses algılanamadı."); };
+        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Sinyal kesildi."); };
         recognition.onend = () => setIsListening(false); 
         recognition.start();
+    };
+
+    const stopListening = () => {
+        if (recognitionRef.current) { recognitionRef.current.stop(); setIsListening(false); }
+    };
+
+    const handleManualSubmit = () => {
+        if (!textCommand.trim()) return;
+        setSpeechTranscript(textCommand); 
+        handleCommand(textCommand);
+        setTextCommand(""); 
     };
 
     const handleManualSourceSelect = (col) => {
         if (!pendingAction) return;
         handleDraftGradeChange(pendingAction.studentId, col.id, pendingAction.status);
-        updateFeedbackAndSpeak("Seçilen kaynak başarıyla sisteme işlendi.");
+        updateFeedbackAndSpeak("Manuel seçiminiz algılandı ve sisteme işlendi efendim.");
         setPendingAction(null);
         setPendingSources([]);
     };
@@ -252,22 +308,34 @@ ${JSON.stringify(contextData)}
         });
         updateClassInDb({ ...targetClass, students: updatedStudents });
         setDraftGrades({}); setDraftNotes({});
-        updateFeedbackAndSpeak("Veriler kaydedildi.");
-        setTimeout(() => onClose(), 1200);
+        setTimeout(() => onClose(), 2000); // Kapatmayı ses bittikten sonraya ertele
     };
 
     return (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }} className="bg-slate-900/95 border border-cyan-500/30 rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col max-h-[85vh]">
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }} className="bg-slate-900/95 border border-cyan-500/30 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col max-h-[85vh]">
                 
-                {/* RADAR PANELDİ ÜST KISIM */}
+                {/* RADAR PANEL */}
                 <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 p-6 flex flex-col items-center justify-center shrink-0">
                     <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute w-44 h-44 border border-cyan-500/10 rounded-full border-t-cyan-400/40" />
                     <button onClick={() => { window.speechSynthesis.cancel(); onClose(); }} className="absolute top-4 right-4 text-slate-500 hover:text-cyan-400 transition-colors z-30"><X size={20}/></button>
                     
-                    <div onClick={toggleListening} className="z-10 bg-slate-900 p-4 rounded-full border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.2)] mb-3 cursor-pointer relative hover:scale-105 transition-transform">
+                    <div onClick={isListening ? stopListening : startListening} className="z-10 bg-slate-900 p-4 rounded-full border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.2)] mb-3 cursor-pointer relative hover:scale-105 transition-transform">
                         {isListening && <span className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping"></span>}
                         <Activity size={24} className={`text-cyan-400 ${(isListening || isThinking) ? 'animate-pulse' : ''}`} />
+                    </div>
+
+                    <div className="w-full max-w-xl z-10 relative flex items-center mb-4">
+                        <div className="absolute left-4 text-cyan-500/50 pointer-events-none"><Keyboard size={18} /></div>
+                        <input 
+                            ref={inputRef} type="text" placeholder="Manuel komut (Örn: Merve'nin eksiklerini say)" 
+                            className="w-full bg-slate-900/80 border border-cyan-800/50 text-cyan-100 rounded-xl pl-12 pr-24 py-3 text-sm focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(34,211,238,0.2)] transition-all font-medium"
+                            value={textCommand} onChange={(e) => setTextCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} disabled={isListening || isThinking}
+                        />
+                        <div className="absolute right-2 flex items-center gap-1">
+                            <button onClick={isListening ? stopListening : startListening} className={`p-2 rounded-lg transition-colors ${isListening ? 'bg-cyan-500/20 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.3)]' : 'hover:bg-slate-800 text-slate-400 hover:text-cyan-400'}`}><Mic size={18} className={isListening ? 'animate-pulse' : ''} /></button>
+                            <button onClick={handleManualSubmit} className="p-2 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-400 rounded-lg transition-colors" disabled={!textCommand.trim() || isListening || isThinking}><Send size={18} /></button>
+                        </div>
                     </div>
 
                     <div className="z-10 text-center w-full px-2">
@@ -277,7 +345,6 @@ ${JSON.stringify(contextData)}
                         </p>
                     </div>
 
-                    {/* KAYNAK SEÇTİRME KAPSÜLLERİ */}
                     <AnimatePresence>
                         {pendingSources.length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="mt-4 flex flex-wrap justify-center gap-1.5 z-20 relative max-h-24 overflow-y-auto">
@@ -291,8 +358,8 @@ ${JSON.stringify(contextData)}
                     </AnimatePresence>
                 </div>
 
-                {/* ÖDEV MATRİS LİSTESİ - BURADA OVERFLOW GÜVENLİĞİ VE SCROLL AKIŞI SAĞLANDI */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/40 min-h-0 custom-scrollbar">
+                {/* ÖDEV MATRİS LİSTESİ */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/40 min-h-[300px] custom-scrollbar">
                     {selectedStudent ? (
                         <>
                             <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-cyan-900/30">
@@ -330,7 +397,7 @@ ${JSON.stringify(contextData)}
                             </div>
                         </>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-600 font-mono py-12"><TerminalSquare size={36} className="mb-2 opacity-30 animate-pulse"/><p className="text-xs">Komut Girişi veya Ses Bekleniyor...</p></div>
+                        <div className="h-full flex flex-col items-center justify-center text-slate-600 font-mono py-12"><TerminalSquare size={36} className="mb-2 opacity-30 animate-pulse"/><p className="text-xs">Komut veya Ses Bekleniyor...</p></div>
                     )}
                 </div>
 
