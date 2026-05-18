@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Sparkle, Layout, BookOpenCheck, Calendar, StickyNote, Info } from 'lucide-react';
-import { calculateStats, formatDate, isOverdue } from '../../utils/helpers';
+import { calculateStats, formatDate, getDeadlineStatus } from '../../utils/helpers';
 import { TOPIC_THEMES, STATUS_OPTIONS } from '../../utils/constants';
 import StatusBadge from '../ui/StatusBadge';
 import PdfDownloadButton from '../ui/PdfButton';
@@ -29,16 +29,59 @@ const StudentDetail = ({ selectedStudentForView, selectedClass, currentUserRole,
                     {reversedTopics.map((topic, i) => {
                         const theme = currentUserRole === 'vip-student' ? { tag: 'bg-vipGold', text: 'text-vipGold' } : TOPIC_THEMES[i % TOPIC_THEMES.length]; 
                         const topicStats = calculateStats([selectedStudentForView], [{...topic, subColumns: topic.subColumns}]);
-                        const pct = topicStats.percentage || 0; const isLate = isOverdue(topic.date);
+                        const pct = topicStats.percentage || 0;
+                        
+                        // 🔥 OTOMATİK RENKLENDİRME VE DURUM MANITIĞI
+                        const deadlineInfo = getDeadlineStatus(topic.date);
+                        const hasSources = topic.subColumns && topic.subColumns.length > 0;
+                        
+                        // Ödev altındaki tüm kaynaklar 'done' (Yapıldı) olarak mı işaretlenmiş kontrolü
+                        const isAllDone = hasSources && topic.subColumns.every(col => selectedStudentForView.grades?.[col.id] === 'done');
+
+                        // Arka plan rengini belirleme kuralı
+                        let cardColorStyle = "";
+                        if (deadlineInfo.isOverdue) {
+                            if (isAllDone) {
+                                // Tarih geçti ama hepsi yapıldı -> YEŞİL
+                                cardColorStyle = currentUserRole === 'vip-student'
+                                    ? 'bg-emerald-950/40 border-emerald-500/40 shadow-md shadow-emerald-500/5'
+                                    : 'bg-emerald-50/80 border-emerald-200 shadow-sm';
+                            } else {
+                                // Tarih geçti ve yapılmayanlar var -> KIRMIZI
+                                cardColorStyle = currentUserRole === 'vip-student'
+                                    ? 'bg-rose-950/40 border-rose-500/40 shadow-md shadow-rose-500/5'
+                                    : 'bg-rose-50/80 border-rose-200 shadow-sm';
+                            }
+                        } else {
+                            // Süre henüz geçmediyse orijinal görünüm kalır
+                            cardColorStyle = currentUserRole === 'vip-student' 
+                                ? 'bg-slate-700 border-slate-600 shadow-md' 
+                                : 'bg-white border-slate-200 shadow-float';
+                        }
+
                         return (
-                            <motion.div key={topic.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`${currentUserRole === 'vip-student' ? 'bg-slate-700 border-slate-600 shadow-md' : 'bg-white border-slate-200 shadow-float'} rounded-3xl p-4 md:p-6 border`}>
+                            <motion.div key={topic.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`rounded-3xl p-4 md:p-6 border transition-all duration-300 ${cardColorStyle}`}>
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                                     <div className="flex items-center gap-3"><div className={`w-2 h-8 rounded-full ${theme.tag}`}></div><h3 className={`text-xl font-black uppercase tracking-wide ${currentUserRole === 'vip-student' ? 'text-white' : 'text-slate-800'}`}>{topic.title}</h3></div>
-                                    <div className="flex flex-wrap items-center gap-3">{topic.date && ( <div className={`text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm border ${isLate && pct < 100 ? 'bg-errorRed/20 text-errorRed border-errorRed/30 animate-pulse' : (currentUserRole === 'vip-student' ? 'bg-slate-800 text-vipGold/80 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200')}`}><Calendar size={14}/> Son Teslim: {formatDate(topic.date)}</div> )}<div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border shadow-sm ${currentUserRole === 'vip-student' ? 'bg-slate-800 border-slate-600' : 'bg-slate-50 border-slate-200'}`}><div className={`w-16 h-2 rounded-full overflow-hidden ${currentUserRole === 'vip-student' ? 'bg-slate-600' : 'bg-slate-200'}`}><div className={`h-full ${theme.tag} ${currentUserRole === 'vip-student' && 'shadow-vip-glow'}`} style={{ width: `${pct}%` }}></div></div><span className={`text-xs font-black ${currentUserRole === 'vip-student' ? 'text-white' : 'text-slate-700'}`}>%{pct}</span></div></div>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        {topic.date && ( 
+                                            <div className={`text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm border ${
+                                                deadlineInfo.isOverdue && !isAllDone 
+                                                    ? 'bg-rose-500 text-white border-rose-600 animate-pulse' 
+                                                    : deadlineInfo.isOverdue && isAllDone
+                                                        ? 'bg-emerald-600 text-white border-emerald-700'
+                                                        : (deadlineInfo.isToday ? 'bg-amber-500 text-white border-amber-600 animate-pulse' : (currentUserRole === 'vip-student' ? 'bg-slate-800 text-vipGold/80 border-slate-600' : 'bg-slate-50 text-slate-500 border-slate-200'))
+                                            }`}>
+                                                <Calendar size={14}/> Son Teslim: {formatDate(topic.date)} 
+                                                {deadlineInfo.text && <span className="ml-1 px-1.5 py-0.5 rounded-md bg-black/10 font-black text-[10px]">({deadlineInfo.text})</span>}
+                                            </div> 
+                                        )}
+                                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border shadow-sm ${currentUserRole === 'vip-student' ? 'bg-slate-800 border-slate-600' : 'bg-slate-50 border-slate-200'}`}><div className={`w-16 h-2 rounded-full overflow-hidden ${currentUserRole === 'vip-student' ? 'bg-slate-600' : 'bg-slate-200'}`}><div className={`h-full ${theme.tag} ${currentUserRole === 'vip-student' && 'shadow-vip-glow'}`} style={{ width: `${pct}%` }}></div></div><span className={`text-xs font-black ${currentUserRole === 'vip-student' ? 'text-white' : 'text-slate-700'}`}>%{pct}</span></div>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {topic.subColumns?.map(col => {
-                                        const status = selectedStudentForView.grades?.[col.id] || 'assigned'; const statusData = STATUS_OPTIONS.find(o => o.id === status) || STATUS_OPTIONS[0]; const StatusIcon = statusData.icon; const note = selectedStudentForView.assignmentNotes?.[col.id]; const isMissed = isLate && status !== 'done' && status !== 'exempt';
+                                        const status = selectedStudentForView.grades?.[col.id] || 'assigned'; const statusData = STATUS_OPTIONS.find(o => o.id === status) || STATUS_OPTIONS[0]; const StatusIcon = statusData.icon; const note = selectedStudentForView.assignmentNotes?.[col.id]; const isMissed = deadlineInfo.isOverdue && status !== 'done' && status !== 'exempt';
                                         const cardStyle = currentUserRole === 'vip-student' ? `bg-slate-800 border-slate-600 ${isMissed ? 'border-errorRed shadow-[0_0_15px_rgba(239,68,68,0.3)]' : ''}` : `bg-white border-slate-100 ${isMissed ? 'border-errorRed/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : ''}`;
                                         const titleStyle = currentUserRole === 'vip-student' ? 'text-white' : 'text-slate-800';
                                         return (
