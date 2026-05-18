@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, User, Crown, Briefcase, ChevronRight, ChevronLeft } from 'lucide-react';
+import { GraduationCap, User, Crown, Briefcase, ChevronRight, ChevronLeft, Download, Smartphone, Share, PlusSquare } from 'lucide-react';
 
 // -------------------------------------------------------------
 // V3 HTML KUSURSUZ CANVAS YILDIZ MOTORU
@@ -86,7 +86,8 @@ const VipParticles = () => {
     );
 };
 
-const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
+// 🔥 PROPS GÜNCELLEMESİ ALINDI
+const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandalone }) => {
     const [authView, setAuthView] = useState('selection'); 
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -94,6 +95,15 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
     
     const [errorMsg, setErrorMsg] = useState("");
     const [showForgotMsg, setShowForgotMsg] = useState(false);
+
+    // 🔥 PWA MOBİL CİHAZ AYIRT EDİCİ HOOK'LAR
+    const [isIos, setIsIos] = useState(false);
+    const [showIosModal, setShowIosModal] = useState(false);
+
+    useEffect(() => {
+        const ua = window.navigator.userAgent.toLowerCase();
+        setIsIos(/iphone|ipad|ipod/.test(ua));
+    }, []);
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -110,7 +120,6 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
         setErrorMsg(''); 
         setShowForgotMsg(false);
 
-        // 🔥 YAZILIMSAL TEMİZLİK: Boşlukları uçur ve kullanıcı adını tamamen küçük harfe çevir
         const cleanUsername = username.trim().toLowerCase();
         const cleanPassword = password.trim();
 
@@ -124,6 +133,18 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
         } catch (error) {
             console.error("Giriş hatası:", error);
             setErrorMsg('Kullanıcı adı veya şifre hatalı!');
+        }
+    };
+
+    // 🔥 PWA AKILLI YÜKLEME AKIŞI TETİKLEYİCİSİ
+    const handlePwaInstall = async () => {
+        if (isIos) {
+            setShowIosModal(true);
+        } else if (deferredPrompt) {
+            deferredPrompt.prompt();
+            await deferredPrompt.userChoice;
+        } else {
+            alert("Uygulama zaten kurulu veya tarayıcınız otomatik kuruluma izin vermiyor. Tarayıcı ayarlarından 'Ana Ekrana Ekle' yapabilirsiniz.");
         }
     };
 
@@ -170,6 +191,19 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
                                 <ChevronRight className="lch" size={16}/>
                             </motion.button>
                             
+                            {/* 🔥 YENİ: DİNAMİK PWA MOBİL UYGULAMA İNDİRME BUTONU (Zaten kuruluysa tamamen gizlenir) */}
+                            {!isStandalone && (deferredPrompt || isIos) && (
+                                <motion.button 
+                                    variants={itemVariants}
+                                    whileHover={{ scale: 1.03 }} 
+                                    whileTap={{ scale: 0.96 }} 
+                                    onClick={handlePwaInstall}
+                                    className="mt-6 w-full max-w-[360px] py-4 bg-slate-700/50 hover:bg-slate-700 text-white rounded-xl border border-slate-600 font-black text-xs tracking-widest flex items-center justify-center gap-2.5 transition-all shadow-md uppercase"
+                                >
+                                    <Download size={15} className="animate-bounce" /> Mobil Uygulamayı İndir
+                                </motion.button>
+                            )}
+
                             <motion.div variants={itemVariants} className="lquote"><span className="lqm">"</span> Eğitim, dünyayı değiştirmek için en güçlü silahtır. <span className="lqm">"</span></motion.div>
                         </motion.div>
                     )}
@@ -193,7 +227,6 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
                                 
                                 <div className="login-input-group">
                                     <label className="login-label" style={{color: authView === 'vip-login' ? '#e6c27a' : '#94a3b8'}}>Kullanıcı Adı</label>
-                                    {/* 🔥 DONANIMSAL KLAVYE ENGELLEYİCİLER BURADA */}
                                     <input 
                                         type="text" 
                                         autoCapitalize="none"
@@ -209,7 +242,6 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
                                 
                                 <div className="login-input-group" style={{marginTop: '20px'}}>
                                     <label className="login-label" style={{color: authView === 'vip-login' ? '#e6c27a' : '#94a3b8'}}>Şifre</label>
-                                    {/* 🔥 DONANIMSAL KLAVYE ENGELLEYİCİLER BURADA */}
                                     <input 
                                         type="password" 
                                         autoCapitalize="none"
@@ -287,6 +319,61 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
                     )}
                 </AnimatePresence>
             </motion.div>
+
+            {/* 🔥 YENİ: APPLE (iOS) KULLANICILARI İÇİN ADIM ADIM KURULUM KILAVUZU MODALI */}
+            <AnimatePresence>
+                {showIosModal && (
+                    <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center p-4" onClick={() => setShowIosModal(false)}>
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.9, y: 30 }} 
+                            animate={{ opacity: 1, scale: 1, y: 0 }} 
+                            exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                            className="bg-slate-900 border border-slate-700 p-6 rounded-[2rem] w-full max-w-sm text-center shadow-2xl relative"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <button onClick={() => setShowIosModal(false)} className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-full bg-slate-800 transition-colors"><X size={16}/></button>
+                            
+                            <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/30 text-brandPurple rounded-full flex items-center justify-center mx-auto mb-4 shadow-glow">
+                                <Smartphone size={22} />
+                            </div>
+
+                            <h3 className="text-xl font-black text-white uppercase tracking-wide">iPhone Kurulum Rehberi</h3>
+                            <p className="text-slate-400 text-xs mt-2 font-medium">Uygulamayı telefonunuza kurmak için Safari tarayıcısından aşağıdaki basit adımları izleyin:</p>
+
+                            <div className="mt-6 space-y-4 text-left">
+                                <div className="flex items-center gap-3.5 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-brandPurple font-black text-xs flex items-center justify-center border border-indigo-500/20">1</div>
+                                    <p className="text-slate-200 text-xs font-semibold flex items-center gap-1.5">
+                                        Safari alt barındaki <Share size={16} className="text-blue-400" /> <b>"Paylaş"</b> butonuna basın.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-3.5 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-brandPurple font-black text-xs flex items-center justify-center border border-indigo-500/20">2</div>
+                                    <p className="text-slate-200 text-xs font-semibold">
+                                        Açılan pencerede sayfayı biraz aşağı kaydırın.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-3.5 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-brandPurple font-black text-xs flex items-center justify-center border border-indigo-500/20">3</div>
+                                    <p className="text-slate-200 text-xs font-semibold flex items-center gap-1.5">
+                                        <PlusSquare size={16} className="text-slate-300" /> <b>"Ana Ekrana Ekle"</b> seçeneğine tıklayın.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={() => setShowIosModal(false)}
+                                className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 rounded-xl text-xs tracking-widest transition-colors"
+                            >
+                                ANLADIM
+                            </button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
         </div>
     );
 };
