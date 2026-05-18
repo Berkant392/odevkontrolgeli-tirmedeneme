@@ -45,26 +45,39 @@ export const formatDate = (dateStr) => {
     return date.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
-// YENİ EKLENEN: Ödev Teslim Tarihi Hesaplama Fonksiyonu
+// Geriye dönük uyumluluk için korunan fonksiyon
+export const isOverdue = (d) => d ? new Date(d) < new Date(new Date().setHours(0,0,0,0)) : false;
+
+// Ödev Teslim Tarihi Hesaplama Fonksiyonu
 export const getDeadlineStatus = (dateStr) => {
     if (!dateStr) return { isOverdue: false, text: "", isToday: false };
 
-    // Tarihi al ve saat 23:59:59 yap (günün sonu)
     const targetDate = new Date(dateStr);
     targetDate.setHours(23, 59, 59, 999);
     
     const now = new Date();
     
-    // Milisaniye farkını güne çevir
     const diffTime = targetDate - now;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) {
         return { isOverdue: true, text: "Süresi Doldu", isToday: false };
     } else if (diffDays === 0) {
-        // Eğer diffDays 0 ise ama diffTime pozitifse bugündür
         return { isOverdue: false, text: "Bugün Son", isToday: true };
     } else {
         return { isOverdue: false, text: `${diffDays} gün kaldı`, isToday: false };
+    }
+};
+
+export const formatDriveLink = (url) => {
+    if (!url) return "";
+    try {
+        if (url.includes("drive.google.com/file/d/")) {
+            const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) return `https://drive.google.com/uc?export=download&id=${match[1]}`;
+        }
+        return url;
+    } catch (e) {
+        return url;
     }
 };
