@@ -147,34 +147,34 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
         }
     };
 
-    // 🔥 GÖRECELİ GÜVENLİ YOLLAR (Gereksiz kök / işaretleri kaldırıldı)
+    // 🔥 MUTLAK VE GÜVENLİ BAŞLANGIÇ YOLLARI BAŞINA KÖK ( / ) ALARAK EKLENDİ
     const iosStepsData = [
         {
             id: 1,
             title: "📤 Adım 1: Menüyü Açın",
             desc: "Telefonunuzdan uygulamayı açtığınız tarayıcının alt barındaki veya üst köşesindeki 'Paylaş' ya da 'Seçenekler' simgesine dokunun.",
-            img: "pwa/adim1.jpg",
+            img: "/pwa/adim1.png",
             icon: <Share className="text-blue-400" size={24} />
         },
         {
             id: 2,
             title: "📜 Adım 2: Listeyi Kaydırın",
-            desc: "Karşınıza çıkan tarayıcı işlem penceresini parmağınızla hafifçe yukarıya kaydırarak alt kısımdaki ek özellikleri görünür yapın.",
-            img: "pwa/adim2.jpg",
+            desc: "Karşınıza çıkan tarayıcı işlem penceresini parmağınızla hafifçe yukarıye kaydırarak alt kısımdaki ek özellikleri görünür yapın.",
+            img: "/pwa/adim2.png",
             icon: <Smartphone className="text-sky-400" size={24} />
         },
         {
             id: 3,
             title: "➕ Adım 3: Ana Ekrana Ekle",
             desc: "Seçenekler arasında yer alan ve yanında artı simgesi bulunan 'Ana Ekrana Ekle' (Add to Home Screen) sekmesine dokunun.",
-            img: "pwa/adim3.jpg",
+            img: "/pwa/adim3.png",
             icon: <PlusSquare className="text-indigo-400" size={24} />
         },
         {
             id: 4,
             title: "✨ Adım 4: Kurulumu Bitir",
-            desc: "Açılan son onay ekranının sağ üst köşesindeki 'Ekle' butonuna basın. Platform artık ana ekranınızda bir mobil uygulama!",
-            img: "pwa/adim4.jpg",
+            desc: "Son olarak ekranın sağ üst köşesinde beliren 'Ekle' (Add) seçeneğine tıklayın. Platform artık ana ekranınızda bir mobil uygulama!",
+            img: "/pwa/adim4.png",
             icon: <GraduationCap className="text-emerald-400" size={24} />
         }
     ];
@@ -350,7 +350,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                 </AnimatePresence>
             </motion.div>
 
-            {/* 🔥 DIKDÖRTGEN DIKEY TELEFON TASARIMLI SİHİRBAZ MODALI */}
+            {/* 🔥 ZIRHLI VE DIKDOERTGEN TELEFON TASARIMLI SİHİRBAZ MODALI (Gelişmiş Hata Tolere Sistemli) */}
             <AnimatePresence>
                 {showIosModal && (
                     <div className="fixed inset-0 bg-slate-950 z-[99999] flex items-center justify-center p-4">
@@ -369,23 +369,28 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                         {iosStepsData[iosStep - 1].icon}
                                     </div>
                                 </div>
-                                <h3 className="text-md font-black text-white uppercase tracking-wider">{iosStepsData[iosStep - 1].title}</h3>
+                                <h3 className="text-lg font-black text-white uppercase tracking-wider">{iosStepsData[iosStep - 1].title}</h3>
                                 <p className="text-slate-300 text-[11px] mt-1.5 px-1 font-medium leading-relaxed min-h-[45px]">{iosStepsData[iosStep - 1].desc}</p>
                             </div>
 
-                            {/* 🔥 GÜNCELLEME: ÇİFT KATMANLI KORUMALI AKILLI GÖRSEL ALANI */}
+                            {/* 🔥 GÜNCELLEME: ÇİFT KATMANLI KORUMALI AKILLI GÖRSEL ALANI (.png -> .jpg -> root fallback) */}
                             <div className="my-3 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-center h-96 overflow-hidden relative shadow-inner">
                                 <img 
                                     src={iosStepsData[iosStep - 1].img} 
                                     alt={iosStepsData[iosStep - 1].title} 
                                     className="max-h-full max-w-full object-contain pointer-events-none"
                                     onError={(e) => {
-                                        // EĞER PWA/ KLASÖRÜNDE BULAMAZSA DOĞRUDAN KÖKTE (PUBLIC/) ARAMAYI DENE!
-                                        const currentSrc = e.target.src;
-                                        if (currentSrc.includes('pwa/')) {
-                                            e.target.src = currentSrc.replace('pwa/', '');
-                                        } else {
-                                            // İki olasılık da patlarsa şık placeholder devreye girer
+                                        const currentSrc = e.target.getAttribute('src');
+                                        // 1. Eğer .png denendiyse ve patladıysa .jpg formatına çevirmeyi dene
+                                        if (currentSrc.endsWith('.png')) {
+                                            e.target.setAttribute('src', currentSrc.replace('.png', '.jpg'));
+                                        } 
+                                        // 2. Eğer .jpg de patladıysa ve pwa/ klasöründeyse doğrudan ana dizinde aramayı dene
+                                        else if (currentSrc.includes('/pwa/')) {
+                                            e.target.setAttribute('src', currentSrc.replace('/pwa/', '/'));
+                                        } 
+                                        // 3. Hepsi çökerse şık placeholder elementini devreye sok
+                                        else {
                                             e.target.style.display = 'none';
                                             e.target.nextSibling.style.display = 'flex';
                                         }
