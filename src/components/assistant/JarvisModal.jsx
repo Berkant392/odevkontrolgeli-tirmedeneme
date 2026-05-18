@@ -5,6 +5,7 @@ import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
 
+// 🛡️ ÇÖKME ENGELLEYİCİ KALKAN
 const getSafeText = (val) => {
     if (!val) return "";
     if (typeof val === 'string' || typeof val === 'number') return String(val);
@@ -41,20 +42,18 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [draftNotes, setDraftNotes] = useState({});
     
     const recognitionRef = useRef(null);
-    const sortedFoundTopics = [...foundTopics].reverse();
+    const sortedFoundTopics = [...(foundTopics || [])].reverse();
 
-    // 🔒 ARKA PLAN SCROLL KİLİDİ VE OTO-DİNLEME
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         setTimeout(() => { startListening(); }, 500);
         return () => { 
             document.body.style.overflow = ''; 
             if (recognitionRef.current) recognitionRef.current.abort();
-            window.speechSynthesis.cancel();
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
         };
     }, []);
 
-    // 🗣️ DİNAMİK SESLİ YANIT VE OTOMATİK DİNLEME (Auto-Resume)
     const speakFeedback = (text, autoListenAfter = false) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
@@ -62,7 +61,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         utterance.lang = 'tr-TR';
         utterance.rate = 1.0;
         
-        // Seslendirme bitince mikrafonu otomatik aç (Eksik bilgi sorulmuşsa)
         utterance.onend = () => {
             if (autoListenAfter) {
                 startListening();
@@ -77,11 +75,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         speakFeedback(msg, autoListenAfter);
     };
 
-    // 🧠 YAPAY ZEKA: VERİ HAZIRLIĞI (LLM'in Öğrencilerin Eksiklerini Görebilmesi İçin)
     const getStudentReadableGrades = (student, cls) => {
         let records = [];
-        cls.topics.forEach(t => {
-            t.subColumns.forEach(col => {
+        (cls?.topics || []).forEach(t => {
+            (t.subColumns || []).forEach(col => {
                 const status = draftGrades[student.id]?.[col.id] || student.grades?.[col.id];
                 if (status) {
                     const statusTR = status === 'done' ? 'Yapıldı' : status === 'missing' ? 'Eksik' : status === 'assigned' ? 'Verildi' : 'Muaf';
@@ -92,6 +89,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         return records;
     };
 
+    // 🧠 TOKEN TASARRUFLU (DİNAMİK) GROQ API ÇAĞRISI
     const callGroqAPI = async (transcript) => {
         const apiKey = import.meta.env.VITE_GROQ_API_KEY;
         if (!apiKey) {
@@ -100,29 +98,48 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
             return null;
         }
 
-        // LLM'in sınıfı ve kimin ne eksiği olduğunu bilmesi için özel veri yapısı
-        const contextData = classes.map(c => ({
-            className: c.className,
-            students: c.students.map(s => ({
-                name: s.name,
-                records: getStudentReadableGrades(s, c)
-            })),
-            topics: c.topics.map(t => ({
-                title: t.title,
-                sources: t.subColumns.map(col => col.title)
-            }))
-        }));
+        let dynamicContextData;
+        let currentStudentContext = "";
 
-        const currentStudentContext = selectedStudent 
-            ? `Şu an ekranda seçili aktif öğrenci: "${selectedStudent.name}". Eğer komutta yeni bir isim yoksa, bu komutu ${selectedStudent.name} için uygula.`
-            : `Şu an seçili bir öğrenci yok. Komuttan öğrenci ismini bul.`;
+        // 🔥 OPTİMİZASYON: Sadece seçili öğrenci varsa notlarını gönder. Yoksa sadece isim listesini gönder.
+        if (selectedStudent) {
+            const targetClass = (classes || []).find(c => c.id === selectedStudent.classId);
+            const studentCurrentData = targetClass?.students?.find(s => s.id === selectedStudent.id) || selectedStudent;
+            
+            dynamicContextData = {
+                odakMode: "AKTIF_OGRENCI",
+                ogrenciAdi: selectedStudent.name,
+                sinifAdi: selectedStudent.className,
+                // Sadece seçili öğrencinin notları gönderilir!
+                notKayitlari: getStudentReadableGrades(studentCurrentData, targetClass),
+                mevcutOdevler: (targetClass?.topics || []).map(t => ({
+                    baslik: t.title,
+                    kaynaklar: (t.subColumns || []).map(col => col.title)
+                }))
+            };
+            currentStudentContext = `Şu an ekranda seçili aktif öğrenci: "${selectedStudent.name}". Eğer komutta yeni bir isim yoksa, sadece bu öğrencinin verilerini baz al.`;
+        } else {
+            dynamicContextData = {
+                odakMode: "GENEL_ARAMA",
+                siniflar: (classes || []).map(c => ({
+                    sinifAdi: c.className,
+                    // Sadece isimler gönderilir, notlar asla gönderilmez! (Muazzam Token tasarrufu)
+                    ogrenciIsimleri: (c.students || []).map(s => s.name),
+                    odevBasliklari: (c.topics || []).map(t => ({
+                        baslik: t.title,
+                        kaynaklar: (t.subColumns || []).map(col => col.title)
+                    }))
+                }))
+            };
+            currentStudentContext = `Şu an seçili bir öğrenci yok. Kullanıcının komutundan öğrenci ismini eşleştirmelisin.`;
+        }
 
         const systemPrompt = `
 Sen "J.A.R.V.I.S" adında, son derece zeki, profesyonel ve saygılı bir eğitim yapay zekasısın.
 Sana verilen komutu analiz et ve SADECE aşağıdaki JSON formatında yanıt ver. Asla JSON dışında düz metin yazma!
 
-Veritabanı:
-${JSON.stringify(contextData)}
+Mevcut Aktif Veritabanı (Dinamik Bağlam):
+${JSON.stringify(dynamicContextData)}
 
 ${currentStudentContext}
 
@@ -145,8 +162,8 @@ JSON FORMATIN:
 
 Kurallar:
 - "feedback" alanı çok önemlidir. Mekanik değil, akıcı konuş. "Efendim" kelimesini ara sıra kullan.
-- Eğer eylem "query" ise, veritabanına bakıp Ahmet'in eksiklerini bularak "feedback" içine yaz (Örn: "Ahmet'in Üslü Sayılar testinden eksiği bulunuyor efendim.").
-- Eğer "need_info" ise "feedback" içinde eksik olan bilgiyi karizmatikçe sor (Örn: "Ahmet'in Köklü Sayılar ödevi için hangi kaynağı işaretlememi istersiniz efendim?").
+- Eğer eylem "query" ise, veritabanına bakıp eksikleri bularak "feedback" içine yaz.
+- Eğer "need_info" ise "feedback" içinde eksik olan bilgiyi karizmatikçe sor.
 - Durumlar İngilizce döndürülmelidir: yapıldı->done, eksik->missing, verildi->assigned, muaf->exempt.
 `;
 
@@ -180,15 +197,13 @@ Kurallar:
     const processGroqResult = (aiResult) => {
         if (!aiResult) return;
 
-        // 1. ONAYLA VE KAYDET EYLEMİ (Kullanıcı "Kaydet" dediyse)
         if (aiResult.action === 'save') {
             updateFeedbackAndSpeak(aiResult.feedback || "Değişiklikler sisteme kaydediliyor efendim.");
             applyChanges();
             return;
         }
 
-        // 2. ÖĞRENCİ BELİRLEME (Update, Query veya Need Info için)
-        const allStudents = classes.flatMap(cls => (cls.students || []).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })));
+        const allStudents = (classes || []).flatMap(cls => (cls.students || []).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })));
         let bestStudent = findBestMatch(allStudents, 'name', aiResult.student);
         
         if (!bestStudent && selectedStudent) bestStudent = selectedStudent;
@@ -200,31 +215,26 @@ Kurallar:
             const topics = targetClass?.topics || []; 
             setFoundTopics(topics);
 
-            // KONU VE KAYNAK EŞLEŞTİRME
             const bestTopic = findBestMatch(topics, 'title', aiResult.topic);
             let bestCol = null;
             if (bestTopic && aiResult.source) {
                 bestCol = findBestMatch(bestTopic.subColumns || [], 'title', aiResult.source);
             }
 
-            // A. EKSİK BİLGİ SORMA (Need Info) -> Otomatik Dinleme Başlatır
             if (aiResult.action === 'need_info') {
                 if (bestTopic) {
                     setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: aiResult.status });
                     setPendingSources(bestTopic.subColumns || []);
                 }
-                // J.A.R.V.I.S eksik bilgiyi sorar ve cevabı dinlemek için mikrofonu otomatik açar!
                 updateFeedbackAndSpeak(aiResult.feedback, true); 
                 return;
             }
 
-            // B. BİLGİ SORGULAMA (Query) -> J.A.R.V.I.S raporu okur
             if (aiResult.action === 'query') {
                 updateFeedbackAndSpeak(aiResult.feedback);
                 return;
             }
 
-            // C. NOT GÜNCELLEME (Update) -> İşlemi taslağa ekler
             if (aiResult.action === 'update' && bestTopic && bestCol && aiResult.status) {
                 handleDraftGradeChange(bestStudent.id, bestCol.id, aiResult.status);
                 updateFeedbackAndSpeak(aiResult.feedback);
@@ -233,7 +243,6 @@ Kurallar:
             }
 
         } else {
-            // Hiçbir öğrenci bulunamadı
             updateFeedbackAndSpeak(aiResult.feedback || "Sistemde böyle bir öğrenci kaydı bulamadım efendim.");
         }
     };
@@ -252,7 +261,6 @@ Kurallar:
         processGroqResult(aiResult);
     };
 
-    // MİKROFON KONTROLÜ
     const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) return;
@@ -269,7 +277,7 @@ Kurallar:
             setSpeechTranscript(transcript); 
             handleCommand(transcript); 
         };
-        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Sinyal kesildi."); };
+        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Sinyal kesildi. Yazarak devam edebilirsiniz."); };
         recognition.onend = () => setIsListening(false); 
         recognition.start();
     };
@@ -299,7 +307,7 @@ Kurallar:
     const applyChanges = () => {
         if (!selectedStudent) return;
         const targetClass = classes.find(c => c.id === selectedStudent.classId); if (!targetClass) return;
-        const updatedStudents = targetClass.students.map(s => {
+        const updatedStudents = (targetClass.students || []).map(s => {
             if (s.id === selectedStudent.id) {
                 const newGrades = { ...(s.grades || {}), ...(draftGrades[s.id] || {}) };
                 const newNotes = { ...(s.assignmentNotes || {}), ...(draftNotes[s.id] || {}) };
@@ -308,7 +316,7 @@ Kurallar:
         });
         updateClassInDb({ ...targetClass, students: updatedStudents });
         setDraftGrades({}); setDraftNotes({});
-        setTimeout(() => onClose(), 2000); // Kapatmayı ses bittikten sonraya ertele
+        setTimeout(() => onClose(), 2000); 
     };
 
     return (
@@ -346,9 +354,9 @@ Kurallar:
                     </div>
 
                     <AnimatePresence>
-                        {pendingSources.length > 0 && (
+                        {(pendingSources || []).length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="mt-4 flex flex-wrap justify-center gap-1.5 z-20 relative max-h-24 overflow-y-auto">
-                                {pendingSources.map(col => (
+                                {(pendingSources || []).map(col => (
                                     <button key={col.id} onClick={() => handleManualSourceSelect(col)} className="px-3 py-1.5 bg-cyan-950/90 border border-cyan-500/40 hover:border-cyan-300 text-cyan-200 text-[10px] font-bold rounded-xl transition-all">
                                         {getSafeText(col.title)}
                                     </button>
@@ -372,8 +380,8 @@ Kurallar:
                                     <div key={topic.id} className="bg-slate-900/40 rounded-2xl border border-cyan-900/20 p-4">
                                         <h4 className="font-bold text-cyan-200 text-xs mb-3 border-b border-slate-800/60 pb-2 flex items-center gap-1.5"><div className="w-1 h-3 bg-cyan-500 rounded-full"></div>{getSafeText(topic.title)}</h4>
                                         <div className="space-y-2.5">
-                                            {topic.subColumns?.map(col => {
-                                                const targetClass = classes.find(c => c.id === selectedStudent.classId);
+                                            {(topic.subColumns || []).map(col => {
+                                                const targetClass = (classes || []).find(c => c.id === selectedStudent.classId);
                                                 const studentData = targetClass?.students?.find(s => s.id === selectedStudent.id);
                                                 const displayGrade = draftGrades[selectedStudent.id]?.[col.id] !== undefined ? draftGrades[selectedStudent.id]?.[col.id] : (studentData?.grades?.[col.id] || 'assigned');
                                                 const isChanged = draftGrades[selectedStudent.id]?.[col.id] !== undefined;
@@ -397,7 +405,7 @@ Kurallar:
                             </div>
                         </>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-600 font-mono py-12"><TerminalSquare size={36} className="mb-2 opacity-30 animate-pulse"/><p className="text-xs">Komut veya Ses Bekleniyor...</p></div>
+                        <div className="h-full flex flex-col items-center justify-center text-slate-600 font-mono py-12"><TerminalSquare size={36} className="mb-2 opacity-30 animate-pulse"/><p className="text-xs">Komut Girişi veya Ses Bekleniyor...</p></div>
                     )}
                 </div>
 
