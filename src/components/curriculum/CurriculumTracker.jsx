@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, BookOpen, CheckSquare, Square, CornerDownRight, Pencil, Check, Library, Save, X, GripVertical } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { generateId } from '../../utils/helpers';
@@ -190,7 +190,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
 
     return (
         <div className="animate-scale-in max-w-4xl mx-auto mt-2 relative z-10">
-            {/* Üst İlerleme Kartı - Dolguları mobilde p-4 seviyesine sıkıştırıldı */}
+            {/* Üst İlerleme Kartı */}
             <div className={`p-4 md:p-8 rounded-2xl md:rounded-3xl mb-4 md:mb-8 ${isVip ? 'bg-slate-700 border border-slate-600 shadow-lg' : 'bg-white border border-slate-100 shadow-float'}`}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
                     <div className="flex items-center gap-3 md:gap-4">
@@ -215,7 +215,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                 </div>
             </div>
 
-            {/* Yeni Konu Ekleme Barı - Mobilde pencereler ve butonlar daraltıldı */}
+            {/* Yeni Konu Ekleme Barı */}
             {isTeacherMode && (
                 <div className="flex flex-col md:flex-row gap-2 mb-4 md:mb-8">
                     <input type="text" placeholder="Yeni Ana Konu Başlığı (Örn: Türev)..." className="flex-1 bg-white border-2 border-slate-200 rounded-xl md:rounded-2xl px-4 py-3 md:px-6 md:py-4 text-sm md:text-lg focus:border-brandPurple outline-none font-bold text-slate-800 shadow-sm transition-all" value={newTopicTitle} onChange={e => setNewTopicTitle(e.target.value)} onKeyDown={e => e.key==='Enter' && addTopic(newTopicTitle)}/>
@@ -226,7 +226,7 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                 </div>
             )}
 
-            {/* Ana Liste Kartı - Mobilde iç dolgular p-3.5 seviyesine çekildi */}
+            {/* Ana Liste Kartı */}
             <div className={`rounded-xl md:rounded-3xl p-3.5 md:p-10 ${isVip ? 'bg-slate-700 border border-slate-600 shadow-lg' : 'bg-white border border-slate-100 shadow-float'}`}>
                 {localCurriculum.length === 0 ? (
                     <div className="text-center py-6 text-xs md:text-sm font-bold text-slate-400">Henüz hiç konu eklenmemiş.</div>
@@ -234,7 +234,6 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                     <DragDropContext onDragEnd={handleDragEnd}>
                         <Droppable droppableId="curriculum-board" type="topic">
                             {(provided) => (
-                                // 🔥 GÜNCELLEME: Konular arası dikey boşluklar daraltıldı (space-y-4 md:space-y-8)
                                 <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4 md:space-y-8">
                                     {localCurriculum.map((topic, index) => {
                                         const tProgress = getTopicProgress(topic);
@@ -262,7 +261,6 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                                             <button onClick={() => setEditingTopicId(null)} className="p-2 bg-slate-200 text-slate-600 rounded-xl"><X size={14}/></button>
                                                                         </div>
                                                                     ) : (
-                                                                        // 🔥 GÜNCELLEME: Ana konu font boyutu responsive yapıldı (text-sm md:text-2xl)
                                                                         <h3 className={`text-sm md:text-2xl font-black truncate tracking-wide ${topic.isCompleted ? (isVip ? 'text-slate-500 line-through decoration-2' : 'text-slate-400/50 line-through decoration-2') : (isVip ? 'text-white' : 'text-slate-800')}`}>{topic.title}</h3>
                                                                     )}
                                                                     {!isEditingThisTopic && ( <span className={`text-[9px] md:text-xs font-black px-2 py-0.5 rounded-md border shrink-0 ${topic.isCompleted ? 'bg-successGreen/10 text-successGreen border-successGreen/20' : (isVip ? 'bg-slate-800 text-vipGold border-slate-600' : 'bg-slate-100 text-slate-500 border-slate-200')}`}>%{tProgress}</span> )}
@@ -280,7 +278,6 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                         {/* Alt Başlıklar Bölümü */}
                                                         <Droppable droppableId={topic.id} type="subtopic">
                                                             {(provided) => (
-                                                                // 🔥 GÜNCELLEME: Akordeon gizleme yok, mobilde sola yanaşma payı azaltıldı (pl-6 md:pl-11)
                                                                 <div {...provided.droppableProps} ref={provided.innerRef} className="pl-6 md:pl-11 mt-1 space-y-1.5 min-h-[5px]">
                                                                     {topic.subTopics?.map((sub, subIndex) => {
                                                                         const isEditingThisSub = editingSubTopicId === sub.id;
@@ -305,7 +302,6 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                                                                     <button onClick={() => setEditingSubTopicId(null)} className="p-1 bg-slate-200 text-slate-600 rounded-md"><X size={12}/></button>
                                                                                                 </div>
                                                                                             ) : ( 
-                                                                                                // 🔥 GÜNCELLEME: Alt konu başlığı font boyutu daraltıldı (text-[11px] md:text-lg)
                                                                                                 <span className={`text-[11px] md:text-lg font-bold truncate leading-tight ${sub.isCompleted ? (isVip ? 'text-slate-500 line-through' : 'text-slate-400/50 line-through') : (isVip ? 'text-slate-300' : 'text-slate-600')}`}>{sub.title}</span> 
                                                                                             )}
                                                                                             {isTeacherMode && !isEditingThisSub && (
@@ -331,11 +327,13 @@ const CurriculumTracker = ({ cls, updateClassInDb, isTeacherMode, libraryItems =
                                                             )}
                                                         </Droppable>
                                                     </div>
-                                                );
-                                        })}
-                                        {provided.placeholder}
-                                    </div>
-                                )}
+                                                )}
+                                            </Draggable>
+                                        );
+                                    })}
+                                    {provided.placeholder}
+                                </div>
+                            )}
                         </Droppable>
                     </DragDropContext>
                 )}
