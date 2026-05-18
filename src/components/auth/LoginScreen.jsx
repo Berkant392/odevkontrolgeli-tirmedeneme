@@ -92,7 +92,6 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
     const [password, setPassword] = useState("");
     const [pin, setPin] = useState("");
     
-    // YENİ: Hata ve Şifremi Unuttum state'leri
     const [errorMsg, setErrorMsg] = useState("");
     const [showForgotMsg, setShowForgotMsg] = useState(false);
 
@@ -106,21 +105,22 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
         show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 24 } }
     };
 
-    // YENİ: Giriş işlemini yöneten ve hata yakalayan fonksiyon
     const handleStudentLoginSubmit = async (e) => {
         if (e) e.preventDefault();
         setErrorMsg(''); 
         setShowForgotMsg(false);
 
-        if (!username.trim() || !password.trim()) {
+        // 🔥 YAZILIMSAL TEMİZLİK: Boşlukları uçur ve kullanıcı adını tamamen küçük harfe çevir
+        const cleanUsername = username.trim().toLowerCase();
+        const cleanPassword = password.trim();
+
+        if (!cleanUsername || !cleanPassword) {
             setErrorMsg('Lütfen kullanıcı adı ve şifrenizi giriniz.');
             return;
         }
 
         try {
-            // App.jsx tarafındaki giriş fonksiyonunu tetikliyoruz.
-            // Eğer App.jsx'teki fonksiyon giriş başarısız olduğunda hata fırlatıyorsa (throw error), buradaki catch bloğuna düşer.
-            await onStudentLogin(username, password, authView === 'vip-login');
+            await onStudentLogin(cleanUsername, cleanPassword, authView === 'vip-login');
         } catch (error) {
             console.error("Giriş hatası:", error);
             setErrorMsg('Kullanıcı adı veya şifre hatalı!');
@@ -193,22 +193,44 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
                                 
                                 <div className="login-input-group">
                                     <label className="login-label" style={{color: authView === 'vip-login' ? '#e6c27a' : '#94a3b8'}}>Kullanıcı Adı</label>
-                                    <input type="text" className={`login-input ${authView === 'vip-login' ? 'vip-input' : ''}`} placeholder="örn: ahmet.yilmaz" value={username} onChange={e => setUsername(e.target.value)} />
+                                    {/* 🔥 DONANIMSAL KLAVYE ENGELLEYİCİLER BURADA */}
+                                    <input 
+                                        type="text" 
+                                        autoCapitalize="none"
+                                        autoCorrect="off"
+                                        autoComplete="username"
+                                        spellCheck="false"
+                                        className={`login-input ${authView === 'vip-login' ? 'vip-input' : ''}`} 
+                                        placeholder="örn: ahmet.yilmaz" 
+                                        value={username} 
+                                        onChange={e => setUsername(e.target.value)} 
+                                    />
                                 </div>
                                 
                                 <div className="login-input-group" style={{marginTop: '20px'}}>
                                     <label className="login-label" style={{color: authView === 'vip-login' ? '#e6c27a' : '#94a3b8'}}>Şifre</label>
-                                    <input type="password" className={`login-input ${authView === 'vip-login' ? 'vip-input' : ''}`} style={{letterSpacing: '0.3em', fontSize: '18px'}} placeholder="••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleStudentLoginSubmit(e)} />
+                                    {/* 🔥 DONANIMSAL KLAVYE ENGELLEYİCİLER BURADA */}
+                                    <input 
+                                        type="password" 
+                                        autoCapitalize="none"
+                                        autoCorrect="off"
+                                        autoComplete="current-password"
+                                        spellCheck="false"
+                                        className={`login-input ${authView === 'vip-login' ? 'vip-input' : ''}`} 
+                                        style={{letterSpacing: '0.3em', fontSize: '18px'}} 
+                                        placeholder="•••••" 
+                                        value={password} 
+                                        onChange={e => setPassword(e.target.value)} 
+                                        onKeyDown={e => e.key === 'Enter' && handleStudentLoginSubmit(e)} 
+                                    />
                                 </div>
 
-                                {/* YENİ EKLENEN HATA MESAJI */}
                                 {errorMsg && (
                                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-red-400 text-sm mt-3 font-medium text-center bg-red-500/10 py-2 rounded-lg border border-red-500/20">
                                         {errorMsg}
                                     </motion.div>
                                 )}
 
-                                {/* YENİ EKLENEN ŞİFREMİ UNUTTUM BUTONU VE UYARISI */}
                                 <div className="mt-4 flex flex-col items-end">
                                     <button
                                         type="button"
@@ -257,7 +279,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
                                     <input type="password" autoFocus className="login-input" style={{textAlign: 'center', fontSize: '24px', letterSpacing: '0.5em', padding: '16px'}} placeholder="••••" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && onTeacherLogin(pin)} />
                                 </div>
                                 
-                                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }} onClick={() => onTeacherLogin(pin)} className="lbtn lbtn-a w-full flex items-center justify-center rounded-xl" style={{marginTop: '28px', padding: '16px', background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.3)'}}>
+                                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }} onClick={() => onTeacherLogin(pin)} className="lbtn lbtn-a w-full flex items-center justify-center rounded-xl" style={{marginTop: '28px', padding: '16px', background: 'rgba(96,155,250,0.15)', border: '1px solid rgba(96,165,250,0.3)'}}>
                                     <span style={{color: '#60a5fa', fontSize: '16px', fontWeight: '900'}}>SİSTEME GİR</span>
                                 </motion.button>
                             </motion.div>
