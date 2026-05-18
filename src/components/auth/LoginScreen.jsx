@@ -147,34 +147,34 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
         }
     };
 
-    // 🔥 EVRENSEL HALE GETİRİLEN IOT SİHİRBAZ ADIMLARI (Safari & Chrome Ortak)
+    // 🔥 GÜNCELLENEN EVRENSEL ADIMLAR (.jpg uzantılı ve cihaz bağımsız)
     const iosStepsData = [
         {
             id: 1,
-            title: "📤 Adım 1: Paylaş veya Menü Butonu",
-            desc: "Kullandığınız tarayıcıda 'Paylaş' simgesine dokunun. (Safari'de ekranın alt ortasında, Chrome'da ise sağ üst köşede veya adres çubuğunun yanındadır).",
-            img: "/pwa/adim1.png",
+            title: "📤 Adım 1: Menüyü Açın",
+            desc: "Telefonunuzdan uygulamayı açtığınız tarayıcının alt barındaki veya üst köşesindeki 'Paylaş' ya da 'Seçenekler' simgesine dokunun.",
+            img: "/pwa/adim1.jpg",
             icon: <Share className="text-blue-400" size={24} />
         },
         {
             id: 2,
-            title: "📜 Adım 2: Seçenekleri Kaydırın",
-            desc: "Açılan tarayıcı menüsünü veya paylaşım panelini parmağınızla yukarıya doğru kaydırarak alt seçeneklere ilerleyin.",
-            img: "/pwa/adim2.png",
+            title: "📜 Adım 2: Listeyi Kaydırın",
+            desc: "Karşınıza çıkan tarayıcı işlem penceresini parmağınızla hafifçe yukarıya kaydırarak alt kısımdaki ek özellikleri görünür yapın.",
+            img: "/pwa/adim2.jpg",
             icon: <Smartphone className="text-sky-400" size={24} />
         },
         {
             id: 3,
             title: "➕ Adım 3: Ana Ekrana Ekle",
-            desc: "Seçenekler listesinin içinde yer alan 'Ana Ekrana Ekle' (Add to Home Screen) butonunu bulun ve dokunun.",
-            img: "/pwa/adim3.png",
+            desc: "Seçenekler arasında yer alan ve yanında artı simgesi bulunan 'Ana Ekrana Ekle' (Add to Home Screen) sekmesine dokunun.",
+            img: "/pwa/adim3.jpg",
             icon: <PlusSquare className="text-indigo-400" size={24} />
         },
         {
             id: 4,
-            title: "🎉 Adım 4: Kurulumu Tamamla",
-            desc: "Son olarak ekranın sağ üst köşesinde beliren 'Ekle' (Add) seçeneğine tıklayın. Berkant Hoca Platformu artık ana ekranınızda bir mobil uygulama!",
-            img: "/pwa/adim4.png",
+            title: "✨ Adım 4: Kurulumu Bitir",
+            desc: "Açılan son onay ekranının sağ üst köşesindeki 'Ekle' butonuna basın. Platform artık ana ekranınızda bir mobil uygulama!",
+            img: "/pwa/adim4.jpg",
             icon: <GraduationCap className="text-emerald-400" size={24} />
         }
     ];
@@ -350,7 +350,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                 </AnimatePresence>
             </motion.div>
 
-            {/* 🔥 SAFARI VE CHROME İÇİN KUSURSUZ ÇALIŞAN KATI ARKA PLANLI REHBER MODALI */}
+            {/* 🔥 GÜNCELLEME: DIKDÖRTGEN DIKEY TELEFON TASARIMLI SİHİRBAZ MODALI (Saf Kanatlı CSS) */}
             <AnimatePresence>
                 {showIosModal && (
                     <div className="fixed inset-0 bg-slate-950 z-[99999] flex items-center justify-center p-4">
@@ -358,22 +358,25 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                             initial={{ opacity: 0, y: 40, scale: 0.95 }} 
                             animate={{ opacity: 1, y: 0, scale: 1 }} 
                             exit={{ opacity: 0, y: 30, scale: 0.95 }}
-                            className="bg-slate-900 border-2 border-slate-800 p-5 md:p-7 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl flex flex-col justify-between min-h-[500px] relative overflow-hidden"
+                            // max-w-[360px] ve min-h-[640px] ile dikey dikdörtgen (smartphone mockup) yapısına kavuşturuldu
+                            className="bg-slate-900 border-2 border-slate-800 p-5 md:p-6 rounded-[2.5rem] w-full max-w-[360px] min-h-[640px] text-center shadow-2xl flex flex-col justify-between relative overflow-hidden"
                             onClick={e => e.stopPropagation()}
                         >
                             <button onClick={() => setShowIosModal(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full bg-slate-800 transition-colors z-50"><X size={16}/></button>
 
-                            <div>
-                                <div className="flex justify-center mb-2 mt-2">
+                            {/* Üst Başlık ve İkon Alanı */}
+                            <div className="mt-2">
+                                <div className="flex justify-center mb-2">
                                     <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/30 text-brandPurple rounded-full flex items-center justify-center shadow-glow">
                                         {iosStepsData[iosStep - 1].icon}
                                     </div>
                                 </div>
-                                <h3 className="text-lg font-black text-white uppercase tracking-wider">{iosStepsData[iosStep - 1].title}</h3>
-                                <p className="text-slate-300 text-xs mt-2 px-1 font-medium leading-relaxed min-h-[50px]">{iosStepsData[iosStep - 1].desc}</p>
+                                <h3 className="text-md font-black text-white uppercase tracking-wider">{iosStepsData[iosStep - 1].title}</h3>
+                                <p className="text-slate-300 text-[11px] mt-1.5 px-1 font-medium leading-relaxed min-h-[45px]">{iosStepsData[iosStep - 1].desc}</p>
                             </div>
 
-                            <div className="my-4 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-center h-48 overflow-hidden relative shadow-inner">
+                            {/* Orta Kısım: Dikdörtgen Elongated Görsel Çerçevesi (h-96 yapılarak dikey alan genişletildi) */}
+                            <div className="my-3 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-center h-96 overflow-hidden relative shadow-inner">
                                 <img 
                                     src={iosStepsData[iosStep - 1].img} 
                                     alt={iosStepsData[iosStep - 1].title} 
@@ -390,8 +393,9 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                 </div>
                             </div>
 
-                            <div>
-                                <div className="flex justify-center gap-1.5 mb-4">
+                            {/* Alt Kontrol Paneli */}
+                            <div className="mb-2">
+                                <div className="flex justify-center gap-1.5 mb-3">
                                     {iosStepsData.map((step) => (
                                         <div key={step.id} className={`h-1.5 rounded-full transition-all duration-300 ${iosStep === step.id ? 'w-6 bg-brandPurple shadow-glow' : 'w-1.5 bg-slate-700'}`} />
                                     ))}
