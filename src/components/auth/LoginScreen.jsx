@@ -147,34 +147,34 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
         }
     };
 
-    // 🔥 GÜNCELLENEN EVRENSEL ADIMLAR (.jpg uzantılı ve cihaz bağımsız)
+    // 🔥 GÖRECELİ GÜVENLİ YOLLAR (Gereksiz kök / işaretleri kaldırıldı)
     const iosStepsData = [
         {
             id: 1,
             title: "📤 Adım 1: Menüyü Açın",
             desc: "Telefonunuzdan uygulamayı açtığınız tarayıcının alt barındaki veya üst köşesindeki 'Paylaş' ya da 'Seçenekler' simgesine dokunun.",
-            img: "/pwa/adim1.jpg",
+            img: "pwa/adim1.jpg",
             icon: <Share className="text-blue-400" size={24} />
         },
         {
             id: 2,
             title: "📜 Adım 2: Listeyi Kaydırın",
             desc: "Karşınıza çıkan tarayıcı işlem penceresini parmağınızla hafifçe yukarıya kaydırarak alt kısımdaki ek özellikleri görünür yapın.",
-            img: "/pwa/adim2.jpg",
+            img: "pwa/adim2.jpg",
             icon: <Smartphone className="text-sky-400" size={24} />
         },
         {
             id: 3,
             title: "➕ Adım 3: Ana Ekrana Ekle",
             desc: "Seçenekler arasında yer alan ve yanında artı simgesi bulunan 'Ana Ekrana Ekle' (Add to Home Screen) sekmesine dokunun.",
-            img: "/pwa/adim3.jpg",
+            img: "pwa/adim3.jpg",
             icon: <PlusSquare className="text-indigo-400" size={24} />
         },
         {
             id: 4,
             title: "✨ Adım 4: Kurulumu Bitir",
             desc: "Açılan son onay ekranının sağ üst köşesindeki 'Ekle' butonuna basın. Platform artık ana ekranınızda bir mobil uygulama!",
-            img: "/pwa/adim4.jpg",
+            img: "pwa/adim4.jpg",
             icon: <GraduationCap className="text-emerald-400" size={24} />
         }
     ];
@@ -350,7 +350,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                 </AnimatePresence>
             </motion.div>
 
-            {/* 🔥 GÜNCELLEME: DIKDÖRTGEN DIKEY TELEFON TASARIMLI SİHİRBAZ MODALI (Saf Kanatlı CSS) */}
+            {/* 🔥 DIKDÖRTGEN DIKEY TELEFON TASARIMLI SİHİRBAZ MODALI */}
             <AnimatePresence>
                 {showIosModal && (
                     <div className="fixed inset-0 bg-slate-950 z-[99999] flex items-center justify-center p-4">
@@ -358,13 +358,11 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                             initial={{ opacity: 0, y: 40, scale: 0.95 }} 
                             animate={{ opacity: 1, y: 0, scale: 1 }} 
                             exit={{ opacity: 0, y: 30, scale: 0.95 }}
-                            // max-w-[360px] ve min-h-[640px] ile dikey dikdörtgen (smartphone mockup) yapısına kavuşturuldu
                             className="bg-slate-900 border-2 border-slate-800 p-5 md:p-6 rounded-[2.5rem] w-full max-w-[360px] min-h-[640px] text-center shadow-2xl flex flex-col justify-between relative overflow-hidden"
                             onClick={e => e.stopPropagation()}
                         >
                             <button onClick={() => setShowIosModal(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full bg-slate-800 transition-colors z-50"><X size={16}/></button>
 
-                            {/* Üst Başlık ve İkon Alanı */}
                             <div className="mt-2">
                                 <div className="flex justify-center mb-2">
                                     <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/30 text-brandPurple rounded-full flex items-center justify-center shadow-glow">
@@ -375,25 +373,31 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                 <p className="text-slate-300 text-[11px] mt-1.5 px-1 font-medium leading-relaxed min-h-[45px]">{iosStepsData[iosStep - 1].desc}</p>
                             </div>
 
-                            {/* Orta Kısım: Dikdörtgen Elongated Görsel Çerçevesi (h-96 yapılarak dikey alan genişletildi) */}
+                            {/* 🔥 GÜNCELLEME: ÇİFT KATMANLI KORUMALI AKILLI GÖRSEL ALANI */}
                             <div className="my-3 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-center h-96 overflow-hidden relative shadow-inner">
                                 <img 
                                     src={iosStepsData[iosStep - 1].img} 
                                     alt={iosStepsData[iosStep - 1].title} 
                                     className="max-h-full max-w-full object-contain pointer-events-none"
                                     onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.nextSibling.style.display = 'flex';
+                                        // EĞER PWA/ KLASÖRÜNDE BULAMAZSA DOĞRUDAN KÖKTE (PUBLIC/) ARAMAYI DENE!
+                                        const currentSrc = e.target.src;
+                                        if (currentSrc.includes('pwa/')) {
+                                            e.target.src = currentSrc.replace('pwa/', '');
+                                        } else {
+                                            // İki olasılık da patlarsa şık placeholder devreye girer
+                                            e.target.style.display = 'none';
+                                            e.target.nextSibling.style.display = 'flex';
+                                        }
                                     }}
                                 />
                                 <div className="hidden absolute inset-0 flex-col items-center justify-center text-slate-600 font-bold text-xs p-4 bg-slate-950/40">
                                     <Smartphone size={32} className="text-slate-700 mb-2 animate-pulse" />
                                     <span>[ Ekran Görüntüsü Alanı ]</span>
-                                    <span className="text-[10px] text-slate-500 mt-1 font-normal">public{iosStepsData[iosStep - 1].img}</span>
+                                    <span className="text-[10px] text-slate-500 mt-1 font-normal">public/{iosStepsData[iosStep - 1].img}</span>
                                 </div>
                             </div>
 
-                            {/* Alt Kontrol Paneli */}
                             <div className="mb-2">
                                 <div className="flex justify-center gap-1.5 mb-3">
                                     {iosStepsData.map((step) => (
