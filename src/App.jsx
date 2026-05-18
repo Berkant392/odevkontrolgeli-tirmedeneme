@@ -377,13 +377,11 @@ const App = () => {
         <div className={`min-h-screen pb-24 md:pb-32 relative transition-colors duration-1000 ${currentUserRole === 'vip-student' ? 'bg-slate-900' : 'bg-lightBg'}`}>
             {currentUserRole === 'vip-student' && ( <div className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"><div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full mix-blend-screen opacity-10" style={{background: 'radial-gradient(circle, rgba(255,215,0,0.4) 0%, transparent 70%)'}}></div><div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] rounded-full mix-blend-screen opacity-[0.05]" style={{background: 'radial-gradient(circle, rgba(255,255,255,0.5) 0%, transparent 70%)'}}></div></div> )}
             
-            {/* 🔥 GÜNCELLEME: Üst bar dikey payı py-4'ten mobilde py-2.5'e düşürülerek daraltıldı */}
             <header className={`no-print relative z-20 transition-all duration-500 ${currentUserRole === 'vip-student' ? 'bg-slate-800/90 border-b border-slate-700 shadow-md' : 'bg-white border-b border-slate-200 shadow-sm'}`}>
                  <div className="max-w-7xl mx-auto px-3 py-2.5 md:py-4 flex flex-col items-center gap-2">
                     <div className="flex items-center gap-3 w-full justify-between">
                         {currentUserRole !== 'student' && currentUserRole !== 'vip-student' && view !== 'home' ? ( <button onClick={() => view === 'student-detail' ? setView('class-detail') : goHome()} className={`p-1.5 md:p-2 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}><ChevronLeft size={20} /></button> ) : <div className="w-8"></div>}
                         
-                        {/* 🔥 GÜNCELLEME: Lucide başlık şapkası uçuruldu, yerine mikro pwa amblemi entegre edildi */}
                         <div className="text-center">
                             <h1 className={`text-md md:text-2xl font-black tracking-tight flex items-center justify-center gap-2 ${currentUserRole === 'vip-student' ? 'real-gold-text' : 'text-slate-800'}`}>
                                 <div className={`p-1 md:p-1.5 rounded-lg shadow-md transition-transform hover:scale-105 hover-lift w-7 h-7 md:w-9 md:h-9 flex items-center justify-center ${currentUserRole === 'vip-student' ? 'real-gold-bg shadow-vip-glow' : 'bg-gradient-to-tr from-brandPurple to-blue-600 shadow-glow'}`}>
@@ -404,13 +402,12 @@ const App = () => {
 
             {view === 'home' && (
                 <>
-                    {/* 🔥 GÜNCELLEME: Konteyner kenar boşlukları daraltıldı px-4 -> px-2.5 */}
                     <div className="max-w-7xl mx-auto px-2.5 mt-4 animate-fade-in-up relative z-10">
                         <div className={`p-4 md:p-6 rounded-2xl md:rounded-[2rem] shadow-sm border flex flex-col md:flex-row gap-3 items-start md:items-center relative overflow-hidden ${currentUserRole === 'vip-student' ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-100'}`}>
                             <div className={`p-2.5 rounded-xl shrink-0 ${currentUserRole === 'vip-student' ? 'bg-slate-700 text-vipGold shadow-vip-glow' : 'bg-white text-brandPurple shadow-sm'}`}><Megaphone size={22} /></div>
                             <div className="flex-1 z-10 pr-6">
                                 <h4 className={`text-[10px] md:text-xs font-black uppercase tracking-widest mb-0.5 ${currentUserRole === 'vip-student' ? 'text-slate-400' : 'text-brandPurple'}`}>{announcementTitle}</h4>
-                                <p className={`text-xs md:text-base font-medium leading-relaxed ${currentUserRole === 'vip-student' ? 'text-slate-200' : 'text-slate-700'}`}>{systemAnnouncement}</p>
+                                <p className={`text-sm md:text-base font-medium leading-relaxed ${currentUserRole === 'vip-student' ? 'text-slate-200' : 'text-slate-700'}`}>{systemAnnouncement}</p>
                             </div>
                             {isTeacherMode && <button onClick={() => { setModalType('system-settings'); setModalInputVal(systemAnnouncement); setModalTitleVal(announcementTitle); setModalPdfVal(countdownConfig.label); setModalDateVal(countdownConfig.targetDate.split('T')[0]); }} className={`absolute top-3 right-3 p-1.5 rounded-lg transition-all shadow-sm ${currentUserRole === 'vip-student' ? 'bg-slate-700 text-slate-300 hover:text-vipGold' : 'bg-white text-slate-400 hover:text-brandPurple hover:bg-purple-100'}`} title="Duyuru ve Takvimi Düzenle"><Edit3 size={15} /></button>}
                         </div>
@@ -419,7 +416,6 @@ const App = () => {
                 </>
             )}
 
-            {/* 🔥 GÜNCELLEME: Ana konteyner dolguları mobilde sıkıştırıldı px-4 -> px-2.5 */}
             <main className="max-w-7xl mx-auto px-2.5 mt-5 no-print relative z-10">
                 <AnimatePresence mode="wait">
                     {isTeacherMode && view === 'home' && <TeacherDashboard regularClasses={regularClasses} vipClasses={vipClasses} onOpenClass={openClass} onNewClass={() => { setModalType('class'); setModalInputVal(''); }} onNewVipClass={() => { setModalType('vip'); setModalInputVal(''); }} />}
@@ -510,7 +506,7 @@ const App = () => {
                                 
                                 {modalType === 'topic' && (
                                     <div className="mb-3">
-                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vütüphaneden Seç:</label>
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kütüphaneden Seç:</label>
                                         <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto p-0.5">
                                             {libraryItems.filter(i => i.type === LIBRARY_TYPES.TOPIC).map(item => ( <button key={item.id} onClick={() => setModalInputVal(item.text)} className="text-[11px] bg-purple-50 hover:bg-purple-100 text-brandPurple px-2 py-1 rounded-lg transition-colors font-bold border border-purple-100">{item.text}</button> ))}
                                         </div>
@@ -571,7 +567,7 @@ const App = () => {
             </AnimatePresence>
 
             {/* TABLODAKİ BUTON/MENÜ MODALLARI */}
-            {activeCell && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveCell(null)}><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-3 rounded-2xl shadow-xl flex gap-1.5" onClick={e => e.stopPropagation()}>{STATUS_OPTIONS.map(opt => ( <button key={opt.id} onClick={() => updateGrade(activeCell.classId, activeCell.studentId, activeCell.colId, opt.id)} className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${opt.bg} ${opt.color} hover:scale-105 border ${opt.border}`}><opt.icon size={20} className="mb-1" strokeWidth={2.5}/><span className="text-[9px] font-black uppercase tracking-wider">{opt.label}</span></button> ))}</motion.div></div>}
+            {activeCell && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveCell(null)}><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-3 rounded-2xl shadow-xl flex gap-1.5" onClick={e => e.stopPropagation()}>{STATUS_OPTIONS.map(opt => ( <button key={opt.id} onClick={() => updateGrade(activeCell.classId, activeCell.studentId, activeCell.colId, opt.id)} className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${opt.bg} ${opt.color} hover:scale-105 border ${opt.border}`}><opt.icon size={20} className="mb-1" strokeWidth={2.5}/><span className="text-xs font-black uppercase tracking-wider">{opt.label}</span></button> ))}</motion.div></div>}
             
             {activeColMenu && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveColMenu(null)}><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-1.5 rounded-2xl shadow-xl flex flex-col gap-0.5 w-48" onClick={e => e.stopPropagation()}><button onClick={() => { const cls = classes.find(c => c.id === activeColMenu.classId); const col = cls.topics.find(t => t.id === activeColMenu.topicId).subColumns.find(c => c.id === activeColMenu.colId); setModalData({ classId: cls.id, topicId: activeColMenu.topicId, colId: col.id }); setModalInputVal(col.title); setModalPdfVal(col.pdfLink || ""); setModalType('edit-source'); setActiveColMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"><Pencil size={14}/> Kaynağı Düzenle</button><button onClick={() => { deleteColumn(activeColMenu.classId, activeColMenu.topicId, activeColMenu.colId); setActiveColMenu(null); }} className="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={14}/> Kaynağı Sil</button></motion.div></div>}
             
@@ -614,37 +610,41 @@ const App = () => {
                 )}
             </AnimatePresence>
 
-            {/* 🚀 KAÇIŞI OLMAYAN ZORUNLU GÜNCELLEME EKRANI (UPDATE PROMPT) */}
+            {/* 🔥 GÜNCELLEME: YENİ AKILLI VE KAÇIŞI OLMAYAN PWA BAĞLANTI / LOGOUT PROMPT ARAYÜZÜ */}
             <AnimatePresence>
                 {needRefresh && (
                     <motion.div 
                         initial={{ opacity: 0 }} 
                         animate={{ opacity: 1 }} 
-                        className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[99998] flex items-center justify-center p-4 select-none"
+                        className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[99998] flex items-center justify-center p-4 select-none"
                     >
                         <motion.div 
                             initial={{ scale: 0.95, y: 20 }} 
                             animate={{ scale: 1, y: 0 }}
-                            className="bg-slate-900 border-2 border-brandPurple/40 p-5 md:p-8 rounded-[2.5rem] w-full max-w-md text-center shadow-[0_0_80px_rgba(147,51,234,0.25)] relative overflow-hidden"
+                            className="bg-slate-900 border-2 border-brandPurple/40 p-5 md:p-8 rounded-[2rem] w-full max-w-sm text-center shadow-[0_0_60px_rgba(147,51,234,0.2)] relative overflow-hidden"
                         >
                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full bg-brandPurple/10 blur-3xl pointer-events-none"></div>
 
-                            <div className="w-14 h-14 bg-purple-500/10 border border-purple-500/30 text-brandPurple rounded-full flex items-center justify-center mx-auto mb-5 shadow-glow">
-                                <RefreshCw size={24} className="animate-spin" style={{ animationDuration: '6s' }} />
+                            <div className="w-14 h-14 bg-purple-500/10 border border-purple-500/30 text-brandPurple rounded-full flex items-center justify-center mx-auto mb-4 shadow-glow">
+                                <RefreshCw size={24} className="animate-spin text-brandPurple" style={{ animationDuration: '4s' }} />
                             </div>
 
-                            <h3 className="text-xl font-black text-white tracking-wide uppercase">Sistem Güncellemesi</h3>
-                            <p className="text-slate-300 text-xs font-medium mt-2.5 leading-relaxed">
-                                Sizin için uygulamayı geliştirdik ve yeni akıllı özellikler ekledik! Kesintisiz ve hatasız bir deneyim için devam etmeden önce lütfen güncelleyin.
+                            <h3 className="text-lg font-black text-white tracking-wide uppercase">Sistem Güncellendi</h3>
+                            <p className="text-slate-300 text-xs font-semibold mt-3 leading-relaxed px-1">
+                                Kesintisiz ve hatasız bir deneyim için lütfen bir kaç dakika sonra yeniden giriş yapmayı deneyiniz.
                             </p>
 
                             <motion.button 
                                 whileHover={{ scale: 1.02 }} 
                                 whileTap={{ scale: 0.98 }} 
-                                onClick={() => updateServiceWorker(true)}
-                                className="w-full mt-6 bg-brandPurple hover:bg-purple-600 text-white font-black py-3.5 rounded-2xl shadow-glow tracking-widest text-xs transition-colors flex items-center justify-center gap-2"
+                                // Butona basıldığında oturumu sıfırlar, loginView'e atar ve prompt kutusunu temizler
+                                onClick={() => {
+                                    handleLogout();
+                                    setNeedRefresh(false);
+                                }}
+                                className="w-full mt-6 bg-brandPurple hover:bg-purple-600 text-white font-black py-3.5 rounded-xl shadow-glow tracking-widest text-xs transition-all uppercase"
                             >
-                                <RefreshCw size={14} /> UYGULAMAYI GÜNCELLE
+                                GİRİŞ EKRANINA DÖN
                             </motion.button>
                         </motion.div>
                     </motion.div>
