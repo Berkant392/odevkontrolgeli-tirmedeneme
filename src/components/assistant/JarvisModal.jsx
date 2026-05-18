@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Activity, Calendar, StickyNote, AlertTriangle, Save, HelpCircle, User, CheckCircle2 } from 'lucide-react';
+import { X, Mic, Activity, Calendar, StickyNote, AlertTriangle, Save, HelpCircle, User, CheckCircle2, TerminalSquare } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
