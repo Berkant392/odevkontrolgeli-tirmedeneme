@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, User, Crown, Briefcase, ChevronRight, ChevronLeft, Download, Smartphone, Share, PlusSquare } from 'lucide-react';
+import { GraduationCap, User, Crown, Briefcase, ChevronRight, ChevronLeft, Download, Smartphone, Share, PlusSquare, X, ArrowLeft, ArrowRight } from 'lucide-react';
 
 // -------------------------------------------------------------
 // V3 HTML KUSURSUZ CANVAS YILDIZ MOTORU
@@ -86,7 +86,6 @@ const VipParticles = () => {
     );
 };
 
-// 🔥 PROPS GÜNCELLEMESİ ALINDI
 const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandalone }) => {
     const [authView, setAuthView] = useState('selection'); 
     const [username, setUsername] = useState("");
@@ -96,9 +95,11 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
     const [errorMsg, setErrorMsg] = useState("");
     const [showForgotMsg, setShowForgotMsg] = useState(false);
 
-    // 🔥 PWA MOBİL CİHAZ AYIRT EDİCİ HOOK'LAR
     const [isIos, setIsIos] = useState(false);
     const [showIosModal, setShowIosModal] = useState(false);
+    
+    // 🔥 SİHİRBAZ ADIM TAKİBİ İÇİN STATE
+    const [iosStep, setIosStep] = useState(1);
 
     useEffect(() => {
         const ua = window.navigator.userAgent.toLowerCase();
@@ -136,9 +137,9 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
         }
     };
 
-    // 🔥 PWA AKILLI YÜKLEME AKIŞI TETİKLEYİCİSİ
     const handlePwaInstall = async () => {
         if (isIos) {
+            setIosStep(1); // Sihirbazı birinci adımdan başlat
             setShowIosModal(true);
         } else if (deferredPrompt) {
             deferredPrompt.prompt();
@@ -147,6 +148,38 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
             alert("Uygulama zaten kurulu veya tarayıcınız otomatik kuruluma izin vermiyor. Tarayıcı ayarlarından 'Ana Ekrana Ekle' yapabilirsiniz.");
         }
     };
+
+    // 🔥 ADIM ADIM REHBER İÇERİK VERİ MODELİ
+    const iosStepsData = [
+        {
+            id: 1,
+            title: "🧭 Adım 1: Safari Tarayıcı",
+            desc: "Uygulamaya kesinlikle iPhone'unuzun kendi tarayıcısı olan Safari üzerinden girdiğinizden emin olun. Chrome veya diğer tarayıcılarda kurulum yapılamaz.",
+            img: "/pwa/adim1.png",
+            icon: <Smartphone className="text-blue-400" size={24} />
+        },
+        {
+            id: 2,
+            title: "📤 Adım 2: Paylaş Butonu",
+            desc: "Safari ekranının en alt ortasında (veya tabletlerde sağ üstte) yer alan yukarı doğru ok işaretli 'Paylaş' simgesine dokunun.",
+            img: "/pwa/adim2.png",
+            icon: <Share className="text-sky-400" size={24} />
+        },
+        {
+            id: 3,
+            title: "➕ Adım 3: Ana Ekrana Ekle",
+            desc: "Açılan paylaşım menüsünü parmağınızla hafifçe yukarı kaydırın ve seçenekler arasından listelenen 'Ana Ekrana Ekle' seçeneğini bulun ve basın.",
+            img: "/pwa/adim3.png",
+            icon: <PlusSquare className="text-indigo-400" size={24} />
+        },
+        {
+            id: 4,
+            title: "💎 Adım 4: Kurulumu Tamamla",
+            desc: "Son olarak açılan onay penceresinin sağ üst köşesindeki 'Ekle' butonuna tıklayın. Berkant Hoca Platformu artık telefonunuzun ana ekranında hazır!",
+            img: "/pwa/adim4.png",
+            icon: <GraduationCap className="text-emerald-400" size={24} />
+        }
+    ];
 
     return (
         <div className="login-scene">
@@ -191,7 +224,6 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                 <ChevronRight className="lch" size={16}/>
                             </motion.button>
                             
-                            {/* 🔥 YENİ: DİNAMİK PWA MOBİL UYGULAMA İNDİRME BUTONU (Zaten kuruluysa tamamen gizlenir) */}
                             {!isStandalone && (deferredPrompt || isIos) && (
                                 <motion.button 
                                     variants={itemVariants}
@@ -320,55 +352,92 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                 </AnimatePresence>
             </motion.div>
 
-            {/* 🔥 YENİ: APPLE (iOS) KULLANICILARI İÇİN ADIM ADIM KURULUM KILAVUZU MODALI */}
+            {/* 🔥 SAFARI HATASI VERMEYEN KATI ARKA PLANLI SİHİRBAZ MODALI */}
             <AnimatePresence>
                 {showIosModal && (
-                    <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center p-4" onClick={() => setShowIosModal(false)}>
+                    <div className="fixed inset-0 bg-slate-950 z-[99999] flex items-center justify-center p-4">
                         <motion.div 
-                            initial={{ opacity: 0, scale: 0.9, y: 30 }} 
-                            animate={{ opacity: 1, scale: 1, y: 0 }} 
-                            exit={{ opacity: 0, scale: 0.9, y: 30 }}
-                            className="bg-slate-900 border border-slate-700 p-6 rounded-[2rem] w-full max-w-sm text-center shadow-2xl relative"
-                            onClick={e => e.stopPropagation()}
+                            initial={{ opacity: 0, y: 40, scale: 0.95 }} 
+                            animate={{ opacity: 1, y: 0, scale: 1 }} 
+                            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+                            className="bg-slate-900 border-2 border-slate-800 p-5 md:p-7 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl flex flex-col justify-between min-h-[500px] relative overflow-hidden"
                         >
-                            <button onClick={() => setShowIosModal(false)} className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-full bg-slate-800 transition-colors"><X size={16}/></button>
-                            
-                            <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/30 text-brandPurple rounded-full flex items-center justify-center mx-auto mb-4 shadow-glow">
-                                <Smartphone size={22} />
+                            {/* Kapat Butonu */}
+                            <button onClick={() => setShowIosModal(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full bg-slate-800 transition-colors z-50"><X size={16}/></button>
+
+                            {/* Üst Kısım: Başlık */}
+                            <div>
+                                <div className="flex justify-center mb-2 mt-2">
+                                    <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/30 text-brandPurple rounded-full flex items-center justify-center shadow-glow">
+                                        {iosStepsData[iosStep - 1].icon}
+                                    </div>
+                                </div>
+                                <h3 className="text-lg font-black text-white uppercase tracking-wider">{iosStepsData[iosStep - 1].title}</h3>
+                                <p className="text-slate-300 text-xs mt-2 px-1 font-medium leading-relaxed min-h-[50px]">{iosStepsData[iosStep - 1].desc}</p>
                             </div>
 
-                            <h3 className="text-xl font-black text-white uppercase tracking-wide">iPhone Kurulum Rehberi</h3>
-                            <p className="text-slate-400 text-xs mt-2 font-medium">Uygulamayı telefonunuza kurmak için Safari tarayıcısından aşağıdaki basit adımları izleyin:</p>
-
-                            <div className="mt-6 space-y-4 text-left">
-                                <div className="flex items-center gap-3.5 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
-                                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-brandPurple font-black text-xs flex items-center justify-center border border-indigo-500/20">1</div>
-                                    <p className="text-slate-200 text-xs font-semibold flex items-center gap-1.5">
-                                        Safari alt barındaki <Share size={16} className="text-blue-400" /> <b>"Paylaş"</b> butonuna basın.
-                                    </p>
-                                </div>
-
-                                <div className="flex items-center gap-3.5 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
-                                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-brandPurple font-black text-xs flex items-center justify-center border border-indigo-500/20">2</div>
-                                    <p className="text-slate-200 text-xs font-semibold">
-                                        Açılan pencerede sayfayı biraz aşağı kaydırın.
-                                    </p>
-                                </div>
-
-                                <div className="flex items-center gap-3.5 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
-                                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-brandPurple font-black text-xs flex items-center justify-center border border-indigo-500/20">3</div>
-                                    <p className="text-slate-200 text-xs font-semibold flex items-center gap-1.5">
-                                        <PlusSquare size={16} className="text-slate-300" /> <b>"Ana Ekrana Ekle"</b> seçeneğine tıklayın.
-                                    </p>
+                            {/* Orta Kısım: Görsel Alanı (GitHub'a attığın resimler burada yüklenecek) */}
+                            <div className="my-4 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-center h-48 overflow-hidden relative shadow-inner">
+                                <img 
+                                    src={iosStepsData[iosStep - 1].img} 
+                                    alt={iosStepsData[iosStep - 1].title} 
+                                    className="max-h-full max-w-full object-contain pointer-events-none"
+                                    onError={(e) => {
+                                        // Eğer resim henüz GitHub/Public içerisine yüklenmediyse şık bir placeholder gösterir
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                                <div className="hidden absolute inset-0 flex-col items-center justify-center text-slate-600 font-bold text-xs p-4 bg-slate-950/40">
+                                    <Smartphone size={32} className="text-slate-700 mb-2 animate-pulse" />
+                                    <span>[ Ekran Görüntüsü Alanı ]</span>
+                                    <span className="text-[10px] text-slate-500 mt-1 font-normal">public{iosStepsData[iosStep - 1].img}</span>
                                 </div>
                             </div>
 
-                            <button 
-                                onClick={() => setShowIosModal(false)}
-                                className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 rounded-xl text-xs tracking-widest transition-colors"
-                            >
-                                ANLADIM
-                            </button>
+                            {/* Alt Kısım: Navigasyon Kontrolleri */}
+                            <div>
+                                {/* Sayfa İndikatör Noktaları */}
+                                <div className="flex justify-center gap-1.5 mb-4">
+                                    {iosStepsData.map((step) => (
+                                        <div key={step.id} className={`h-1.5 rounded-full transition-all duration-300 ${iosStep === step.id ? 'w-6 bg-brandPurple shadow-glow' : 'w-1.5 bg-slate-700'}`} />
+                                    ))}
+                                </div>
+
+                                <div className="flex gap-2">
+                                    {iosStep > 1 ? (
+                                        <button 
+                                            onClick={() => setIosStep(iosStep - 1)}
+                                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700"
+                                        >
+                                            <ArrowLeft size={14} /> GERİ
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={() => setShowIosModal(false)}
+                                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold py-3.5 rounded-xl text-xs transition-colors border border-slate-700"
+                                        >
+                                            KAPAT
+                                        </button>
+                                    )}
+
+                                    {iosStep < 4 ? (
+                                        <button 
+                                            onClick={() => setIosStep(iosStep + 1)}
+                                            className="flex-1 bg-brandPurple hover:bg-purple-600 text-white font-black py-3.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-glow"
+                                        >
+                                            İLERİ <ArrowRight size={14} />
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={() => setShowIosModal(false)}
+                                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3.5 rounded-xl text-xs transition-all shadow-md uppercase tracking-wider"
+                                        >
+                                            HAZIRIM 🎉
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                         </motion.div>
                     </div>
                 )}
