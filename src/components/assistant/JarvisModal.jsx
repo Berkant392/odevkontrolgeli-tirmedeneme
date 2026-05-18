@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Activity, Calendar, StickyNote, AlertTriangle, Save, HelpCircle, User, CheckCircle2, TerminalSquare } from 'lucide-react';
+import { X, Mic, Activity, Calendar, StickyNote, AlertTriangle, Save, HelpCircle, User, CheckCircle2, TerminalSquare, Keyboard, Send, ChevronRight } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
 
-// 🛡️ ÇÖKME ENGELLEYİCİ KALKAN
 const getSafeText = (val) => {
     if (!val) return "";
     if (typeof val === 'string' || typeof val === 'number') return String(val);
@@ -29,8 +28,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [isListening, setIsListening] = useState(false);
     const [isThinking, setIsThinking] = useState(false); 
     const [speechTranscript, setSpeechTranscript] = useState("");
+    const [textCommand, setTextCommand] = useState("");
     
-    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem çevrimiçi. Sizi dinliyorum efendim.");
+    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem çevrimiçi. Size nasıl yardımcı olabilirim efendim?");
+    
+    // 🧠 YENİ: SOHBET HAFIZASI
+    const [chatHistory, setChatHistory] = useState([]);
     
     const [foundStudents, setFoundStudents] = useState([]);
     const [foundTopics, setFoundTopics] = useState([]);
@@ -43,35 +46,37 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [draftNotes, setDraftNotes] = useState({});
     
     const recognitionRef = useRef(null);
-    const autoListenRef = useRef(true); // OTO-DİNLEME ANAHTARI
-    
+    const isSpeakingRef = useRef(false);
+    const inputRef = useRef(null);
+
     const sortedFoundTopics = Array.isArray(foundTopics) ? [...foundTopics].filter(Boolean).reverse() : [];
 
+    // 🔒 BAŞLANGIÇ: MİKROFONU OTOMATİK AÇ
     useEffect(() => {
         document.body.style.overflow = 'hidden';
-        const timer = setTimeout(() => { startListening(); }, 500);
+        setTimeout(() => { startListening(); }, 800);
         return () => { 
-            clearTimeout(timer);
             document.body.style.overflow = ''; 
             if (recognitionRef.current) recognitionRef.current.abort();
             if (window.speechSynthesis) window.speechSynthesis.cancel();
         };
     }, []);
 
-    // 🗣️ SESLENDİRME VE KESİNTİSİZ OTO-DİNLEME (DİYALOG)
+    // 🗣️ DİNAMİK SESLENDİRME VE OTO-DİNLEME DÖNGÜSÜ
     const speakFeedback = (text, shouldListenAfter = true) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
         
-        autoListenRef.current = shouldListenAfter;
-        
+        isSpeakingRef.current = true;
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'tr-TR';
         utterance.rate = 1.0;
         
         utterance.onend = () => {
-            if (autoListenRef.current) {
-                setTimeout(() => startListening(), 300); // 300ms nefes payı
+            isSpeakingRef.current = false;
+            // Konuşma bittikten sonra asistan kendi kendine dinlemeye devam eder.
+            if (shouldListenAfter && !isThinking) {
+                setTimeout(() => { startListening(); }, 200); 
             }
         };
         
@@ -81,12 +86,13 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const updateFeedbackAndSpeak = (msg, shouldListenAfter = true) => {
         setJarvisFeedback(msg);
         speakFeedback(msg, shouldListenAfter);
+        // Yapay Zekanın cevabını hafızaya ekle
+        setChatHistory(prev => [...prev, { role: 'assistant', content: msg }]);
     };
 
     const getStudentReadableGrades = (student, cls) => {
         let records = [];
         if (!student || !cls || !cls.topics) return records;
-        
         const safeTopics = Array.isArray(cls.topics) ? cls.topics.filter(t => t && Array.isArray(t.subColumns)) : [];
         safeTopics.forEach(t => {
             t.subColumns.forEach(col => {
@@ -96,7 +102,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
                 const status = draftStudentGrades[col.id] !== undefined ? draftStudentGrades[col.id] : studentGrades[col.id];
                 if (status) {
                     const statusTR = status === 'done' ? 'Yapıldı' : status === 'missing' ? 'Eksik' : status === 'assigned' ? 'Verildi' : 'Muaf';
-                    records.push(`${t.title || 'Konu'} - ${col.title || 'Kaynak'}: ${statusTR}`);
+                    records.push(`${t.title || ''} - ${col.title || ''}: ${statusTR}`);
                 }
             });
         });
@@ -107,9 +113,9 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         const apiKey = import.meta.env.VITE_GROQ_API_KEY;
         if (!apiKey) { updateFeedbackAndSpeak("API Anahtarı eksik.", false); setIsThinking(false); return null; }
 
+        const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
         let dynamicContextData;
         let currentStudentContext = "";
-        const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
 
         if (selectedStudent) {
             const targetClass = safeClasses.find(c => c.id === selectedStudent.classId);
@@ -125,7 +131,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
                     kaynaklar: Array.isArray(t.subColumns) ? t.subColumns.filter(Boolean).map(col => col.title || "") : []
                 })) : []
             };
-            currentStudentContext = `Aktif odak: "${selectedStudent?.name || ''}". Komutta yeni isim yoksa işlemleri bu öğrenciye uygula.`;
+            currentStudentContext = `
+[ZORUNLU HAFIZA KURALI]: 
+Şu an aktif olan ve işlem yapılan öğrenci: "${selectedStudent?.name}". 
+Kullanıcı yeni bir isim söylemedikçe (Örn: sadece "fonksiyonları çözmüş" diyorsa), İŞLEMİ KESİNLİKLE BU AKTİF ÖĞRENCİYE UYGULA! Öğrenci adı eksik diyerek geri sorma.`;
         } else {
             dynamicContextData = {
                 odakMode: "GENEL_ARAMA",
@@ -138,39 +147,47 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
                     })) : []
                 }))
             };
-            currentStudentContext = `Şu an kimse seçili değil. Komuttan hedefi bul.`;
+            currentStudentContext = `Şu an kimse seçili değil. Komuttan öğrenciyi bul.`;
         }
 
+        const pendingChangesCount = Object.keys(draftGrades).length;
+
         const systemPrompt = `
-Sen "J.A.R.V.I.S" adında karizmatik, son derece doğal ve saygılı bir asistansın. Robot gibi uzun listeler okuma, muhabbet eder gibi kısa ve net cevaplar ver.
-Sana verilen komutu analiz et ve SADECE JSON döndür. Asla JSON dışında düz metin yazma!
+Sen "J.A.R.V.I.S" adında karizmatik, anlayışlı ve insansı bir asistansın.
+Sana verilen komutu analiz et ve SADECE JSON döndür. Asla düz metin yazma!
 
 Veritabanı:
 ${JSON.stringify(dynamicContextData)}
 
 ${currentStudentContext}
+Bekleyen kaydedilmemiş değişiklik sayısı: ${pendingChangesCount}.
 
-Kullanıcı Komutu 4 Niyette Olabilir:
-1. "select_student": Kullanıcı SADECE bir isim söylüyorsa (Örn: "Merve", "Aslıhan'ı aç", "İrem Atış"). Bu durumda asla eksiklerini sayma! Sadece öğrenciyi seç.
-2. "update": Not girme (Örn: "Ahmet üslü sayıları çözmüş"). Kaynak veya konu eksikse "need_info" yap.
-3. "query": Kullanıcı ÖZELLİKLE "Eksikleri neler?", "Durumu nasıl?" diye soruyorsa.
-4. "save": "Değişiklikleri onayla", "Kaydet" denirse.
+Niyetler (action):
+1. "select_student": Sadece isim söylendiyse (Örn: "Merve'yi aç", "İrem").
+2. "update": Not giriliyorsa (Örn: "Üslü sayıları çözmüş"). Kaynak/Konu eksikse "need_info" yap.
+3. "query": "Eksikleri neler?", "Durumu ne?" diye soruluyorsa.
+4. "save_and_close": "Kaydet kapat", "Onayla çık", "Değişiklikleri onayla" vb. deniyorsa.
+5. "close_request": Sadece "Kapat", "Çık", "Modali kapat" deniyorsa. (Eğer bekleyen değişiklik varsa, kaydedeyim mi diye sormalısın ve "need_info" dönmelisin).
+6. "need_info": Eksik bilgi varsa (kaynak adı gibi).
 
 JSON FORMATIN:
 {
-  "action": "select_student" | "update" | "query" | "save" | "need_info",
+  "action": "select_student" | "update" | "query" | "save_and_close" | "close_request" | "need_info",
   "student": "Öğrenci İsim Soyisim veya null",
   "topic": "Konu veya null",
   "source": "Kaynak veya null",
   "status": "done" | "missing" | "assigned" | "exempt" | null,
-  "feedback": "Bana sesli olarak vereceğin, çok doğal ve duruma uygun Türkçe cevap."
+  "feedback": "Bana sesli okuyacağın, duruma uygun, doğal Türkçe cevap."
 }
 
-Feedback Kuralları (ÇOK ÖNEMLİ):
-- Eğer action "select_student" ise: "Aslıhan'ın profilini önünüze getirdim efendim, nasıl yardımcı olabilirim?" gibi bir şey söyle. ASLA EKSİK SAYMA!
-- Eğer action "need_info" ise: Hangi kaynağı veya konuyu kastettiğini kibarca sor. (Örn: "Hangi kaynaktan çözdüğünü belirtir misiniz efendim?")
-- Cümlelerinde bazen "efendim" kullan. Uzun ve robotik liste okuma.
+Feedback Kuralları:
+- Eğer "select_student" ise: "Merve'nin dosyasını açtım efendim, dinliyorum." de. ASLA eksiklerini okuma!
+- Eğer "need_info" ise: Hangi kaynak olduğunu sor.
+- Eğer "close_request" ise ve bekleyen değişiklik varsa: "Kaydetmediğimiz değişiklikler var efendim. Onaylayıp öyle mi kapatayım?" de.
 `;
+
+        // Son 4 konuşmayı (hafızayı) gönderiyoruz
+        const recentHistory = chatHistory.slice(-4);
 
         try {
             const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -178,9 +195,13 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
                 headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: 'llama-3.3-70b-versatile',
-                    messages: [ { role: 'system', content: systemPrompt }, { role: 'user', content: transcript } ],
+                    messages: [ 
+                        { role: 'system', content: systemPrompt }, 
+                        ...recentHistory,
+                        { role: 'user', content: transcript } 
+                    ],
                     response_format: { type: 'json_object' },
-                    temperature: 0.3
+                    temperature: 0.2
                 })
             });
             const data = await response.json();
@@ -193,14 +214,29 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
 
     const processGroqResult = (aiResult) => {
         if (!aiResult) {
-            updateFeedbackAndSpeak("Bağlantı hatası, tekrar dener misiniz efendim?", true);
+            updateFeedbackAndSpeak("Sinyal alamadım, tekrar eder misiniz efendim?", true);
             return;
         }
 
-        if (aiResult.action === 'save') {
-            updateFeedbackAndSpeak(aiResult.feedback || "Değişiklikler sisteme kaydediliyor efendim.", false);
+        // 1. KAYDET VE KAPAT ("Kaydet Kapat" dediyse)
+        if (aiResult.action === 'save_and_close') {
+            updateFeedbackAndSpeak(aiResult.feedback || "Değişiklikleri kaydedip sistemi kapatıyorum efendim.", false);
             applyChanges();
             return;
+        }
+
+        // 2. SADECE KAPAT ("Kapat" dediyse ama kaydedilmemiş notlar varsa)
+        if (aiResult.action === 'close_request') {
+            if (Object.keys(draftGrades).length > 0) {
+                // Kaydedilmemiş veri var, AI muhtemelen "need_info" veya uyarı döndü, dinlemeye devam et.
+                updateFeedbackAndSpeak(aiResult.feedback, true);
+                return;
+            } else {
+                // Değişiklik yok, direkt kapat
+                updateFeedbackAndSpeak(aiResult.feedback || "Sistemi kapatıyorum efendim.", false);
+                setTimeout(() => onClose(), 1500);
+                return;
+            }
         }
 
         const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
@@ -210,22 +246,22 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
         
         let bestStudent = null;
 
-        // 🧠 ÇOKLU EŞLEŞME (Merve / İrem Atış) ALGORİTMASI
+        // 🧠 GELİŞMİŞ ÇOKLU EŞLEŞME (İrem Atış / İrem Su)
         if (aiResult.student) {
             const safeItems = allStudents.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item.name).toLocaleLowerCase('tr-TR') }));
-            const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.35, includeScore: true });
+            const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.45, includeScore: true });
             const results = fuse.search(aiResult.student);
 
             if (results.length > 0) {
                 const bestScore = results[0].score;
-                // En iyi sonuca çok yakın olan TÜM isimleri bul (Aynı isimde olanlar)
-                const identicalMatches = results.filter(r => r.score <= bestScore + 0.1).map(r => r.item);
+                // Tolerans artırıldı (+0.25). İrem Su ile İrem Atış aynı kelime içeriyorsa ikisi de listelenir.
+                const identicalMatches = results.filter(r => r.score <= bestScore + 0.25).map(r => r.item);
 
                 if (identicalMatches.length > 1) {
                     setFoundStudents(identicalMatches);
                     setSelectedStudent(null);
                     setFoundTopics([]);
-                    updateFeedbackAndSpeak(`Sistemde ${aiResult.student} adında ${identicalMatches.length} kişi buldum efendim. Ekrana listeledim, hangi sınıftaki veya VIP olanı kastettiğinizi belirtir misiniz?`, true);
+                    updateFeedbackAndSpeak(aiResult.feedback || `Sistemde ${aiResult.student} isminde ${identicalMatches.length} kişi buldum efendim. Hangi sınıftaki olduğunu veya VIP öğrenci olup olmadığını belirtir misiniz?`, true);
                     return;
                 } else {
                     bestStudent = identicalMatches[0];
@@ -233,6 +269,7 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
             }
         }
         
+        // Eğer AI yeni bir isim bulamadıysa, hafızadaki (seçili) öğrenciyi kullanmaya devam et
         if (!bestStudent && selectedStudent) bestStudent = selectedStudent;
 
         if (bestStudent) {
@@ -245,7 +282,7 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
             const findTopicCol = (items, key, textToSearch) => {
                 if (!items || items.length === 0 || !textToSearch) return null;
                 const sItems = items.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item[key]) }));
-                const f = new Fuse(sItems, { keys: ['_safeSearchKey'], threshold: 0.45, includeScore: true });
+                const f = new Fuse(sItems, { keys: ['_safeSearchKey'], threshold: 0.5, includeScore: true });
                 const r = f.search(textToSearch);
                 return r.length > 0 ? r[0].item : null;
             };
@@ -256,7 +293,7 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
                 bestCol = findTopicCol(bestTopic.subColumns || [], 'title', aiResult.source);
             }
 
-            // A. Sadece İsim Söylendi (Muhabbet ve Hazırlık)
+            // A. Sadece İsim Söylendi (Robotik rapor kusması iptal edildi)
             if (aiResult.action === 'select_student') {
                 updateFeedbackAndSpeak(aiResult.feedback, true);
                 return;
@@ -283,7 +320,7 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
                 handleDraftGradeChange(bestStudent.id, bestCol.id, aiResult.status);
                 updateFeedbackAndSpeak(aiResult.feedback, true);
             } else {
-                updateFeedbackAndSpeak(aiResult.feedback || "İşlemi eşleştiremedim efendim, tekrar eder misiniz?", true);
+                updateFeedbackAndSpeak(aiResult.feedback || "İşlemi tam algılayamadım efendim, tekrar eder misiniz?", true);
             }
 
         } else {
@@ -293,7 +330,11 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
 
     const handleCommand = async (transcript) => {
         if (!transcript.trim()) return;
-        stopListening(); // Analiz sırasında dinlemeyi durdur
+        
+        // Kullanıcının dediklerini hafızaya ekle
+        setChatHistory(prev => [...prev, { role: 'user', content: transcript }]);
+        
+        stopListening(); // Analiz sırasında mikrofonu kapa
         setPendingAction(null);
         setPendingSources([]);
         
@@ -308,7 +349,8 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
 
     const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return;
+        if (!SpeechRecognition || isSpeakingRef.current || isThinking) return;
+        
         if (recognitionRef.current) recognitionRef.current.abort();
         
         const recognition = new SpeechRecognition();
@@ -322,19 +364,34 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
             setSpeechTranscript(transcript); 
             handleCommand(transcript); 
         };
-        recognition.onerror = () => { setIsListening(false); };
-        recognition.onend = () => { setIsListening(false); }; 
+        recognition.onerror = (e) => { 
+            setIsListening(false); 
+            // Sinyal koparsa kısa süre sonra tekrar denemesi için
+            setTimeout(() => { if (!isSpeakingRef.current && !isThinking) startListening(); }, 1500); 
+        };
+        recognition.onend = () => { 
+            setIsListening(false); 
+            // Sessizlik durumunda kapatırsa, otomatik olarak yeniden başlasın
+            setTimeout(() => { if (!isSpeakingRef.current && !isThinking) startListening(); }, 500);
+        }; 
         recognition.start();
     };
 
     const stopListening = () => {
-        if (recognitionRef.current) { recognitionRef.current.stop(); setIsListening(false); }
+        if (recognitionRef.current) { recognitionRef.current.abort(); setIsListening(false); }
+    };
+
+    const handleManualSubmit = () => {
+        if (!textCommand.trim()) return;
+        setSpeechTranscript(textCommand); 
+        handleCommand(textCommand);
+        setTextCommand(""); 
     };
 
     const handleManualSourceSelect = (col) => {
         if (!pendingAction) return;
         handleDraftGradeChange(pendingAction.studentId, col.id, pendingAction.status);
-        updateFeedbackAndSpeak("Manuel seçiminiz kaydedildi efendim. Dinlemeye devam ediyorum.", true);
+        updateFeedbackAndSpeak("Seçiminiz onaylandı efendim. Başka bir emriniz var mı?", true);
         setPendingAction(null);
         setPendingSources([]);
     };
@@ -342,7 +399,10 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
     const handleDraftGradeChange = (studentId, colId, statusId) => { setDraftGrades(prev => ({ ...prev, [studentId]: { ...(prev[studentId] || {}), [colId]: statusId } })); };
 
     const applyChanges = () => {
-        if (!selectedStudent) return;
+        if (!selectedStudent) {
+            setTimeout(() => onClose(), 1000); 
+            return;
+        }
         const safeClasses = Array.isArray(classes) ? classes.filter(Boolean) : [];
         const targetClass = safeClasses.find(c => c.id === selectedStudent.classId); 
         if (!targetClass) return;
@@ -365,17 +425,30 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }} className="bg-slate-900/95 border border-cyan-500/30 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col max-h-[85vh]">
                 
-                {/* RADAR PANEL (GEREKSİZ ARAMA KUTUSU SİLİNDİ) */}
+                {/* RADAR PANEL */}
                 <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 p-8 flex flex-col items-center justify-center shrink-0 min-h-[220px]">
                     <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute w-56 h-56 border border-cyan-500/10 rounded-full border-t-cyan-400/40 pointer-events-none" />
                     <motion.div animate={{ rotate: -360 }} transition={{ duration: 30, repeat: Infinity, ease: 'linear' }} className="absolute w-36 h-36 border border-cyan-500/10 rounded-full border-b-cyan-400/40 pointer-events-none" />
                     
-                    <button onClick={() => { window.speechSynthesis.cancel(); onClose(); }} className="absolute top-4 right-4 text-slate-500 hover:text-cyan-400 transition-colors z-30"><X size={24}/></button>
+                    <button onClick={() => { window.speechSynthesis.cancel(); stopListening(); onClose(); }} className="absolute top-4 right-4 text-slate-500 hover:text-cyan-400 transition-colors z-30"><X size={24}/></button>
                     
                     {/* BÜYÜK DİNLEME BUTONU */}
                     <div onClick={isListening ? stopListening : startListening} className="z-10 bg-slate-900 p-6 rounded-full border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.2)] mb-4 cursor-pointer relative hover:scale-105 transition-transform group">
                         {isListening && <span className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping"></span>}
                         <Mic size={36} className={`text-cyan-400 ${(isListening || isThinking) ? 'animate-pulse' : 'group-hover:text-cyan-300'}`} />
+                    </div>
+
+                    <div className="w-full max-w-xl z-10 relative flex items-center mb-4">
+                        <div className="absolute left-4 text-cyan-500/50 pointer-events-none"><Keyboard size={18} /></div>
+                        <input 
+                            ref={inputRef} type="text" placeholder="Manuel komut (Örn: Merve'nin eksiklerini say)" 
+                            className="w-full bg-slate-900/80 border border-cyan-800/50 text-cyan-100 rounded-xl pl-12 pr-24 py-3 text-sm focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(34,211,238,0.2)] transition-all font-medium"
+                            value={textCommand} onChange={(e) => setTextCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} disabled={isListening || isThinking}
+                        />
+                        <div className="absolute right-2 flex items-center gap-1">
+                            <button onClick={isListening ? stopListening : startListening} className={`p-2 rounded-lg transition-colors ${isListening ? 'bg-cyan-500/20 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.3)]' : 'hover:bg-slate-800 text-slate-400 hover:text-cyan-400'}`}><Mic size={18} className={isListening ? 'animate-pulse' : ''} /></button>
+                            <button onClick={handleManualSubmit} className="p-2 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-400 rounded-lg transition-colors" disabled={!textCommand.trim() || isListening || isThinking}><Send size={18} /></button>
+                        </div>
                     </div>
 
                     <div className="z-10 text-center w-full px-4">
@@ -398,7 +471,7 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
                     </AnimatePresence>
                 </div>
 
-                {/* ÖDEV VE PROFİL LİSTESİ (MOBİL SCROLL DÜZELTİLDİ) */}
+                {/* ÖDEV VE PROFİL LİSTESİ */}
                 <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-4 bg-slate-950/60 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
                     
                     {/* ÇOKLU EŞLEŞME DURUMU */}
@@ -406,7 +479,7 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
                         <div className="space-y-3">
                             <h4 className="text-cyan-400 font-mono text-xs uppercase tracking-widest px-2 flex items-center gap-2"><User size={14}/> Lütfen Hedefi Seçin</h4>
                             {foundStudents.map(student => (
-                                <button key={student.id} onClick={() => { setSelectedStudent(student); setFoundTopics((classes || []).find(c=>c.id===student.classId)?.topics || []); setFoundStudents([student]); updateFeedbackAndSpeak(`${student.name} kilitlendi efendim.`, true); }} className="w-full text-left p-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all flex items-center gap-4 group">
+                                <button key={student.id} onClick={() => { setSelectedStudent(student); setFoundTopics((classes || []).find(c=>c.id===student.classId)?.topics || []); setFoundStudents([student]); updateFeedbackAndSpeak(`${student.name} seçildi efendim. Dinlemeye devam ediyorum.`, true); }} className="w-full text-left p-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all flex items-center gap-4 group">
                                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm ${student.isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/20 text-cyan-400'}`}>{getSafeText(student.name).charAt(0)}</div>
                                     <div className="flex flex-col">
                                         <span className="font-bold text-slate-200 group-hover:text-cyan-100">{getSafeText(student.name)}</span>
@@ -466,7 +539,7 @@ Feedback Kuralları (ÇOK ÖNEMLİ):
                 <div className="p-4 border-t border-slate-800 bg-slate-950 flex justify-between items-center gap-4 shrink-0">
                     <span className="text-[11px] font-mono text-slate-500">{Object.keys(draftGrades).length} Bekleyen Kayıt</span>
                     <div className="flex gap-2">
-                        <button onClick={() => { window.speechSynthesis.cancel(); onClose(); }} className="px-5 py-2.5 text-xs font-bold text-slate-400 bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors">İptal</button>
+                        <button onClick={() => { window.speechSynthesis.cancel(); stopListening(); onClose(); }} className="px-5 py-2.5 text-xs font-bold text-slate-400 bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors">İptal</button>
                         <button onClick={applyChanges} disabled={Object.keys(draftGrades).length === 0} className={`px-6 py-2.5 rounded-xl text-xs font-black text-slate-900 transition-all ${Object.keys(draftGrades).length > 0 ? 'bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-slate-800 text-slate-600 cursor-not-allowed'}`}><Save size={16} className="inline mr-1" /> KAYDET</button>
                     </div>
                 </div>
