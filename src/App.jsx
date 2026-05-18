@@ -97,12 +97,10 @@ const App = () => {
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
 
-        // Uygulamanın zaten kurulup kurulmadığını donanımsal kontrol etme
         if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
             setIsStandalone(true);
         }
 
-        // Android/Chrome yükleme isteğini yakalama dinleyicisi
         const handleBeforeInstallPrompt = (e) => {
             e.preventDefault();
             setDeferredPrompt(e);
@@ -142,6 +140,32 @@ const App = () => {
         });
         return () => { unsubClasses(); unsubLibrary(); unsubConfig(); };
     }, []);
+
+    // 🔥 YENİ: VERİTABANI GÜNCELLENDİĞİNDE SEÇİLİ ÖĞRENCİ VE SINIF VERİLERİNİ ANINDA TAZELEME MOTORU
+    useEffect(() => {
+        if (classes.length > 0) {
+            // 1. Aktif seçili sınıf varsa verilerini diziden canlı güncelle
+            if (selectedClass) {
+                const freshClass = classes.find(c => c.id === selectedClass.id);
+                if (freshClass) {
+                    setSelectedClass(freshClass);
+                    
+                    // 2. Aktif görüntülenen öğrenci detay ekranı verisini anında tazeleyin
+                    if (selectedStudentForView) {
+                        const freshStudent = freshClass.students?.find(s => s.id === selectedStudentForView.id);
+                        if (freshStudent) {
+                            setSelectedStudentForView(freshStudent);
+                            
+                            // 3. Eğer öğrenci kendi ekranındaysa anlık olarak oturum verisini de tazeleyin
+                            if (loggedInStudent && loggedInStudent.id === freshStudent.id) {
+                                setLoggedInStudent(freshStudent);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }, [classes]);
 
     const verifyPin = (inputPin) => { 
         if (String(inputPin).trim() === String(dbTeacherPin).trim()) { 
@@ -328,8 +352,27 @@ const App = () => {
         setModalEditPassword("");
     };
 
+    // 🔴 KRİTİK DEĞİŞİKLİK 1: İNTERNET KONTROLÜ EN ÜSTE ALINDI (Giriş ekranında da çalışması için)
+    if (!isOnline) {
+        return (
+            <div className="fixed inset-0 bg-slate-950 z-[99999] flex flex-col items-center justify-center p-6 text-center select-none">
+                <motion.div 
+                    animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }}
+                    transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+                    className="w-24 h-24 bg-rose-500/10 border border-rose-500/30 rounded-full flex items-center justify-center text-rose-500 mb-6 shadow-[0_0_50px_rgba(239,68,68,0.2)]"
+                >
+                    <WifiOff size={44} />
+                </motion.div>
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide uppercase">Ağ Bağlantısı Yok</h2>
+                <p className="text-slate-400 text-sm md:text-base mt-3 max-w-sm font-medium leading-relaxed">
+                    Berkant Hoca Eğitim Platformu aktif bir internet bağlantısı gerektirir. Lütfen internet/ağ bağlantınızı kontrol ediniz.
+                </p>
+            </div>
+        );
+    }
+
+    // 🔴 KRİTİK DEĞİŞİKLİK 2: EĞER OTURUM YOKSA LOGIN EKRANINA GİT (İnternet kontrolünden hemen sonra)
     if (!currentUserRole) return (
-        // 🔥 GÜNCELLEME: YÜKLEME PROMPT PROPS'LARI GİRİŞ EKRANINA AKTARILDI
         <LoginScreen 
             onStudentLogin={handleStudentLogin} 
             onTeacherLogin={verifyPin} 
@@ -534,7 +577,7 @@ const App = () => {
                 <button onClick={() => { deleteTopic(activeTopicMenu.classId, activeTopicMenu.topicId); setActiveTopicMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={16}/> Ödevi Sil</button>
             </motion.div></div>}
             
-            {cellNoteModal && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4"><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"><h3 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2"><Edit3 size={20} className="text-amber-500"/>Öğretmen Notu</h3><textarea autoFocus rows="4" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-medium text-sm outline-none focus:border-amber-400" placeholder="Öğrenci için notunuzu buraya yazın..." value={cellNoteModal.note} onChange={e => setCellNoteModal({ ...cellNoteModal, note: e.target.value })}></textarea><div className="flex gap-2 justify-end mt-2"><button onClick={() => setCellNoteModal(null)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button><button onClick={() => { const cls = classes.find(c => c.id === cellNoteModal.classId); const updatedStudents = cls.students.map(s => s.id === studentId ? { ...s, assignmentNotes: { ...(s.assignmentNotes || {}), [cellNoteModal.colId]: cellNoteModal.note } } : s); updateClassInDb({ ...cls, students: updatedStudents }); setCellNoteModal(null); }} className="px-4 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 shadow-md">Notu Kaydet</button></div></motion.div></div>}
+            {cellNoteModal && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4"><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"><h3 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2"><Edit3 size={20} className="text-amber-500"/>Öğretmen Notu</h3><textarea autoFocus rows="4" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-medium text-sm outline-none focus:border-amber-400" placeholder="Öğrenci için notunuzu buraya yazın..." value={cellNoteModal.note} onChange={e => setCellNoteModal({ ...cellNoteModal, note: e.target.value })}></textarea><div className="flex gap-2 justify-end mt-2"><button onClick={() => setCellNoteModal(null)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button><button onClick={() => { const cls = classes.find(c => c.id === cellNoteModal.classId); const updatedStudents = cls.students.map(s => s.id === selectedStudentForView.id ? { ...s, assignmentNotes: { ...(s.assignmentNotes || {}), [cellNoteModal.colId]: cellNoteModal.note } } : s); updateClassInDb({ ...cls, students: updatedStudents }); setCellNoteModal(null); }} className="px-4 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 shadow-md">Notu Kaydet</button></div></motion.div></div>}
             
             {isTeacherMode && <button onClick={() => setShowAssistant(true)} className="fab-button bg-brandPurple text-white" title="Akıllı Asistan"><div className="fab-pulse"></div><Mic size={28} /></button>}
 
@@ -565,30 +608,6 @@ const App = () => {
                             </div>
                         </motion.div>
                     </div>
-                )}
-            </AnimatePresence>
-
-            {/* 🔴 İNTERNETSİZ ÇALIŞMAYI ENGELLEYEN TAM SAYFA KAPLAMA (OVERLAY) */}
-            <AnimatePresence>
-                {!isOnline && (
-                    <motion.div 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }} 
-                        exit={{ opacity: 0 }} 
-                        className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[99999] flex flex-col items-center justify-center p-6 text-center select-none"
-                    >
-                        <motion.div 
-                            animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }}
-                            transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-                            className="w-24 h-24 bg-rose-500/10 border border-rose-500/30 rounded-full flex items-center justify-center text-rose-500 mb-6 shadow-[0_0_50px_rgba(239,68,68,0.2)]"
-                        >
-                            <WifiOff size={44} />
-                        </motion.div>
-                        <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide uppercase">Bağlantı Kesildi</h2>
-                        <p className="text-slate-400 text-sm md:text-base mt-3 max-w-sm font-medium leading-relaxed">
-                            Berkant Hoca Eğitim Platformu aktif bir internet bağlantısı gerektirir. Lütfen ağ ayarlarınızı kontrol edin.
-                        </p>
-                    </motion.div>
                 )}
             </AnimatePresence>
 
