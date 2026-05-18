@@ -5,7 +5,7 @@ import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
 
-// 🛡️ ÇÖKME ENGELLEYİCİ KALKAN
+// 🛡️ ÇÖKME ENGELLEYİCİ KALKAN (Bozuk objeleri filtreler)
 const getSafeText = (val) => {
     if (!val) return "";
     if (typeof val === 'string' || typeof val === 'number') return String(val);
@@ -42,12 +42,15 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [draftNotes, setDraftNotes] = useState({});
     
     const recognitionRef = useRef(null);
-    const sortedFoundTopics = [...(foundTopics || [])].reverse();
+    
+    // 🛡️ REVERSE KALKANI: Dizi boş gelse bile hata vermez
+    const sortedFoundTopics = [...(foundTopics || [])].filter(Boolean).reverse();
 
     useEffect(() => {
         document.body.style.overflow = 'hidden';
-        setTimeout(() => { startListening(); }, 500);
+        const timer = setTimeout(() => { startListening(); }, 500);
         return () => { 
+            clearTimeout(timer);
             document.body.style.overflow = ''; 
             if (recognitionRef.current) recognitionRef.current.abort();
             if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -77,19 +80,20 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
 
     const getStudentReadableGrades = (student, cls) => {
         let records = [];
-        (cls?.topics || []).forEach(t => {
-            (t.subColumns || []).forEach(col => {
+        if (!student || !cls) return records;
+        
+        (cls.topics || []).filter(Boolean).forEach(t => {
+            (t.subColumns || []).filter(Boolean).forEach(col => {
                 const status = draftGrades[student.id]?.[col.id] || student.grades?.[col.id];
                 if (status) {
                     const statusTR = status === 'done' ? 'Yapıldı' : status === 'missing' ? 'Eksik' : status === 'assigned' ? 'Verildi' : 'Muaf';
-                    records.push(`${t.title} - ${col.title}: ${statusTR}`);
+                    records.push(`${t.title || 'Bilinmeyen'} - ${col.title || 'Bilinmeyen'}: ${statusTR}`);
                 }
             });
         });
         return records;
     };
 
-    // 🧠 TOKEN TASARRUFLU (DİNAMİK) GROQ API ÇAĞRISI
     const callGroqAPI = async (transcript) => {
         const apiKey = import.meta.env.VITE_GROQ_API_KEY;
         if (!apiKey) {
@@ -101,33 +105,31 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         let dynamicContextData;
         let currentStudentContext = "";
 
-        // 🔥 OPTİMİZASYON: Sadece seçili öğrenci varsa notlarını gönder. Yoksa sadece isim listesini gönder.
+        // 🛡️ NULL KONTROLÜ: Veritabanı okumalarında 'filter(Boolean)' ile bozuk/undefined veriler siliniyor
         if (selectedStudent) {
-            const targetClass = (classes || []).find(c => c.id === selectedStudent.classId);
-            const studentCurrentData = targetClass?.students?.find(s => s.id === selectedStudent.id) || selectedStudent;
+            const targetClass = (classes || []).filter(Boolean).find(c => c.id === selectedStudent.classId);
+            const studentCurrentData = targetClass?.students?.find(s => s && s.id === selectedStudent.id) || selectedStudent;
             
             dynamicContextData = {
                 odakMode: "AKTIF_OGRENCI",
-                ogrenciAdi: selectedStudent.name,
-                sinifAdi: selectedStudent.className,
-                // Sadece seçili öğrencinin notları gönderilir!
+                ogrenciAdi: selectedStudent?.name || "",
+                sinifAdi: selectedStudent?.className || "",
                 notKayitlari: getStudentReadableGrades(studentCurrentData, targetClass),
-                mevcutOdevler: (targetClass?.topics || []).map(t => ({
-                    baslik: t.title,
-                    kaynaklar: (t.subColumns || []).map(col => col.title)
+                mevcutOdevler: (targetClass?.topics || []).filter(Boolean).map(t => ({
+                    baslik: t.title || "",
+                    kaynaklar: (t.subColumns || []).filter(Boolean).map(col => col.title || "")
                 }))
             };
-            currentStudentContext = `Şu an ekranda seçili aktif öğrenci: "${selectedStudent.name}". Eğer komutta yeni bir isim yoksa, sadece bu öğrencinin verilerini baz al.`;
+            currentStudentContext = `Şu an ekranda seçili aktif öğrenci: "${selectedStudent?.name || ''}". Eğer komutta yeni bir isim yoksa, sadece bu öğrencinin verilerini baz al.`;
         } else {
             dynamicContextData = {
                 odakMode: "GENEL_ARAMA",
-                siniflar: (classes || []).map(c => ({
-                    sinifAdi: c.className,
-                    // Sadece isimler gönderilir, notlar asla gönderilmez! (Muazzam Token tasarrufu)
-                    ogrenciIsimleri: (c.students || []).map(s => s.name),
-                    odevBasliklari: (c.topics || []).map(t => ({
-                        baslik: t.title,
-                        kaynaklar: (t.subColumns || []).map(col => col.title)
+                siniflar: (classes || []).filter(Boolean).map(c => ({
+                    sinifAdi: c.className || "",
+                    ogrenciIsimleri: (c.students || []).filter(Boolean).map(s => s.name || "İsimsiz"),
+                    odevBasliklari: (c.topics || []).filter(Boolean).map(t => ({
+                        baslik: t.title || "",
+                        kaynaklar: (t.subColumns || []).filter(Boolean).map(col => col.title || "")
                     }))
                 }))
             };
@@ -188,7 +190,7 @@ Kurallar:
 
     const findBestMatch = (items, key, textToSearch) => {
         if (!items || items.length === 0 || !textToSearch) return null;
-        const safeItems = items.map(item => ({ ...item, _safeSearchKey: getSafeText(item[key]) }));
+        const safeItems = items.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item[key]) }));
         const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.45, includeScore: true });
         const results = fuse.search(textToSearch);
         return results.length > 0 ? results[0].item : null;
@@ -203,7 +205,11 @@ Kurallar:
             return;
         }
 
-        const allStudents = (classes || []).flatMap(cls => (cls.students || []).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })));
+        // 🛡️ Olası tanımsız objelere karşı filtreleme
+        const allStudents = (classes || []).filter(Boolean).flatMap(cls => 
+            (cls.students || []).filter(Boolean).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' }))
+        );
+        
         let bestStudent = findBestMatch(allStudents, 'name', aiResult.student);
         
         if (!bestStudent && selectedStudent) bestStudent = selectedStudent;
@@ -211,7 +217,7 @@ Kurallar:
         if (bestStudent) {
             setFoundStudents([bestStudent]);
             setSelectedStudent(bestStudent);
-            const targetClass = classes.find(c => c.id === bestStudent.classId); 
+            const targetClass = (classes || []).find(c => c && c.id === bestStudent.classId); 
             const topics = targetClass?.topics || []; 
             setFoundTopics(topics);
 
@@ -306,14 +312,17 @@ Kurallar:
 
     const applyChanges = () => {
         if (!selectedStudent) return;
-        const targetClass = classes.find(c => c.id === selectedStudent.classId); if (!targetClass) return;
-        const updatedStudents = (targetClass.students || []).map(s => {
+        const targetClass = (classes || []).find(c => c && c.id === selectedStudent.classId); if (!targetClass) return;
+        
+        // 🛡️ Filtrelemeler burada da mevcut
+        const updatedStudents = (targetClass.students || []).filter(Boolean).map(s => {
             if (s.id === selectedStudent.id) {
                 const newGrades = { ...(s.grades || {}), ...(draftGrades[s.id] || {}) };
                 const newNotes = { ...(s.assignmentNotes || {}), ...(draftNotes[s.id] || {}) };
                 return { ...s, grades: newGrades, assignmentNotes: newNotes };
             } return s;
         });
+        
         updateClassInDb({ ...targetClass, students: updatedStudents });
         setDraftGrades({}); setDraftNotes({});
         setTimeout(() => onClose(), 2000); 
@@ -356,9 +365,9 @@ Kurallar:
                     <AnimatePresence>
                         {(pendingSources || []).length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="mt-4 flex flex-wrap justify-center gap-1.5 z-20 relative max-h-24 overflow-y-auto">
-                                {(pendingSources || []).map(col => (
+                                {(pendingSources || []).filter(Boolean).map(col => (
                                     <button key={col.id} onClick={() => handleManualSourceSelect(col)} className="px-3 py-1.5 bg-cyan-950/90 border border-cyan-500/40 hover:border-cyan-300 text-cyan-200 text-[10px] font-bold rounded-xl transition-all">
-                                        {getSafeText(col.title)}
+                                        {getSafeText(col?.title)}
                                     </button>
                                 ))}
                             </motion.div>
@@ -371,24 +380,24 @@ Kurallar:
                     {selectedStudent ? (
                         <>
                             <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-cyan-900/30">
-                                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center font-bold text-cyan-400 text-sm">{getSafeText(selectedStudent.name).charAt(0)}</div>
-                                <div className="flex flex-col"><span className="text-sm font-bold text-cyan-100">{getSafeText(selectedStudent.name)}</span><span className="text-[10px] font-mono text-slate-500">{getSafeText(selectedStudent.className)}</span></div>
+                                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center font-bold text-cyan-400 text-sm">{getSafeText(selectedStudent?.name).charAt(0)}</div>
+                                <div className="flex flex-col"><span className="text-sm font-bold text-cyan-100">{getSafeText(selectedStudent?.name)}</span><span className="text-[10px] font-mono text-slate-500">{getSafeText(selectedStudent?.className)}</span></div>
                             </div>
                             
                             <div className="space-y-4">
                                 {sortedFoundTopics.map(topic => (
                                     <div key={topic.id} className="bg-slate-900/40 rounded-2xl border border-cyan-900/20 p-4">
-                                        <h4 className="font-bold text-cyan-200 text-xs mb-3 border-b border-slate-800/60 pb-2 flex items-center gap-1.5"><div className="w-1 h-3 bg-cyan-500 rounded-full"></div>{getSafeText(topic.title)}</h4>
+                                        <h4 className="font-bold text-cyan-200 text-xs mb-3 border-b border-slate-800/60 pb-2 flex items-center gap-1.5"><div className="w-1 h-3 bg-cyan-500 rounded-full"></div>{getSafeText(topic?.title)}</h4>
                                         <div className="space-y-2.5">
-                                            {(topic.subColumns || []).map(col => {
-                                                const targetClass = (classes || []).find(c => c.id === selectedStudent.classId);
-                                                const studentData = targetClass?.students?.find(s => s.id === selectedStudent.id);
+                                            {(topic.subColumns || []).filter(Boolean).map(col => {
+                                                const targetClass = (classes || []).find(c => c && c.id === selectedStudent.classId);
+                                                const studentData = targetClass?.students?.find(s => s && s.id === selectedStudent.id);
                                                 const displayGrade = draftGrades[selectedStudent.id]?.[col.id] !== undefined ? draftGrades[selectedStudent.id]?.[col.id] : (studentData?.grades?.[col.id] || 'assigned');
                                                 const isChanged = draftGrades[selectedStudent.id]?.[col.id] !== undefined;
 
                                                 return (
                                                     <div key={col.id} className={`p-3 rounded-xl bg-slate-900/80 border ${isChanged ? 'border-cyan-500/40' : 'border-slate-800'} flex flex-col sm:flex-row sm:items-center justify-between gap-2.5`}>
-                                                        <span className="text-xs font-medium text-slate-300 truncate max-w-[200px]">{getSafeText(col.title)}</span>
+                                                        <span className="text-xs font-medium text-slate-300 truncate max-w-[200px]">{getSafeText(col?.title)}</span>
                                                         <div className="flex gap-1 shrink-0">
                                                             {STATUS_OPTIONS.map(opt => (
                                                                 <button key={opt.id} onClick={() => handleDraftGradeChange(selectedStudent.id, col.id, opt.id)} className={`px-2 py-1 rounded-md border text-[9px] font-black uppercase tracking-wide transition-all ${displayGrade === opt.id ? darkStatusStyles[opt.id] : 'bg-slate-950 text-slate-600 border-transparent'}`}>
