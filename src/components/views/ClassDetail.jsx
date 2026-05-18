@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Layout, Crown, Pencil, AlertOctagon, KeyRound, BookOpen, Plus, Trash2, Calendar, MoreVertical, UserPlus, Printer } from 'lucide-react';
 import { calculateStats, formatDate } from '../../utils/helpers';
@@ -25,6 +25,18 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
     
     // YENİ EKLENENLERİ EN SOLA/YUKARIYA ALMAK İÇİN DİZİYİ TERSİNE ÇEVİRİYORUZ
     const reversedTopics = selectedClass.topics ? [...selectedClass.topics].reverse() : [];
+
+    // Local states for editing student username and password
+    const [editUsername, setEditUsername] = useState("");
+    const [editPassword, setEditPassword] = useState("");
+
+    const handleEditStudentClick = (student) => {
+        setModalData({ classId: selectedClass.id, studentId: student.id, currentName: student.name });
+        setModalInputVal(student.name);
+        setEditUsername(student.username || "");
+        setEditPassword(student.password || "");
+        setModalType('edit-student');
+    };
 
     return (
         <motion.div key="class-detail" initial={{ opacity: 0, y: 30, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: "spring", stiffness: 260, damping: 20 }} className="bg-white rounded-[2rem] shadow-float border border-slate-200 overflow-hidden relative z-10">
@@ -64,7 +76,7 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                                 </div>
                             </div>
                             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex gap-2"><input type="text" placeholder="Yeni Öğrenci Ekle..." className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-700 w-full focus:border-brandPurple outline-none font-medium" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') addStudent(selectedClass.id); }} /><motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => addStudent(selectedClass.id)} className={`text-white px-4 rounded-xl text-sm font-bold shadow-md ${selectedClass.type === 'vip' ? 'real-gold-bg text-slate-900' : 'bg-brandPurple'}`}>EKLE</motion.button></div>
-                            {selectedClass.students?.map((std) => ( <MobileStudentCard key={std.id} student={std} cls={selectedClass} updateGrade={updateGrade} onOpenNote={openCellNoteModal} onEditStudent={(s) => { setModalData({ classId: selectedClass.id, studentId: s.id, currentName: s.name }); setModalInputVal(s.name); setModalType('edit-student'); }} onDeleteStudent={deleteStudent} onPrintReport={handlePrintStudentReport} /> ))}
+                            {selectedClass.students?.map((std) => ( <MobileStudentCard key={std.id} student={std} cls={selectedClass} updateGrade={updateGrade} onOpenNote={openCellNoteModal} onEditStudent={() => handleEditStudentClick(std)} onDeleteStudent={deleteStudent} onPrintReport={handlePrintStudentReport} /> ))}
                         </div>
                     ) : (
                         <div className="table-container">
@@ -99,7 +111,7 @@ const ClassDetail = ({ selectedClass, activeTab, setActiveTab, isMobile, newStud
                                     {selectedClass.students?.map((std) => (
                                         <tr key={std.id} className="border-b border-slate-100 bg-white">
                                             <td className="sticky-col-left p-4 border-r border-slate-200">
-                                                <div className="flex justify-between items-center group"><div className="flex flex-col gap-1 cursor-pointer" onClick={() => openStudent(std)}><div className="flex items-center gap-3"><motion.div whileHover={{ scale: 1.1 }} className={`w-8 h-8 rounded-full ${selectedClass.type === 'vip' ? 'bg-yellow-100 text-amber-600' : 'bg-purple-100 text-brandPurple'} flex items-center justify-center font-black text-xs`}>{getSafeText(std.name).charAt(0)}</motion.div><span className={`text-sm font-bold text-slate-700 group-hover:${selectedClass.type === 'vip' ? 'text-amber-600' : 'text-brandPurple'} transition-colors`}>{getSafeText(std.name)}</span><button onClick={(e) => { e.stopPropagation(); setModalData({ classId: selectedClass.id, studentId: std.id, currentName: std.name }); setModalInputVal(std.name); setModalType('edit-student'); }} className="text-slate-300 hover:text-brandPurple opacity-0 group-hover:opacity-100 transition-opacity"><Pencil size={14}/></button></div>{std.username && ( <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-1 ml-11" onClick={e=>e.stopPropagation()}><span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{std.username}</span><span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1"><KeyRound size={10}/> {std.password}</span></div> )}</div><div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); handlePrintStudentReport(selectedClass, std); }} className={`p-2 rounded-lg transition-colors ${selectedClass.type === 'vip' ? 'bg-yellow-50 text-amber-500 hover:bg-yellow-100' : 'bg-purple-50 text-brandPurple hover:bg-purple-100'}`} title="Rapor Yazdır"><Printer size={16}/></motion.button><motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={(e) => deleteStudent(e, selectedClass.id, std.id)} className="bg-rose-50 text-rose-400 hover:text-rose-600 hover:bg-rose-100 p-2 rounded-lg transition-colors"><Trash2 size={16}/></motion.button></div></div>
+                                                <div className="flex justify-between items-center group"><div className="flex flex-col gap-1 cursor-pointer" onClick={() => openStudent(std)}><div className="flex items-center gap-3"><motion.div whileHover={{ scale: 1.1 }} className={`w-8 h-8 rounded-full ${selectedClass.type === 'vip' ? 'bg-yellow-100 text-amber-600' : 'bg-purple-100 text-brandPurple'} flex items-center justify-center font-black text-xs`}>{getSafeText(std.name).charAt(0)}</motion.div><span className={`text-sm font-bold text-slate-700 group-hover:${selectedClass.type === 'vip' ? 'text-amber-600' : 'text-brandPurple'} transition-colors`}>{getSafeText(std.name)}</span><button onClick={(e) => { e.stopPropagation(); handleEditStudentClick(std); }} className="text-slate-300 hover:text-brandPurple opacity-0 group-hover:opacity-100 transition-opacity"><Pencil size={14}/></button></div>{std.username && ( <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-1 ml-11" onClick={e=>e.stopPropagation()}><span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{std.username}</span><span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1"><KeyRound size={10}/> {std.password}</span></div> )}</div><div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); handlePrintStudentReport(selectedClass, std); }} className={`p-2 rounded-lg transition-colors ${selectedClass.type === 'vip' ? 'bg-yellow-50 text-amber-500 hover:bg-yellow-100' : 'bg-purple-50 text-brandPurple hover:bg-purple-100'}`} title="Rapor Yazdır"><Printer size={16}/></motion.button><motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={(e) => deleteStudent(e, selectedClass.id, std.id)} className="bg-rose-50 text-rose-400 hover:text-rose-600 hover:bg-rose-100 p-2 rounded-lg transition-colors"><Trash2 size={16}/></motion.button></div></div>
                                             </td>
                                             {reversedTopics.map((topic, i) => {
                                                 const theme = TOPIC_THEMES[i % TOPIC_THEMES.length];
