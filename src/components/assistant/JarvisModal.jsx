@@ -4,6 +4,7 @@ import { X, Mic, RefreshCw, Save, User, CheckCircle2, TerminalSquare, ChevronRig
 import { STATUS_OPTIONS } from '../../utils/constants';
 import Fuse from 'fuse.js';
 
+// 🛡️ ÇÖKME ENGELLEYİCİ GÜVENLİK KALKANI
 const getSafeText = (val) => {
     if (!val) return "";
     if (typeof val === 'string' || typeof val === 'number') return String(val);
@@ -33,7 +34,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
     const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
     const [foundTopics, setFoundTopics] = useState([]);
     
-    // Eksik veri durumlarında kullanılacak dinamik seçim alanları
     const [pendingAction, setPendingAction] = useState(null); 
     const [pendingSources, setPendingSources] = useState([]); 
     const [pendingStatusSelect, setPendingStatusSelect] = useState(null); 
@@ -43,7 +43,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
     const sortedFoundTopics = Array.isArray(foundTopics) ? [...foundTopics].filter(Boolean).reverse() : [];
 
-    // Başlangıç Ayarları ve Otomatik Mikrofon Aktivasyonu
+    // Başlangıç Ayarları ve Otomatik Dinleme Aktivasyonu
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         
@@ -65,7 +65,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         };
     }, [initialStudent, classes]);
 
-    // ⚡ YENİ ÖĞRENCİ ARAMA FONKSİYONU (RESET MANTIĞI)
+    // Öğrenci Sıfırlama ve Yeniden Arama Sekmesi Aktivasyonu
     const handleResetStudent = () => {
         setSelectedStudent(null);
         setFoundStudents([]);
@@ -73,11 +73,11 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         setPendingAction(null);
         setPendingSources([]);
         setPendingStatusSelect(null);
-        setJarvisFeedback("Öğrenci seçimi sıfırlandı. Lütfen yeni öğrenci adını söyleyin.");
-        setTimeout(() => startListening(), 400);
+        setJarvisFeedback("Öğrenci bağlamı sıfırlandı. Yeni bir isim söyleyebilirsiniz.");
+        setTimeout(() => startListening(), 350);
     };
 
-    // 🧠 SİSTEMDEKİ TÜM VERİLERİ ÖNCEDEN OKUYAN DİNAMİK SÖZLÜK MOTORU (LEXICON)
+    // 🧠 GELİŞMİŞ YEREL SÖZLÜK VE KELİME EŞLEŞTİRME MOTORU
     const findBestComponentLocal = (items, targetProperty, inputTranscript) => {
         if (!items || items.length === 0 || !inputTranscript) return null;
         let text = inputTranscript.toLocaleLowerCase('tr-TR');
@@ -88,14 +88,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         items.forEach(item => {
             let targetText = getSafeText(item[targetProperty]).toLocaleLowerCase('tr-TR');
             
-            // 1. Birebir veya İç İçe Geçme Durumu
             if (text.includes(targetText) || targetText.includes(text)) {
                 highestScore = 100;
                 bestItem = item;
                 return;
             }
             
-            // 2. Akustik Ses Tanıma Hataları Tolerans Filtresi (Ön Okuma Destekli)
             if (targetText.includes("video ders defteri") && (text.includes("vdd") || text.includes("video ders") || text.includes("ve de") || text.includes("ve d") || text.includes("bide"))) {
                 highestScore = 98;
                 bestItem = item;
@@ -107,7 +105,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 return;
             }
             
-            // 3. Ek Temizleme ve Kök Analizi
             let targetTokens = targetText.split(/\s+/).filter(t => t.length > 1);
             let matchedTokens = targetTokens.filter(token => {
                 let strippedToken = token.replace(/ı|i|u|ü|a|e|ın|in|un|ün$/g, "");
@@ -121,7 +118,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             }
         });
         
-        // 4. Fallback: Fuse.js Bulanık Eşleştirme
         if (highestScore < 50) {
             const fuse = new Fuse(items, { keys: [targetProperty], threshold: 0.55, ignoreLocation: true });
             const results = fuse.search(text);
@@ -131,7 +127,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         return bestItem;
     };
 
-    // 🔬 YEREL DOĞAL DİL İŞLEME (LOCAL NLP) MERKEZİ
+    // 🔬 AKILLI YEREL GÖREV ÇEKİRDEĞİ
     const analyzeCommandLocal = (transcript, isFinalFallback = true) => {
         let text = transcript.toLocaleLowerCase('tr-TR').trim();
         
@@ -141,7 +137,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             setPendingStatusSelect(null);
         }
         
-        // Sistem direktifleri yönetimi
         if (text.match(/kaydet|onayla|sisteme işle/)) { applyChanges(); return true; }
         if (text === 'kapat' || text === 'çık') { onClose(); return true; }
         if (text.match(/öğrenci değiştir|yeni öğrenci|öğrenci ara/)) { handleResetStudent(); return true; }
@@ -149,14 +144,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         text = text.replace(/birinci/g, '1').replace(/ikinci/g, '2').replace(/üçüncü/g, '3')
                    .replace(/\bbir\b/g, '1').replace(/\biki\b/g, '2').replace(/\b[uü]ç\b/g, '3');
 
-        // Durum (Status) yönetimi
         let status = null;
         if (text.match(/çözmemiş|yapmamış|yapmadı|eksik|boş|yok|çözmüyor|yapılmadı|çözülmedi/)) status = 'missing';
         else if (text.match(/çözdü|yaptı|tamamladı|bitirdi|full|bitti|çözmüş|yapmış|yapıldı|çözüldü|yapıyoruz/)) status = 'done';
         else if (text.match(/verdim|verildi|atadım|ödev ver/)) status = 'assigned';
         else if (text.match(/muaf|gerek yok|pas geç/)) status = 'exempt';
 
-        // 🌟 "TÜMÜ / HİÇBİRİ" TOPLU İŞLEM PARSERI
         const isAllSources = text.match(/tümünü|tamamını|hepsini|bütün kaynaklar|tümü|tamamı|hepsi/);
         const isNoneSources = text.match(/hiçbiri|hiçbirini/);
 
@@ -165,23 +158,35 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             Array.isArray(cls.students) ? cls.students.filter(std => std && std.name).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })) : []
         );
 
-        // Öğrenci bağlam kontrolü
-        let bestStudent = findBestComponentLocal(allStudents, 'name', text);
-
-        if (bestStudent && isFinalFallback) {
-            const firstName = bestStudent.name.split(' ')[0];
-            const fuseStudents = new Fuse(allStudents, { keys: ['name'], threshold: 0.35 });
-            const sResults = fuseStudents.search(firstName);
-            const identicalMatches = sResults.filter(r => r.item.name.toLowerCase().includes(firstName.toLowerCase())).map(r => r.item);
-            const isExactFullMentioned = identicalMatches.some(m => text.includes(m.name.toLowerCase()));
+        // 🔥 Gelişmiş Öğrenci Arama ve Akıllı Filtreleme Hiyerarşisi (Merve Gündüz / İrem Atış Karar Mekanizması)
+        let matchedStudentsList = [];
+        const fuseStudents = new Fuse(allStudents, { keys: ['name'], threshold: 0.4, includeScore: true, ignoreLocation: true });
+        const searchRes = fuseStudents.search(text);
+        
+        if (searchRes.length > 0) {
+            const bestScore = searchRes[0].score;
             
-            if (identicalMatches.length > 1 && !isExactFullMentioned) {
-                setFoundStudents(identicalMatches);
-                setSelectedStudent(null);
-                setFoundTopics([]);
-                setJarvisFeedback(`"${firstName}" adında birden fazla kayıt var, lütfen aşağıdan seçin.`);
-                return false;
+            // Eğer tam ad + soyad girildiyse (Skor kusursuzdur < 0.15)
+            if (bestScore < 0.15) {
+                const bestNameStr = searchRes[0].item.name.toLowerCase();
+                // Sadece o tam ad soyada sahip olanları havuzda tut (İrem Atış ise 2 kişi kalır, Merve Gündüz ise tek kişi)
+                matchedStudentsList = allStudents.filter(s => s.name.toLowerCase() === bestNameStr);
+            } else {
+                // Sadece ilk isim söylendiyse ("Merve") yakın skorluların hepsini listele
+                matchedStudentsList = searchRes.filter(r => r.score <= bestScore + 0.12).map(r => r.item);
             }
+        }
+
+        let bestStudent = null;
+        if (matchedStudentsList.length === 1) {
+            bestStudent = matchedStudentsList[0];
+        } else if (matchedStudentsList.length > 1 && isFinalFallback) {
+            // İki adet "İrem Atış" veya genel "Merve" durumu varsa listeyi ekrana dök
+            setFoundStudents(matchedStudentsList);
+            setSelectedStudent(null);
+            setFoundTopics([]);
+            setJarvisFeedback(`Eşleşen ${matchedStudentsList.length} öğrenci bulundu. Lütfen aşağıdan hedefi seçin.`);
+            return false;
         }
 
         if (!bestStudent && selectedStudent) bestStudent = selectedStudent;
@@ -197,21 +202,19 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         
         if (isFinalFallback) setFoundTopics(topics);
 
-        // Konu Eşleştirme
         const bestTopic = findBestComponentLocal(topics, 'title', text);
         if (!bestTopic) {
-            if (isFinalFallback) setJarvisFeedback(`${bestStudent.name} profili kilitlendi. Lütfen ödev konusunu söyleyin.`);
+            if (isFinalFallback) setJarvisFeedback(`${bestStudent.name} seçildi. Ödev konusunu söyleyebilirsiniz.`);
             return false;
         }
 
-        // 🌟 TOPLU DURUM ATAMA İŞLEMLERİ (Kusursuzlaştırıldı)
         if ((isAllSources || isNoneSources) && (status || isNoneSources)) {
             let targetStatus = isNoneSources ? 'missing' : status;
             if (isFinalFallback) {
                 (bestTopic.subColumns || []).forEach(col => {
                     handleDraftGradeChange(bestStudent.id, col.id, targetStatus);
                 });
-                setJarvisFeedback(`İşlem Başarılı: ${bestTopic.title} altındaki tüm kaynaklar güncellendi.`);
+                setJarvisFeedback(`Toplu İşlem Başarılı: ${bestTopic.title} altındaki tüm kaynaklar güncellendi.`);
             }
             return true;
         } 
@@ -225,7 +228,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 }
                 return true;
             } else if (isFinalFallback) {
-                // Kaynak anlaşılamadıysa alt tarafta butonları aç
                 setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: status });
                 setPendingSources(bestTopic.subColumns || []);
                 setJarvisFeedback(`"${bestTopic.title}" konusu anlaşıldı. Uygulanacak kaynağı alttan seçin.`);
@@ -233,7 +235,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             return false;
         }
 
-        // Durum belirtilmediyse ama kaynak belliyse durumu sor
         const bestCol = findBestComponentLocal(bestTopic.subColumns || [], 'title', text) || bestTopic.subColumns?.[0];
         if (bestCol && isFinalFallback) {
             setPendingStatusSelect({ studentId: bestStudent.id, topicId: bestTopic.id, colId: bestCol.id, colTitle: bestCol.title });
@@ -320,7 +321,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 exit={{ opacity: 0, scale: 0.97, y: 12 }} 
                 className="bg-white border border-slate-200 rounded-[2.2rem] w-full max-w-2xl overflow-hidden shadow-float flex flex-col max-h-[85vh]"
             >
-                {/* ÜST RADAR VE YENİ ÖĞRENCİ SEKMELİ KONTROL ALANI */}
+                {/* ÜST RADAR VE KONTROL ALANI */}
                 <div className="relative overflow-hidden bg-slate-50/70 border-b border-slate-100 p-6 flex flex-col items-center justify-center shrink-0">
                     <button onClick={onClose} className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors z-30"><X size={20}/></button>
                     <div className="absolute top-5 left-6 flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-widest z-20"><TerminalSquare size={13}/> AKILLI İŞLEM ASİSTANI</div>
@@ -331,20 +332,20 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         <Mic size={28} className={isListening ? 'text-brandPurple animate-pulse' : 'text-slate-400 group-hover:text-brandPurple transition-colors'} />
                     </div>
 
-                    {/* 🔥 KOMUT YAZMA KUTUSU KALKTI, YERİNE PREMIUM DEĞİŞTİRME SEKMESİ GELDİ */}
+                    {/* 🔥 Gelişmiş Öğrenci Bağlam / Değiştirme Sekmesi */}
                     <div className="w-full max-w-xl z-10 flex gap-2">
-                        <div className="flex-1 bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 flex items-center justify-between shadow-sm">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <div className="flex-1 bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 flex items-center justify-between shadow-sm">
+                            <div className="flex items-center gap-2.5">
+                                <div className={`w-2.5 h-2.5 rounded-full ${selectedStudent ? 'bg-emerald-500' : 'bg-amber-400'} animate-pulse`}></div>
                                 <span className="text-slate-400 font-medium">Aktif Bağlam:</span>
-                                <span className="text-brandPurple font-black">{selectedStudent ? selectedStudent.name : "Öğrenci Seçilmedi"}</span>
+                                <span className="text-brandPurple font-black text-base">{selectedStudent ? selectedStudent.name : "Aranıyor..."}</span>
                             </div>
                             {selectedStudent && (
                                 <button 
                                     onClick={handleResetStudent}
-                                    className="flex items-center gap-1 text-[11px] font-black bg-purple-50 text-brandPurple border border-purple-100 px-3 py-1.5 rounded-xl hover:bg-brandPurple hover:text-white transition-all shadow-sm"
+                                    className="flex items-center gap-1 text-[11px] font-black bg-purple-50 text-brandPurple border border-purple-100 px-3 py-2 rounded-xl hover:bg-brandPurple hover:text-white transition-all shadow-sm"
                                 >
-                                    <RefreshCw size={12}/> YENİ ÖĞRENCİ ARA
+                                    <RefreshCw size={12}/> 🔄 ÖĞRENCİ DEĞİŞTİR / ARA
                                 </button>
                             )}
                         </div>
