@@ -44,7 +44,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const recognitionRef = useRef(null);
     
     // 🛡️ REVERSE KALKANI: Dizi boş gelse bile hata vermez
-    const sortedFoundTopics = [...(foundTopics || [])].filter(Boolean).reverse();
+    const sortedFoundTopics = Array.isArray(foundTopics) ? [...foundTopics].filter(Boolean).reverse() : [];
 
     useEffect(() => {
         document.body.style.overflow = 'hidden';
@@ -78,16 +78,25 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         speakFeedback(msg, autoListenAfter);
     };
 
+    // 🛡️ ZIRHLI NOT OKUYUCU
     const getStudentReadableGrades = (student, cls) => {
         let records = [];
-        if (!student || !cls) return records;
+        if (!student || !cls || !cls.topics) return records;
         
-        (cls.topics || []).filter(Boolean).forEach(t => {
-            (t.subColumns || []).filter(Boolean).forEach(col => {
-                const status = draftGrades[student.id]?.[col.id] || student.grades?.[col.id];
+        const safeTopics = Array.isArray(cls.topics) ? cls.topics.filter(t => t && Array.isArray(t.subColumns)) : [];
+        
+        safeTopics.forEach(t => {
+            t.subColumns.forEach(col => {
+                if (!col || !col.id) return; 
+                
+                const studentGrades = student.grades || {};
+                const draftStudentGrades = draftGrades[student.id] || {};
+                
+                const status = draftStudentGrades[col.id] !== undefined ? draftStudentGrades[col.id] : studentGrades[col.id];
+                
                 if (status) {
                     const statusTR = status === 'done' ? 'Yapıldı' : status === 'missing' ? 'Eksik' : status === 'assigned' ? 'Verildi' : 'Muaf';
-                    records.push(`${t.title || 'Bilinmeyen'} - ${col.title || 'Bilinmeyen'}: ${statusTR}`);
+                    records.push(`${t.title || 'İsimsiz Konu'} - ${col.title || 'İsimsiz Kaynak'}: ${statusTR}`);
                 }
             });
         });
@@ -104,10 +113,11 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
 
         let dynamicContextData;
         let currentStudentContext = "";
+        const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
 
-        // 🛡️ NULL KONTROLÜ: Veritabanı okumalarında 'filter(Boolean)' ile bozuk/undefined veriler siliniyor
+        // 🛡️ NULL KONTROLÜ
         if (selectedStudent) {
-            const targetClass = (classes || []).filter(Boolean).find(c => c.id === selectedStudent.classId);
+            const targetClass = safeClasses.find(c => c.id === selectedStudent.classId);
             const studentCurrentData = targetClass?.students?.find(s => s && s.id === selectedStudent.id) || selectedStudent;
             
             dynamicContextData = {
@@ -115,22 +125,22 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
                 ogrenciAdi: selectedStudent?.name || "",
                 sinifAdi: selectedStudent?.className || "",
                 notKayitlari: getStudentReadableGrades(studentCurrentData, targetClass),
-                mevcutOdevler: (targetClass?.topics || []).filter(Boolean).map(t => ({
+                mevcutOdevler: Array.isArray(targetClass?.topics) ? targetClass.topics.filter(Boolean).map(t => ({
                     baslik: t.title || "",
-                    kaynaklar: (t.subColumns || []).filter(Boolean).map(col => col.title || "")
-                }))
+                    kaynaklar: Array.isArray(t.subColumns) ? t.subColumns.filter(Boolean).map(col => col.title || "") : []
+                })) : []
             };
             currentStudentContext = `Şu an ekranda seçili aktif öğrenci: "${selectedStudent?.name || ''}". Eğer komutta yeni bir isim yoksa, sadece bu öğrencinin verilerini baz al.`;
         } else {
             dynamicContextData = {
                 odakMode: "GENEL_ARAMA",
-                siniflar: (classes || []).filter(Boolean).map(c => ({
-                    sinifAdi: c.className || "",
-                    ogrenciIsimleri: (c.students || []).filter(Boolean).map(s => s.name || "İsimsiz"),
-                    odevBasliklari: (c.topics || []).filter(Boolean).map(t => ({
-                        baslik: t.title || "",
-                        kaynaklar: (t.subColumns || []).filter(Boolean).map(col => col.title || "")
-                    }))
+                siniflar: safeClasses.map(c => ({
+                    sinifAdi: c.className || "Tanımsız Sınıf",
+                    ogrenciIsimleri: Array.isArray(c.students) ? c.students.filter(s => s && s.name).map(s => s.name) : [],
+                    odevBasliklari: Array.isArray(c.topics) ? c.topics.filter(t => t && t.title).map(t => ({
+                        baslik: t.title,
+                        kaynaklar: Array.isArray(t.subColumns) ? t.subColumns.filter(col => col && col.title).map(col => col.title) : []
+                    })) : []
                 }))
             };
             currentStudentContext = `Şu an seçili bir öğrenci yok. Kullanıcının komutundan öğrenci ismini eşleştirmelisin.`;
@@ -205,9 +215,9 @@ Kurallar:
             return;
         }
 
-        // 🛡️ Olası tanımsız objelere karşı filtreleme
-        const allStudents = (classes || []).filter(Boolean).flatMap(cls => 
-            (cls.students || []).filter(Boolean).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' }))
+        const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
+        const allStudents = safeClasses.flatMap(cls => 
+            Array.isArray(cls.students) ? cls.students.filter(std => std && std.name).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })) : []
         );
         
         let bestStudent = findBestMatch(allStudents, 'name', aiResult.student);
@@ -217,7 +227,7 @@ Kurallar:
         if (bestStudent) {
             setFoundStudents([bestStudent]);
             setSelectedStudent(bestStudent);
-            const targetClass = (classes || []).find(c => c && c.id === bestStudent.classId); 
+            const targetClass = safeClasses.find(c => c.id === bestStudent.classId); 
             const topics = targetClass?.topics || []; 
             setFoundTopics(topics);
 
@@ -312,16 +322,18 @@ Kurallar:
 
     const applyChanges = () => {
         if (!selectedStudent) return;
-        const targetClass = (classes || []).find(c => c && c.id === selectedStudent.classId); if (!targetClass) return;
+        const safeClasses = Array.isArray(classes) ? classes.filter(Boolean) : [];
+        const targetClass = safeClasses.find(c => c.id === selectedStudent.classId); 
+        if (!targetClass) return;
         
-        // 🛡️ Filtrelemeler burada da mevcut
-        const updatedStudents = (targetClass.students || []).filter(Boolean).map(s => {
+        const updatedStudents = Array.isArray(targetClass.students) ? targetClass.students.filter(Boolean).map(s => {
             if (s.id === selectedStudent.id) {
                 const newGrades = { ...(s.grades || {}), ...(draftGrades[s.id] || {}) };
                 const newNotes = { ...(s.assignmentNotes || {}), ...(draftNotes[s.id] || {}) };
                 return { ...s, grades: newGrades, assignmentNotes: newNotes };
-            } return s;
-        });
+            } 
+            return s;
+        }) : [];
         
         updateClassInDb({ ...targetClass, students: updatedStudents });
         setDraftGrades({}); setDraftNotes({});
