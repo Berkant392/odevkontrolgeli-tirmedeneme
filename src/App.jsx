@@ -49,6 +49,11 @@ const App = () => {
     const [modalEditUsername, setModalEditUsername] = useState("");
     const [modalEditPassword, setModalEditPassword] = useState("");
     
+    // 🔐 ÖĞRENCİNİN KENDİ AYARLARI İÇİN GEREKLİ INPUT STATE'LERİ
+    const [studentUsernameInput, setStudentUsernameInput] = useState("");
+    const [studentPasswordInput, setStudentPasswordInput] = useState("");
+    const [studentConfirmPasswordInput, setStudentConfirmPasswordInput] = useState("");
+
     const [activeTopicMenu, setActiveTopicMenu] = useState(null);
     const [activeColMenu, setActiveColMenu] = useState(null);
     const [activeCell, setActiveCell] = useState(null);
@@ -109,7 +114,6 @@ const App = () => {
             const updatedStudents = foundClass.students.map(s => s.id === foundStudent.id ? { ...s, lastLogin: new Date().toISOString() } : s); 
             updateClassInDb({ ...foundClass, students: updatedStudents }); 
         } else { 
-            // 🔥 Hata fırlatıyoruz ki LoginScreen'deki try/catch bloğu bu hatayı yakalayabilsin.
             throw new Error("Kullanıcı adı veya şifre hatalı"); 
         }
     };
@@ -166,6 +170,49 @@ const App = () => {
     
     const openCellNoteModal = (classId, studentId, colId, currentNote) => { setCellNoteModal({ classId, studentId, colId, note: currentNote || "" }); };
     
+    // 🔥 ÖĞRENCİNİN KENDİ BİLGİLERİNİ GÜNCELLEME SİSTEMİ
+    const handleOpenStudentSettings = () => {
+        if (loggedInStudent) {
+            setStudentUsernameInput(loggedInStudent.username || "");
+            setStudentPasswordInput(loggedInStudent.password || "");
+            setStudentConfirmPasswordInput(loggedInStudent.password || "");
+            setStudentSettingsModal(true);
+        }
+    };
+
+    const handleSaveStudentSettings = async () => {
+        if (!studentUsernameInput.trim() || !studentPasswordInput.trim()) {
+            showAlert('error', 'Eksik Bilgi', 'Kullanıcı adı veya şifre alanı boş bırakılamaz.');
+            return;
+        }
+        if (studentPasswordInput !== studentConfirmPasswordInput) {
+            showAlert('error', 'Şifre Uyuşmazlığı', 'Girdiğiniz şifreler birbiriyle eşleşmiyor! Lütfen kontrol edin.');
+            return;
+        }
+
+        try {
+            const cls = classes.find(c => c.id === selectedClass.id);
+            if (!cls) return;
+
+            const updatedStudents = cls.students.map(s => 
+                s.id === loggedInStudent.id 
+                    ? { ...s, username: studentUsernameInput.trim(), password: studentPasswordInput.trim() } 
+                    : s
+            );
+
+            await updateClassInDb({ ...cls, students: updatedStudents });
+            
+            // Yerel oturum state'ini de güncelle ki çıkış yapana kadar güncel kalsın
+            setLoggedInStudent(prev => ({ ...prev, username: studentUsernameInput.trim(), password: studentPasswordInput.trim() }));
+            
+            setStudentSettingsModal(false);
+            showAlert('success', 'Başarılı', 'Hesap bilgileriniz başarıyla güncellendi ve kaydedildi.');
+        } catch (e) {
+            console.error(e);
+            showAlert('error', 'Hata', 'Bilgiler güncellenirken bir hata meydana geldi.');
+        }
+    };
+
     const handleModalSubmit = async () => {
         if (modalType === 'system-settings') { 
             await updateDoc(doc(db, SETTINGS_COLLECTION, SETTINGS_DOC), { announcement: modalInputVal, announcementTitle: modalTitleVal, countdown: { targetDate: modalDateVal ? `${modalDateVal}T00:00:00` : countdownConfig.targetDate, startDate: countdownConfig.startDate, label: modalPdfVal || "" } }); 
@@ -182,7 +229,6 @@ const App = () => {
             const cls = classes.find(c => c.id === modalData.classId); 
             updateClassInDb({ ...cls, className: modalInputVal }); 
         } 
-        // 🔥 ÖĞRENCİ BİLGİLERİNİ GÜNCELLEME ALANI
         else if (modalType === 'edit-student') { 
             const cls = classes.find(c => c.id === modalData.classId); 
             const updatedStudents = cls.students.map(s => 
@@ -216,7 +262,6 @@ const App = () => {
             updateClassInDb({ ...cls, topics: updatedTopics }); 
         }
         
-        // Modal state'lerini temizle
         setModalType(null); 
         setModalInputVal(""); 
         setModalTitleVal(""); 
@@ -239,7 +284,7 @@ const App = () => {
                         <div className="text-center"><h1 className={`text-xl md:text-3xl font-black tracking-tight flex items-center justify-center gap-3 ${currentUserRole === 'vip-student' ? 'real-gold-text' : 'text-slate-800'}`}><div className={`p-2 rounded-xl shadow-md transition-transform hover:scale-105 hover-lift ${currentUserRole === 'vip-student' ? 'real-gold-bg shadow-vip-glow' : 'bg-gradient-to-tr from-brandPurple to-blue-600 shadow-glow'}`}><GraduationCap className={currentUserRole === 'vip-student' ? 'text-[#111]' : 'text-white'} size={24} strokeWidth={2.5} /></div> BERKANT HOCA</h1></div>
                         <div className="flex items-center gap-2 min-w-[80px] justify-end">
                             {isTeacherMode && <button onClick={() => setShowLibraryManager(true)} className="p-2 text-slate-500 hover:text-brandPurple bg-white hover:bg-purple-50 rounded-full transition-colors shadow-sm border border-slate-200 hover-lift"><Library size={20}/></button>}
-                            {(currentUserRole === 'student' || currentUserRole === 'vip-student') && <button onClick={() => setStudentSettingsModal(true)} className={`p-2 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'text-slate-300 hover:text-vipGold bg-slate-700 border border-slate-600 shadow-sm' : 'text-slate-500 hover:text-brandPurple bg-white shadow-sm border border-slate-200'}`} title="Hesabım"><Settings size={20}/></button>}
+                            {(currentUserRole === 'student' || currentUserRole === 'vip-student') && <button onClick={handleOpenStudentSettings} className={`p-2 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'text-slate-300 hover:text-vipGold bg-slate-700 border border-slate-600 shadow-sm' : 'text-slate-500 hover:text-brandPurple bg-white shadow-sm border border-slate-200'}`} title="Hesabım"><Settings size={20}/></button>}
                             <button onClick={handleLogout} className={`p-2 rounded-full transition-colors hover-lift ${currentUserRole === 'vip-student' ? 'text-rose-400 hover:text-rose-300 bg-slate-700 border border-slate-600 shadow-sm' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 shadow-sm border border-slate-200'}`} title="Çıkış Yap"><LogOut size={20}/></button>
                         </div>
                     </div>
@@ -295,7 +340,6 @@ const App = () => {
                             deleteClass={deleteClass} 
                             libraryItems={libraryItems.filter(i => i.type === LIBRARY_TYPES.CURRICULUM)} 
                             saveToLibrary={async (topic) => { if(!topic.title) return; try { await addDoc(collection(db, LIBRARY_COLLECTION), { text: topic.title, type: LIBRARY_TYPES.CURRICULUM, subTopics: topic.subTopics ? topic.subTopics.map(st => ({ title: st.title })) : [] }); showAlert('success', 'Başarılı', 'Ödev başarıyla kütüphaneye kaydedildi!'); } catch (e) { showAlert('error', 'Hata', 'Kütüphane kayıt hatası oluştu!'); } }} 
-                            // 🔥 Yeni eklenen props
                             setModalEditUsername={setModalEditUsername}
                             setModalEditPassword={setModalEditPassword}
                         />
@@ -328,7 +372,6 @@ const App = () => {
                                 <input type="date" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-bold text-sm outline-none focus:border-brandPurple" value={modalDateVal} onChange={e => setModalDateVal(e.target.value)} />
                             </>
                         ) : modalType === 'edit-student' ? (
-                            // 🔥 YENİ: ÖĞRENCİ DÜZENLEME MODALI ARAYÜZÜ (Kullanıcı adı ve Şifre dahil)
                             <>
                                 <h3 className="font-bold text-lg mb-4 text-slate-800">Öğrenci Bilgilerini Düzenle</h3>
                                 
@@ -383,7 +426,40 @@ const App = () => {
                 </div>
             )}
 
-            {/* TABLODAKİ BUTON/MENÜ MODALLARI (Zerre Değiştirilmedi, Sadece Sil Butonu Eklendi) */}
+            {/* 🔐 ÖĞRENCİ KENDİ HESAP AYARLARI MODALI */}
+            <AnimatePresence>
+                {studentSettingsModal && (
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                            <h3 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
+                                <Settings size={20} className="text-brandPurple"/> Hesap Bilgilerini Düzenle
+                            </h3>
+                            
+                            <div className="mb-4">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kullanıcı Adı</label>
+                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={studentUsernameInput} onChange={e => setStudentUsernameInput(e.target.value)} />
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Yeni Şifre</label>
+                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Yeni şifrenizi girin" value={studentPasswordInput} onChange={e => setStudentPasswordInput(e.target.value)} />
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Yeni Şifre (Tekrar)</label>
+                                <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Şifrenizi doğrulayın" value={studentConfirmPasswordInput} onChange={e => setStudentConfirmPasswordInput(e.target.value)} />
+                            </div>
+
+                            <div className="flex gap-2 justify-end mt-2">
+                                <button onClick={() => setStudentSettingsModal(false)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button>
+                                <button onClick={handleSaveStudentSettings} className="px-4 py-2 bg-brandPurple text-white font-bold rounded-xl hover:bg-purple-700 shadow-md">Değişiklikleri Kaydet</button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* TABLODAKİ BUTON/MENÜ MODALLARI */}
             {activeCell && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveCell(null)}><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-4 rounded-2xl shadow-xl flex gap-2" onClick={e => e.stopPropagation()}>{STATUS_OPTIONS.map(opt => ( <button key={opt.id} onClick={() => updateGrade(activeCell.classId, activeCell.studentId, activeCell.colId, opt.id)} className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${opt.bg} ${opt.color} hover:scale-105 border ${opt.border}`}><opt.icon size={24} className="mb-2" strokeWidth={2.5}/><span className="text-xs font-black uppercase tracking-wider">{opt.label}</span></button> ))}</motion.div></div>}
             
             {activeColMenu && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveColMenu(null)}><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-2 rounded-2xl shadow-xl flex flex-col gap-1 w-52" onClick={e => e.stopPropagation()}><button onClick={() => { const cls = classes.find(c => c.id === activeColMenu.classId); const col = cls.topics.find(t => t.id === activeColMenu.topicId).subColumns.find(c => c.id === activeColMenu.colId); setModalData({ classId: cls.id, topicId: activeColMenu.topicId, colId: col.id }); setModalInputVal(col.title); setModalPdfVal(col.pdfLink || ""); setModalType('edit-source'); setActiveColMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"><Pencil size={16}/> Kaynağı Düzenle</button><button onClick={() => { deleteColumn(activeColMenu.classId, activeColMenu.topicId, activeColMenu.colId); setActiveColMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={16}/> Kaynağı Sil</button></motion.div></div>}
@@ -395,10 +471,9 @@ const App = () => {
             
             {cellNoteModal && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4"><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"><h3 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2"><Edit3 size={20} className="text-amber-500"/>Öğretmen Notu</h3><textarea autoFocus rows="4" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-medium text-sm outline-none focus:border-amber-400" placeholder="Öğrenci için notunuzu buraya yazın..." value={cellNoteModal.note} onChange={e => setCellNoteModal({ ...cellNoteModal, note: e.target.value })}></textarea><div className="flex gap-2 justify-end mt-2"><button onClick={() => setCellNoteModal(null)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button><button onClick={() => { const cls = classes.find(c => c.id === cellNoteModal.classId); const updatedStudents = cls.students.map(s => s.id === cellNoteModal.studentId ? { ...s, assignmentNotes: { ...(s.assignmentNotes || {}), [cellNoteModal.colId]: cellNoteModal.note } } : s); updateClassInDb({ ...cls, students: updatedStudents }); setCellNoteModal(null); }} className="px-4 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 shadow-md">Notu Kaydet</button></div></motion.div></div>}
             
-            {/* SENİN ORİJİNAL ASİSTAN BUTONUN */}
             {isTeacherMode && <button onClick={() => setShowAssistant(true)} className="fab-button bg-brandPurple text-white" title="Akıllı Asistan"><div className="fab-pulse"></div><Mic size={28} /></button>}
 
-            {/* 💎 CUSTOM ALERT / DIALOG MODALI BURADA ÇALIŞIYOR */}
+            {/* 💎 CUSTOM ALERT / DIALOG MODALI */}
             <AnimatePresence>
                 {dialogData.isOpen && (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
