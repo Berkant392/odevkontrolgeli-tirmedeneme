@@ -5,7 +5,7 @@ import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
 
-// 🛡️ ÇÖKME ENGELLEYİCİ KALKAN (Bozuk objeleri filtreler)
+// 🛡️ ÇÖKME ENGELLEYİCİ KALKAN
 const getSafeText = (val) => {
     if (!val) return "";
     if (typeof val === 'string' || typeof val === 'number') return String(val);
@@ -29,6 +29,11 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [isListening, setIsListening] = useState(false);
     const [isThinking, setIsThinking] = useState(false); 
     const [speechTranscript, setSpeechTranscript] = useState("");
+    
+    // 🔥 EKSİK OLAN TANIMLAMALAR GERİ EKLENDİ
+    const [textCommand, setTextCommand] = useState(""); 
+    const inputRef = useRef(null); 
+
     const [jarvisFeedback, setJarvisFeedback] = useState("Sistem çevrimiçi. Size nasıl yardımcı olabilirim efendim?");
     
     const [foundStudents, setFoundStudents] = useState([]);
@@ -43,7 +48,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     
     const recognitionRef = useRef(null);
     
-    // 🛡️ REVERSE KALKANI: Dizi boş gelse bile hata vermez
     const sortedFoundTopics = Array.isArray(foundTopics) ? [...foundTopics].filter(Boolean).reverse() : [];
 
     useEffect(() => {
@@ -78,7 +82,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         speakFeedback(msg, autoListenAfter);
     };
 
-    // 🛡️ ZIRHLI NOT OKUYUCU
     const getStudentReadableGrades = (student, cls) => {
         let records = [];
         if (!student || !cls || !cls.topics) return records;
@@ -115,7 +118,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         let currentStudentContext = "";
         const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
 
-        // 🛡️ NULL KONTROLÜ
         if (selectedStudent) {
             const targetClass = safeClasses.find(c => c.id === selectedStudent.classId);
             const studentCurrentData = targetClass?.students?.find(s => s && s.id === selectedStudent.id) || selectedStudent;
@@ -356,11 +358,19 @@ Kurallar:
 
                     <div className="w-full max-w-xl z-10 relative flex items-center mb-4">
                         <div className="absolute left-4 text-cyan-500/50 pointer-events-none"><Keyboard size={18} /></div>
+                        
+                        {/* 🔥 TEXT COMMAND VE INPUT REF BURADA ÇALIŞIYOR */}
                         <input 
-                            ref={inputRef} type="text" placeholder="Manuel komut (Örn: Merve'nin eksiklerini say)" 
+                            ref={inputRef} 
+                            type="text" 
+                            placeholder="Manuel komut (Örn: Merve'nin eksiklerini say)" 
                             className="w-full bg-slate-900/80 border border-cyan-800/50 text-cyan-100 rounded-xl pl-12 pr-24 py-3 text-sm focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(34,211,238,0.2)] transition-all font-medium"
-                            value={textCommand} onChange={(e) => setTextCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} disabled={isListening || isThinking}
+                            value={textCommand} 
+                            onChange={(e) => setTextCommand(e.target.value)} 
+                            onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} 
+                            disabled={isListening || isThinking}
                         />
+
                         <div className="absolute right-2 flex items-center gap-1">
                             <button onClick={isListening ? stopListening : startListening} className={`p-2 rounded-lg transition-colors ${isListening ? 'bg-cyan-500/20 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.3)]' : 'hover:bg-slate-800 text-slate-400 hover:text-cyan-400'}`}><Mic size={18} className={isListening ? 'animate-pulse' : ''} /></button>
                             <button onClick={handleManualSubmit} className="p-2 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-400 rounded-lg transition-colors" disabled={!textCommand.trim() || isListening || isThinking}><Send size={18} /></button>
