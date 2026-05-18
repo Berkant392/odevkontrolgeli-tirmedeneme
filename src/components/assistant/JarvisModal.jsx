@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Activity, Calendar, StickyNote, AlertTriangle, Save, HelpCircle, User, CheckCircle2, TerminalSquare, Keyboard, Send, ChevronRight } from 'lucide-react';
+import { X, Mic, Activity, Calendar, StickyNote, AlertTriangle, Save, HelpCircle, User, CheckCircle2, TerminalSquare, Keyboard, Send, ChevronRight, MicOff } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
@@ -24,20 +24,19 @@ const darkStatusStyles = {
     'exempt': 'bg-slate-500/20 text-slate-400 border-slate-500/30'
 };
 
-const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
+const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) => {
     const [isListening, setIsListening] = useState(false);
     const [isThinking, setIsThinking] = useState(false); 
     const [speechTranscript, setSpeechTranscript] = useState("");
     const [textCommand, setTextCommand] = useState("");
     
     const [jarvisFeedback, setJarvisFeedback] = useState("Sistem çevrimiçi. Size nasıl yardımcı olabilirim efendim?");
-    
-    // 🧠 YENİ: SOHBET HAFIZASI
     const [chatHistory, setChatHistory] = useState([]);
     
-    const [foundStudents, setFoundStudents] = useState([]);
+    // 🔥 BAĞLAM (CONTEXT) DÜZELTMESİ: Eğer bir öğrenci sayfasındaysak onu direkt seç
+    const [foundStudents, setFoundStudents] = useState(initialStudent ? [initialStudent] : []);
+    const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
     const [foundTopics, setFoundTopics] = useState([]);
-    const [selectedStudent, setSelectedStudent] = useState(null);
     
     const [pendingAction, setPendingAction] = useState(null); 
     const [pendingSources, setPendingSources] = useState([]); 
@@ -45,48 +44,109 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [draftGrades, setDraftGrades] = useState({});
     const [draftNotes, setDraftNotes] = useState({});
     
+    // 🎧 YENİ: Ses ve Oto-Dinleme Ayarları
+    const [selectedVoice, setSelectedVoice] = useState(null);
+    const [isAutoListenEnabled, setIsAutoListenEnabled] = useState(true); // Gürültülü ortam şalteri
+    
     const recognitionRef = useRef(null);
     const isSpeakingRef = useRef(false);
     const inputRef = useRef(null);
 
     const sortedFoundTopics = Array.isArray(foundTopics) ? [...foundTopics].filter(Boolean).reverse() : [];
 
-    // 🔒 BAŞLANGIÇ: MİKROFONU OTOMATİK AÇ
+    // Başlangıç Kurulumları (Sesleri Yükle ve Öğrenciyi Hazırla)
     useEffect(() => {
         document.body.style.overflow = 'hidden';
-        setTimeout(() => { startListening(); }, 800);
+        
+        // 1. Öğrenci zaten varsa konularını yükle
+        if (initialStudent) {
+            const safeClasses = Array.isArray(classes) ? classes.filter(Boolean) : [];
+            const targetClass = safeClasses.find(c => c.id === initialStudent.classId);
+            setFoundTopics(targetClass?.topics || []);
+            setJarvisFeedback(`${initialStudent.name} profili aktif efendim. Dinliyorum.`);
+        }
+
+        // 2. En iyi Türkçe sesi seç
+        const loadVoices = () => {
+            const voices = window.speechSynthesis.getVoices();
+            const preferredVoice = voices.find(v => 
+                v.lang.includes('tr') && (v.name.includes('Neural') || v.name.includes('Premium') || v.name.includes('Google') || v.name.includes('Microsoft'))
+            ) || voices.find(v => v.lang.includes('tr'));
+            setSelectedVoice(preferredVoice);
+        };
+        loadVoices();
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        const timer = setTimeout(() => { startListening(); }, 800);
         return () => { 
+            clearTimeout(timer);
             document.body.style.overflow = ''; 
             if (recognitionRef.current) recognitionRef.current.abort();
             if (window.speechSynthesis) window.speechSynthesis.cancel();
         };
-    }, []);
+    }, [initialStudent, classes]);
 
-    // 🗣️ DİNAMİK SESLENDİRME VE OTO-DİNLEME DÖNGÜSÜ
+    // 🎭 DUYGU ANALİZİ FONKSİYONU
+    const getEmotionSettings = (text) => {
+        const lower = text.toLowerCase();
+        if (/harika|mükemmel|tebrik|başardı|çok iyi|bravo/.test(lower)) return { rate: 1.0, pitch: 1.15, volume: 1.0 };
+        if (/üzgünüm|maalesef|eksik|kalmadı|başarısız|problem/.test(lower)) return { rate: 0.88, pitch: 0.95, volume: 0.9 };
+        if (/\?$|belirtir misiniz|hangi|ne zaman|nasıl/.test(lower)) return { rate: 0.9, pitch: 1.1, volume: 1.0 };
+        if (/kaydedildi|onaylandı|tamamlandı|kilitlendi/.test(lower)) return { rate: 0.95, pitch: 1.0, volume: 1.0 };
+        return { rate: 0.92, pitch: 1.05, volume: 1.0 };
+    };
+
+    // 💨 NEFES ALMA FONKSİYONU
+    const addBreathingPauses = (text) => {
+        return text
+            .replace(/([.!?])\s+/g, "$1, ")
+            .replace(/(efendim|lütfen|teşekkürler)/gi, ", $1, ")
+            .replace(/(kaydedildi|onaylandı|tamamlandı)/gi, ", $1, ");
+    };
+
+    // 🗣️ YENİ DUYGUSAL SESLENDİRME MOTORU
     const speakFeedback = (text, shouldListenAfter = true) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
-        
         isSpeakingRef.current = true;
-        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Bonus: "Hmm" efekti
+        const thinkingSound = new SpeechSynthesisUtterance("hm,");
+        thinkingSound.lang = 'tr-TR';
+        thinkingSound.rate = 1.2;
+        thinkingSound.pitch = 1.0;
+        thinkingSound.volume = 0.5;
+        if (selectedVoice) thinkingSound.voice = selectedVoice;
+
+        // Ana Metin İşleme
+        const emotion = getEmotionSettings(text);
+        const processedText = addBreathingPauses(text);
+        const utterance = new SpeechSynthesisUtterance(processedText);
+        
         utterance.lang = 'tr-TR';
-        utterance.rate = 1.0;
+        utterance.rate = emotion.rate;
+        utterance.pitch = emotion.pitch;
+        utterance.volume = emotion.volume;
+        if (selectedVoice) utterance.voice = selectedVoice;
         
         utterance.onend = () => {
             isSpeakingRef.current = false;
-            // Konuşma bittikten sonra asistan kendi kendine dinlemeye devam eder.
-            if (shouldListenAfter && !isThinking) {
-                setTimeout(() => { startListening(); }, 200); 
+            // Şalter açıksa oto-dinlemeye geç
+            if (shouldListenAfter && !isThinking && isAutoListenEnabled) {
+                setTimeout(() => { startListening(); }, 300); 
             }
         };
         
+        // Hızlıca düşünme sesini, ardından ana metni oynat
+        window.speechSynthesis.speak(thinkingSound);
         window.speechSynthesis.speak(utterance);
     };
 
     const updateFeedbackAndSpeak = (msg, shouldListenAfter = true) => {
         setJarvisFeedback(msg);
         speakFeedback(msg, shouldListenAfter);
-        // Yapay Zekanın cevabını hafızaya ekle
         setChatHistory(prev => [...prev, { role: 'assistant', content: msg }]);
     };
 
@@ -134,7 +194,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
             currentStudentContext = `
 [ZORUNLU HAFIZA KURALI]: 
 Şu an aktif olan ve işlem yapılan öğrenci: "${selectedStudent?.name}". 
-Kullanıcı yeni bir isim söylemedikçe (Örn: sadece "fonksiyonları çözmüş" diyorsa), İŞLEMİ KESİNLİKLE BU AKTİF ÖĞRENCİYE UYGULA! Öğrenci adı eksik diyerek geri sorma.`;
+Kullanıcı yeni bir isim söylemedikçe (Örn: sadece "fonksiyonları çözmüş" diyorsa), İŞLEMİ KESİNLİKLE BU AKTİF ÖĞRENCİYE UYGULA!`;
         } else {
             dynamicContextData = {
                 odakMode: "GENEL_ARAMA",
@@ -147,13 +207,14 @@ Kullanıcı yeni bir isim söylemedikçe (Örn: sadece "fonksiyonları çözmü�
                     })) : []
                 }))
             };
-            currentStudentContext = `Şu an kimse seçili değil. Komuttan öğrenciyi bul.`;
+            currentStudentContext = `Şu an kimse seçili değil. Komuttan hedefi bul.`;
         }
 
         const pendingChangesCount = Object.keys(draftGrades).length;
 
+        // 🔥 GÜNCEL VE DUYGUSAL PROMPT
         const systemPrompt = `
-Sen "J.A.R.V.I.S" adında karizmatik, anlayışlı ve insansı bir asistansın.
+Sen "J.A.R.V.I.S" adında karizmatik, son derece doğal ve saygılı bir asistansın.
 Sana verilen komutu analiz et ve SADECE JSON döndür. Asla düz metin yazma!
 
 Veritabanı:
@@ -163,12 +224,12 @@ ${currentStudentContext}
 Bekleyen kaydedilmemiş değişiklik sayısı: ${pendingChangesCount}.
 
 Niyetler (action):
-1. "select_student": Sadece isim söylendiyse (Örn: "Merve'yi aç", "İrem").
-2. "update": Not giriliyorsa (Örn: "Üslü sayıları çözmüş"). Kaynak/Konu eksikse "need_info" yap.
-3. "query": "Eksikleri neler?", "Durumu ne?" diye soruluyorsa.
-4. "save_and_close": "Kaydet kapat", "Onayla çık", "Değişiklikleri onayla" vb. deniyorsa.
-5. "close_request": Sadece "Kapat", "Çık", "Modali kapat" deniyorsa. (Eğer bekleyen değişiklik varsa, kaydedeyim mi diye sormalısın ve "need_info" dönmelisin).
-6. "need_info": Eksik bilgi varsa (kaynak adı gibi).
+1. "select_student": Sadece isim söylendiyse.
+2. "update": Not giriliyorsa. Kaynak/Konu eksikse "need_info" yap.
+3. "query": "Eksikleri neler?" diye soruluyorsa.
+4. "save_and_close": "Kaydet kapat", "Onayla çık" deniyorsa.
+5. "close_request": Sadece "Kapat" deniyorsa (Kaydedilmemiş veri varsa "need_info" dön).
+6. "need_info": Eksik bilgi varsa.
 
 JSON FORMATIN:
 {
@@ -177,16 +238,10 @@ JSON FORMATIN:
   "topic": "Konu veya null",
   "source": "Kaynak veya null",
   "status": "done" | "missing" | "assigned" | "exempt" | null,
-  "feedback": "Bana sesli okuyacağın, duruma uygun, doğal Türkçe cevap."
+  "feedback": "Bana sesli olarak vereceğin, çok doğal, kısa ve duygusal Türkçe cevap. Robot gibi liste okuma, samimi muhabbet et. Gerekiyorsa 'efendim' de. Üç nokta (...) kullanarak düşünme hissi ver. Ünlem (!) ile coşku ekle. Kısa cümleler kur (max 2 cümle)."
 }
-
-Feedback Kuralları:
-- Eğer "select_student" ise: "Merve'nin dosyasını açtım efendim, dinliyorum." de. ASLA eksiklerini okuma!
-- Eğer "need_info" ise: Hangi kaynak olduğunu sor.
-- Eğer "close_request" ise ve bekleyen değişiklik varsa: "Kaydetmediğimiz değişiklikler var efendim. Onaylayıp öyle mi kapatayım?" de.
 `;
 
-        // Son 4 konuşmayı (hafızayı) gönderiyoruz
         const recentHistory = chatHistory.slice(-4);
 
         try {
@@ -201,7 +256,7 @@ Feedback Kuralları:
                         { role: 'user', content: transcript } 
                     ],
                     response_format: { type: 'json_object' },
-                    temperature: 0.2
+                    temperature: 0.3
                 })
             });
             const data = await response.json();
@@ -218,21 +273,17 @@ Feedback Kuralları:
             return;
         }
 
-        // 1. KAYDET VE KAPAT ("Kaydet Kapat" dediyse)
         if (aiResult.action === 'save_and_close') {
             updateFeedbackAndSpeak(aiResult.feedback || "Değişiklikleri kaydedip sistemi kapatıyorum efendim.", false);
             applyChanges();
             return;
         }
 
-        // 2. SADECE KAPAT ("Kapat" dediyse ama kaydedilmemiş notlar varsa)
         if (aiResult.action === 'close_request') {
             if (Object.keys(draftGrades).length > 0) {
-                // Kaydedilmemiş veri var, AI muhtemelen "need_info" veya uyarı döndü, dinlemeye devam et.
                 updateFeedbackAndSpeak(aiResult.feedback, true);
                 return;
             } else {
-                // Değişiklik yok, direkt kapat
                 updateFeedbackAndSpeak(aiResult.feedback || "Sistemi kapatıyorum efendim.", false);
                 setTimeout(() => onClose(), 1500);
                 return;
@@ -246,7 +297,6 @@ Feedback Kuralları:
         
         let bestStudent = null;
 
-        // 🧠 GELİŞMİŞ ÇOKLU EŞLEŞME (İrem Atış / İrem Su)
         if (aiResult.student) {
             const safeItems = allStudents.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item.name).toLocaleLowerCase('tr-TR') }));
             const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.45, includeScore: true });
@@ -254,14 +304,13 @@ Feedback Kuralları:
 
             if (results.length > 0) {
                 const bestScore = results[0].score;
-                // Tolerans artırıldı (+0.25). İrem Su ile İrem Atış aynı kelime içeriyorsa ikisi de listelenir.
                 const identicalMatches = results.filter(r => r.score <= bestScore + 0.25).map(r => r.item);
 
                 if (identicalMatches.length > 1) {
                     setFoundStudents(identicalMatches);
                     setSelectedStudent(null);
                     setFoundTopics([]);
-                    updateFeedbackAndSpeak(aiResult.feedback || `Sistemde ${aiResult.student} isminde ${identicalMatches.length} kişi buldum efendim. Hangi sınıftaki olduğunu veya VIP öğrenci olup olmadığını belirtir misiniz?`, true);
+                    updateFeedbackAndSpeak(aiResult.feedback || `Sistemde ${aiResult.student} isminde ${identicalMatches.length} kişi buldum efendim. Hangisi olduğunu belirtir misiniz?`, true);
                     return;
                 } else {
                     bestStudent = identicalMatches[0];
@@ -269,7 +318,6 @@ Feedback Kuralları:
             }
         }
         
-        // Eğer AI yeni bir isim bulamadıysa, hafızadaki (seçili) öğrenciyi kullanmaya devam et
         if (!bestStudent && selectedStudent) bestStudent = selectedStudent;
 
         if (bestStudent) {
@@ -293,13 +341,11 @@ Feedback Kuralları:
                 bestCol = findTopicCol(bestTopic.subColumns || [], 'title', aiResult.source);
             }
 
-            // A. Sadece İsim Söylendi (Robotik rapor kusması iptal edildi)
             if (aiResult.action === 'select_student') {
                 updateFeedbackAndSpeak(aiResult.feedback, true);
                 return;
             }
 
-            // B. Eksik Bilgi (Kaynak Soruyor)
             if (aiResult.action === 'need_info') {
                 if (bestTopic) {
                     setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: aiResult.status });
@@ -309,18 +355,16 @@ Feedback Kuralları:
                 return;
             }
 
-            // C. Bilgi Sorgusu (Rapor Okuma)
             if (aiResult.action === 'query') {
                 updateFeedbackAndSpeak(aiResult.feedback, true);
                 return;
             }
 
-            // D. Tam İşlem (Not Kaydetme)
             if (aiResult.action === 'update' && bestTopic && bestCol && aiResult.status) {
                 handleDraftGradeChange(bestStudent.id, bestCol.id, aiResult.status);
                 updateFeedbackAndSpeak(aiResult.feedback, true);
             } else {
-                updateFeedbackAndSpeak(aiResult.feedback || "İşlemi tam algılayamadım efendim, tekrar eder misiniz?", true);
+                updateFeedbackAndSpeak(aiResult.feedback || "İşlemi tam anlayamadım efendim, tekrar eder misiniz?", true);
             }
 
         } else {
@@ -330,11 +374,8 @@ Feedback Kuralları:
 
     const handleCommand = async (transcript) => {
         if (!transcript.trim()) return;
-        
-        // Kullanıcının dediklerini hafızaya ekle
         setChatHistory(prev => [...prev, { role: 'user', content: transcript }]);
-        
-        stopListening(); // Analiz sırasında mikrofonu kapa
+        stopListening(); 
         setPendingAction(null);
         setPendingSources([]);
         
@@ -366,13 +407,17 @@ Feedback Kuralları:
         };
         recognition.onerror = (e) => { 
             setIsListening(false); 
-            // Sinyal koparsa kısa süre sonra tekrar denemesi için
-            setTimeout(() => { if (!isSpeakingRef.current && !isThinking) startListening(); }, 1500); 
+            // SADECE oto-dinleme açıksa tekrar denemeye çalışır
+            if (isAutoListenEnabled) {
+                setTimeout(() => { if (!isSpeakingRef.current && !isThinking) startListening(); }, 1500); 
+            }
         };
         recognition.onend = () => { 
             setIsListening(false); 
-            // Sessizlik durumunda kapatırsa, otomatik olarak yeniden başlasın
-            setTimeout(() => { if (!isSpeakingRef.current && !isThinking) startListening(); }, 500);
+            // Sessizlik durumunda şalter açıksa devam et
+            if (isAutoListenEnabled) {
+                setTimeout(() => { if (!isSpeakingRef.current && !isThinking) startListening(); }, 500);
+            }
         }; 
         recognition.start();
     };
@@ -425,15 +470,19 @@ Feedback Kuralları:
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }} className="bg-slate-900/95 border border-cyan-500/30 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col max-h-[85vh]">
                 
-                {/* RADAR PANEL */}
                 <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 p-8 flex flex-col items-center justify-center shrink-0 min-h-[220px]">
                     <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute w-56 h-56 border border-cyan-500/10 rounded-full border-t-cyan-400/40 pointer-events-none" />
                     <motion.div animate={{ rotate: -360 }} transition={{ duration: 30, repeat: Infinity, ease: 'linear' }} className="absolute w-36 h-36 border border-cyan-500/10 rounded-full border-b-cyan-400/40 pointer-events-none" />
                     
                     <button onClick={() => { window.speechSynthesis.cancel(); stopListening(); onClose(); }} className="absolute top-4 right-4 text-slate-500 hover:text-cyan-400 transition-colors z-30"><X size={24}/></button>
                     
-                    {/* BÜYÜK DİNLEME BUTONU */}
-                    <div onClick={isListening ? stopListening : startListening} className="z-10 bg-slate-900 p-6 rounded-full border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.2)] mb-4 cursor-pointer relative hover:scale-105 transition-transform group">
+                    {/* 🔥 YENİ OTO-DİNLEME ŞALTERİ */}
+                    <button onClick={() => { setIsAutoListenEnabled(!isAutoListenEnabled); if(isListening) stopListening(); }} className={`absolute top-4 left-4 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-bold transition-all ${isAutoListenEnabled ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
+                        {isAutoListenEnabled ? <Mic size={12}/> : <MicOff size={12}/>} 
+                        OTO-DİNLEME: {isAutoListenEnabled ? 'AÇIK' : 'KAPALI'}
+                    </button>
+                    
+                    <div onClick={isListening ? stopListening : startListening} className="z-10 bg-slate-900 p-6 rounded-full border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.2)] mb-4 cursor-pointer relative hover:scale-105 transition-transform group mt-6">
                         {isListening && <span className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping"></span>}
                         <Mic size={36} className={`text-cyan-400 ${(isListening || isThinking) ? 'animate-pulse' : 'group-hover:text-cyan-300'}`} />
                     </div>
@@ -471,15 +520,13 @@ Feedback Kuralları:
                     </AnimatePresence>
                 </div>
 
-                {/* ÖDEV VE PROFİL LİSTESİ */}
                 <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-4 bg-slate-950/60 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
                     
-                    {/* ÇOKLU EŞLEŞME DURUMU */}
                     {foundStudents.length > 1 && !selectedStudent && (
                         <div className="space-y-3">
                             <h4 className="text-cyan-400 font-mono text-xs uppercase tracking-widest px-2 flex items-center gap-2"><User size={14}/> Lütfen Hedefi Seçin</h4>
                             {foundStudents.map(student => (
-                                <button key={student.id} onClick={() => { setSelectedStudent(student); setFoundTopics((classes || []).find(c=>c.id===student.classId)?.topics || []); setFoundStudents([student]); updateFeedbackAndSpeak(`${student.name} seçildi efendim. Dinlemeye devam ediyorum.`, true); }} className="w-full text-left p-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all flex items-center gap-4 group">
+                                <button key={student.id} onClick={() => { setSelectedStudent(student); setFoundTopics((classes || []).find(c=>c.id===student.classId)?.topics || []); setFoundStudents([student]); updateFeedbackAndSpeak(`${student.name} kilitlendi efendim. Dinlemeye devam ediyorum.`, true); }} className="w-full text-left p-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all flex items-center gap-4 group">
                                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm ${student.isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/20 text-cyan-400'}`}>{getSafeText(student.name).charAt(0)}</div>
                                     <div className="flex flex-col">
                                         <span className="font-bold text-slate-200 group-hover:text-cyan-100">{getSafeText(student.name)}</span>
@@ -491,7 +538,6 @@ Feedback Kuralları:
                         </div>
                     )}
 
-                    {/* TEK ÖĞRENCİ SEÇİLİYSE */}
                     {selectedStudent && foundStudents.length === 1 && (
                         <>
                             <div className="flex items-center gap-4 bg-cyan-900/10 p-4 rounded-2xl border border-cyan-500/20 mb-6">
@@ -535,7 +581,6 @@ Feedback Kuralları:
                     )}
                 </div>
 
-                {/* ALT AKSİYON PANELİ */}
                 <div className="p-4 border-t border-slate-800 bg-slate-950 flex justify-between items-center gap-4 shrink-0">
                     <span className="text-[11px] font-mono text-slate-500">{Object.keys(draftGrades).length} Bekleyen Kayıt</span>
                     <div className="flex gap-2">
