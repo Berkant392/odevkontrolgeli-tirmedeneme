@@ -235,7 +235,258 @@ const App = () => {
     };
     
     const handlePrintPasswords = (cls) => { const printWindow = window.open('', '_blank'); if (!printWindow) { showAlert('error', 'Pop-up Engellendi', 'Lütfen tarayıcınızın Pop-up engelleyicisini kapatın!'); return; } let html = `<html><head><title>${cls.className} - Şifre Listesi</title><style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;margin-top:20px;}th,td{border:1px solid #ddd;padding:12px;text-align:left;}th{background-color:#f4f4f4;} h2{color:#4f46e5;}</style></head><body><h2>${cls.className} Sınıfı - Öğrenci Giriş Bilgileri</h2><table><tr><th>Öğrenci Adı</th><th>Kullanıcı Adı</th><th>Şifre</th></tr>`; cls.students.forEach(s => { html += `<tr><td><strong>${s.name}</strong></td><td>${s.username}</td><td style="letter-spacing: 2px;"><b>${s.password}</b></td></tr>`; }); html += `</table><script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }; window.onafterprint = function() { window.close(); };</script></body></html>`; printWindow.document.write(html); printWindow.document.close(); };
-    const handlePrintStudentReport = (cls, student) => { const printWindow = window.open('', '_blank'); if (!printWindow) { showAlert('error', 'Pop-up Engellendi', 'Lütfen tarayıcınızın Pop-up engelleyicisini kapatın!'); return; } let html = `<html><head><title>${student.name} - İlerleme Raporu</title><style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;margin-top:20px;}th,td{border:1px solid #ddd;padding:12px;text-align:left;}th{background-color:#f4f4f4;} h2{color:#4f46e5;}</style></head><body><h2>${student.name} - Ödev ve İlerleme Raporu</h2><h3>Sınıf: ${cls.className} | Genel Başarı: %${calculateStats([student], cls.topics).percentage}</h3><table><tr><th>Konu ve Kaynak</th><th>Durum</th><th>Öğretmen Notu</th></tr>`; cls.topics.forEach(topic => { topic.subColumns.forEach(col => { const statusId = student.grades?.[col.id] || 'assigned'; let statusText = statusId === 'done' ? '<span style="color:green;font-weight:bold;">Yapıldı</span>' : statusId === 'missing' ? '<span style="color:red;font-weight:bold;">Eksik</span>' : statusId === 'assigned' ? '<span style="color:orange;font-weight:bold;">Verildi</span>' : '<span style="color:gray;">Muaf</span>'; const note = student.assignmentNotes?.[col.id] || '-'; html += `<tr><td><b>${topic.title}</b><br/>${col.title}</td><td>${statusText}</td><td>${note}</td></tr>`; }); }); html += `</table><script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }; window.onafterprint = function() { window.close(); };</script></body></html>`; printWindow.document.write(html); printWindow.document.close(); };
+    
+    // 🔥 GÜNCELLEME: ULTRA-PREMIUM KURUMSAL LOGOLU RAPORLAMA VE PDF ÇIKTI MOTORU
+    const handlePrintStudentReport = (cls, student) => { 
+        const printWindow = window.open('', '_blank'); 
+        if (!printWindow) { 
+            showAlert('error', 'Pop-up Engellendi', 'Lütfen tarayıcınızın Pop-up engelleyicisini kapatın!'); 
+            return; 
+        } 
+        
+        const stats = calculateStats([student], cls.topics);
+        const percentage = stats.percentage || 0;
+        const dateStr = new Date().toLocaleDateString('tr-TR');
+
+        let html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${student.name} - İlerleme Raporu</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    color: #0f172a;
+                    padding: 35px;
+                    margin: 0;
+                    background: #ffffff;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }
+                .header-container {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    border-bottom: 2px solid #e2e8f0;
+                    padding-bottom: 18px;
+                    margin-bottom: 25px;
+                }
+                .logo-area {
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                }
+                .logo-img {
+                    width: 52px;
+                    height: 52px;
+                    object-fit: contain;
+                }
+                .brand-title {
+                    font-size: 20px;
+                    font-weight: 800;
+                    letter-spacing: 0.5px;
+                    color: #0f172a;
+                }
+                .brand-sub {
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #64748b;
+                    letter-spacing: 2px;
+                    text-transform: uppercase;
+                    margin-top: 1px;
+                }
+                .report-date {
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #64748b;
+                    text-align: right;
+                    line-height: 1.5;
+                }
+                .summary-card {
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 25px;
+                }
+                .summary-grid {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                }
+                .student-info h2 {
+                    margin: 0;
+                    font-size: 22px;
+                    font-weight: 800;
+                    color: #0f172a;
+                    text-transform: uppercase;
+                }
+                .student-info p {
+                    margin: 6px 0 0 0;
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #6366f1;
+                }
+                .progress-area {
+                    min-width: 220px;
+                }
+                .progress-label {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 12px;
+                    font-weight: 800;
+                    margin-bottom: 6px;
+                    color: #334155;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                .progress-bar-bg {
+                    height: 9px;
+                    width: 100%;
+                    background: #e2e8f0;
+                    border-radius: 10px;
+                    overflow: hidden;
+                }
+                .progress-bar-fill {
+                    height: 100%;
+                    background: #6366f1;
+                    border-radius: 10px;
+                    width: ${percentage}%;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 10px;
+                }
+                th {
+                    background-color: #6366f1;
+                    color: #ffffff;
+                    font-size: 11px;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    letter-spacing: 0.8px;
+                    padding: 12px 14px;
+                    text-align: left;
+                    border: none;
+                }
+                td {
+                    padding: 13px 14px;
+                    font-size: 13px;
+                    border-bottom: 1px solid #e2e8f0;
+                    color: #334155;
+                }
+                tr:nth-child(even) {
+                    background-color: #f8fafc;
+                }
+                .badge {
+                    display: inline-block;
+                    padding: 5px 10px;
+                    font-size: 10px;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    border-radius: 6px;
+                    text-align: center;
+                    min-width: 65px;
+                }
+                .badge-done { background: #dcfce7 !important; color: #15803d !important; border: 1px solid #bbf7d0; }
+                .badge-missing { background: #fee2e2 !important; color: #b91c1c !important; border: 1px solid #fca5a5; }
+                .badge-assigned { background: #fef3c7 !important; color: #b45309 !important; border: 1px solid #fde68a; }
+                .badge-exempt { background: #f1f5f9 !important; color: #475569 !important; border: 1px solid #cbd5e1; }
+                .note-text {
+                    font-style: italic;
+                    color: #475569;
+                    font-weight: 500;
+                }
+                .empty-note {
+                    color: #cbd5e1;
+                    font-weight: bold;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header-container">
+                <div class="logo-area">
+                    <img src="/pwa-192x192.png" class="logo-img" alt="Logo" />
+                    <div>
+                        <div class="brand-title">BERKANT HOCA</div>
+                        <div class="brand-sub">EĞİTİM PLATFORMU</div>
+                    </div>
+                </div>
+                <div class="report-date">
+                    <strong>Rapor Tarihi:</strong><br/>${dateStr}
+                </div>
+            </div>
+
+            <div class="summary-card">
+                <div class="summary-grid">
+                    <div class="student-info">
+                        <h2>${student.name}</h2>
+                        <p>Kurs / Sınıf Grubu: ${cls.className}</p>
+                    </div>
+                    <div class="progress-area">
+                        <div class="progress-label">
+                            <span>Genel Başarı Oranı</span>
+                            <span>%${percentage}</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 45%;">Konu ve Kaynak Detayı</th>
+                        <th style="width: 20%;">Durum</th>
+                        <th style="width: 35%;">Öğretmen Notu</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        cls.topics.forEach(topic => {
+            topic.subColumns.forEach(col => {
+                const statusId = student.grades?.[col.id] || 'assigned';
+                let badgeClass = 'badge-assigned';
+                let statusLabel = 'Verildi';
+                
+                if (statusId === 'done') { badgeClass = 'badge-done'; statusLabel = 'Yapıldı'; }
+                else if (statusId === 'missing') { badgeClass = 'badge-missing'; statusLabel = 'Eksik'; }
+                else if (statusId === 'exempt') { badgeClass = 'badge-exempt'; statusLabel = 'Muaf'; }
+
+                const note = student.assignmentNotes?.[col.id] || '';
+                const noteContent = note ? `<span class="note-text">${note}</span>` : `<span class="empty-note">-</span>`;
+
+                html += `
+                    <tr>
+                        <td><strong>${topic.title}</strong><br/><span style="color: #64748b; font-size: 11px; font-weight: 600;">${col.title}</span></td>
+                        <td><span class="badge ${badgeClass}">${statusLabel}</span></td>
+                        <td>${noteContent}</td>
+                    </tr>`;
+            });
+        });
+
+        html += `
+                </tbody>
+            </table>
+            <script>
+                window.onload = function() {
+                    setTimeout(function() { window.print(); }, 400);
+                };
+                window.onafterprint = function() {
+                    window.close();
+                };
+            </script>
+        </body>
+        </html>`;
+
+        printWindow.document.write(html);
+        printWindow.document.close();
+    };
     
     const handleOpenRisk = (cls) => { 
         const stats = calculateStats(cls.students, cls.topics); 
@@ -637,7 +888,6 @@ const App = () => {
                             <motion.button 
                                 whileHover={{ scale: 1.02 }} 
                                 whileTap={{ scale: 0.98 }} 
-                                // Butona basıldığında oturumu sıfırlar, loginView'e atar ve prompt kutusunu temizler
                                 onClick={() => {
                                     handleLogout();
                                     setNeedRefresh(false);
