@@ -30,14 +30,10 @@ const lightStatusStyles = {
 // 🧠 TÜRKÇE NLP MOTORU - ÇEKİM EKİ NORMALİZASYONU
 // ═══════════════════════════════════════════════════════════════
 const TURKISH_STEM_RULES = {
-    // Fiil çekim ekleri (yapıldı → yapıl, çözüldü → çözül)
     'dı': 'd', 'di': 'd', 'du': 'd', 'dü': 'd',
     'tı': 't', 'ti': 't', 'tu': 't', 'tü': 't',
-    // Edilgen (verildi → veril)
     'ildi': 'il', 'ıldı': 'ıl', 'uldu': 'ul', 'üldü': 'ül',
-    // Olumsuz (yapmadı → yapm)
     'madı': 'ma', 'medi': 'me', 'madu': 'ma', 'medü': 'me',
-    // Diğer ekler
     'mış': 'm', 'miş': 'm', 'muş': 'm', 'müş': 'm',
     'mışım': 'm', 'mişim': 'm', 'muşum': 'm', 'müşüm': 'm',
 };
@@ -54,7 +50,7 @@ const TURKISH_STATUS_SYNONYMS = {
     ],
     missing: [
         'yapılmadı', 'yapılmamış', 'yapamadı', 'yapamamış', 'yapmamış', 'yapmıyor',
-        'çözülmedi', 'çözülmemiş', 'çözemedi', 'çözemedik', 'çözememiş', 'çözmüyor',
+        'çözülmedi', 'çözülmemiş', 'çözemedi', 'çözemedik', 'çözemedi', 'çözmüyor',
         'eksik', 'eksi', 'eksikti', 'eksikmiş', 'eksik kalmış',
         'boş', 'boşmuş', 'boştu', 'boş kalmış',
         'yok', 'yoktu', 'yokmuş', 'hiç', 'hiçbiri', 'hiçbirini', 'hiçbirine',
@@ -79,7 +75,6 @@ const TURKISH_STATUS_SYNONYMS = {
     ]
 };
 
-// Türkçe karakter normalizasyonu (ses benzerliği için)
 const turkishNormalize = (text) => {
     if (!text) return '';
     return text.toLocaleLowerCase('tr-TR')
@@ -94,22 +89,17 @@ const turkishNormalize = (text) => {
         .replace(/İ/g, 'i');
 };
 
-// Çekim eki normalizasyonu
 const normalizeTurkishWord = (word) => {
     if (!word) return '';
     let normalized = word.toLocaleLowerCase('tr-TR');
-    
-    // Ek düşümü kuralları
     Object.entries(TURKISH_STEM_RULES).forEach(([suffix, stem]) => {
         if (normalized.endsWith(suffix)) {
             normalized = normalized.slice(0, -suffix.length) + stem;
         }
     });
-    
     return normalized;
 };
 
-// Metin içindeki tüm kelimeleri normalize et
 const normalizeText = (text) => {
     if (!text) return '';
     return text.toLocaleLowerCase('tr-TR')
@@ -118,25 +108,20 @@ const normalizeText = (text) => {
         .join(' ');
 };
 
-// Durum tespiti (Gelişmiş)
 const detectStatus = (text) => {
     if (!text) return null;
     const normalized = normalizeText(text);
     const words = normalized.split(/\s+/);
-    
-    // Her durum için en uzun eşleşmeyi bul (önce daha spesifik olanlar)
     let bestMatch = { status: null, length: 0, confidence: 0 };
-    
+
     Object.entries(TURKISH_STATUS_SYNONYMS).forEach(([status, synonyms]) => {
         synonyms.forEach(syn => {
             const normalizedSyn = normalizeText(syn);
-            // Tam kelime eşleşmesi
             if (normalized.includes(normalizedSyn)) {
                 if (normalizedSyn.length > bestMatch.length) {
                     bestMatch = { status, length: normalizedSyn.length, confidence: 1.0 };
                 }
             }
-            // Kelime bazlı eşleşme
             const synWords = normalizedSyn.split(/\s+/);
             let matchedWords = 0;
             synWords.forEach(sw => {
@@ -147,11 +132,10 @@ const detectStatus = (text) => {
             }
         });
     });
-    
+
     return bestMatch.status;
 };
 
-// Levenshtein mesafesi (yazım hatası toleransı)
 const levenshteinDistance = (str1, str2) => {
     const track = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
     for (let i = 0; i <= str1.length; i++) track[0][i] = i;
@@ -169,7 +153,6 @@ const levenshteinDistance = (str1, str2) => {
     return track[str2.length][str1.length];
 };
 
-// Ses benzerliği skoru (0-1)
 const phoneticSimilarity = (str1, str2) => {
     const n1 = turkishNormalize(str1);
     const n2 = turkishNormalize(str2);
@@ -183,26 +166,25 @@ const phoneticSimilarity = (str1, str2) => {
 // 🎯 ANA BİLEŞEN
 // ═══════════════════════════════════════════════════════════════
 const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) => {
+    // ════════ STATE TANIMLARI (En üstte!) ════════
     const [isListening, setIsListening] = useState(false);
     const [speechTranscript, setSpeechTranscript] = useState("");
     const [jarvisFeedback, setJarvisFeedback] = useState("Sistem aktif. Öğrenci adını söyleyin.");
-    
     const [foundStudents, setFoundStudents] = useState(initialStudent ? [initialStudent] : []);
     const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
     const [foundTopics, setFoundTopics] = useState([]);
-    
     const [pendingAction, setPendingAction] = useState(null); 
     const [pendingSources, setPendingSources] = useState([]); 
     const [pendingStatusSelect, setPendingStatusSelect] = useState(null);
-    
     const [draftGrades, setDraftGrades] = useState({});
     const [commandMode, setCommandMode] = useState(initialStudent ? 'homework' : 'student');
     const [isProcessing, setIsProcessing] = useState(false);
-    
+
+    // ════════ REF TANIMLARI ════════
     const recognitionRef = useRef(null);
     const autoListenTimerRef = useRef(null);
 
-    // 🎯 TÜM ÖĞRENCİLERİ HAZIRLA
+    // ════════ USEMEMO TANIMLARI (State'lerden hemen sonra!) ════════
     const allStudents = useMemo(() => {
         const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
         return safeClasses.flatMap(cls => 
@@ -218,20 +200,31 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         );
     }, [classes]);
 
-    // 🎬 BAŞLANGIÇ AYARLARI
+    // 🆕 DÜZELTME: sortedFoundTopics artık useMemo hook'u olarak tanımlı!
+    // foundTopics state'ine bağımlı ve JSX'ten ÖNCE, callback'lerden ÖNCE tanımlı
+    const sortedFoundTopics = useMemo(() => {
+        return Array.isArray(foundTopics) ? [...foundTopics].filter(Boolean).reverse() : [];
+    }, [foundTopics]);
+
+    const changeCount = useMemo(() => {
+        return Object.values(draftGrades).reduce((acc, studentGrades) => {
+            return acc + Object.keys(studentGrades || {}).length;
+        }, 0);
+    }, [draftGrades]);
+
+    // ════════ USEEFFECT TANIMLARI ════════
     useEffect(() => {
         document.body.style.overflow = 'hidden';
-        
+
         if (initialStudent) {
             const targetClass = (classes || []).find(c => c.id === initialStudent.classId);
             setFoundTopics(targetClass?.topics || []);
             setJarvisFeedback(`${initialStudent.name} profili aktif. Ödev durumunu söyleyin.`);
             setCommandMode('homework');
-            // Ödev dinlemesine geç
-            autoListenTimerRef.current = setTimeout(() => startListening(), 800);
+            autoListenTimerRef.current = setTimeout(() => startListeningRef(), 800);
         } else {
             setJarvisFeedback("Öğrenci adını söyleyin. Örnek: 'Ahmet Yılmaz'");
-            autoListenTimerRef.current = setTimeout(() => startListening(), 600);
+            autoListenTimerRef.current = setTimeout(() => startListeningRef(), 600);
         }
 
         return () => { 
@@ -241,7 +234,11 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         };
     }, [initialStudent, classes]);
 
-    // 🔄 ÖĞRENCİ DEĞİŞTİR / YENİ ARAMA
+    // ════════ YARDIMCI FONKSİYONLAR (useCallback İÇİNDE DEĞİL!) ════════
+    // startListening fonksiyonunu ref ile saklayalım ki useEffect içinde kullanabilelim
+    const startListeningRef = useRef(null);
+
+    // ════════ USECALLBACK TANIMLARI ════════
     const handleResetStudent = useCallback(() => {
         setSelectedStudent(null);
         setFoundStudents([]);
@@ -253,117 +250,111 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         setCommandMode('student');
         setSpeechTranscript("");
         setJarvisFeedback("Yeni öğrenci araması. Adı söyleyin.");
-        setTimeout(() => startListening(), 500);
+        setTimeout(() => startListeningRef.current?.(), 500);
     }, []);
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🧠 GELİŞMİŞ ÖĞRENCİ ARAMA MOTORU (7 AŞAMA)
-    // ═══════════════════════════════════════════════════════════════
     const findStudentsAdvanced = useCallback((inputText) => {
         if (!inputText || allStudents.length === 0) return { students: [], exactMatch: false, reason: 'empty' };
-        
+
         let text = inputText.toLocaleLowerCase('tr-TR').trim();
         const textNormalized = turkishNormalize(text);
-        
-        // AŞAMA 1: Tam Ad Soyad Eşleşmesi (===)
+
+        // AŞAMA 1: Tam Ad Soyad Eşleşmesi
         const exactMatches = allStudents.filter(s => {
             const nameLower = s.name.toLocaleLowerCase('tr-TR');
             return nameLower === text || turkishNormalize(nameLower) === textNormalized;
         });
-        
+
         if (exactMatches.length === 1) {
             return { students: exactMatches, exactMatch: true, isSingle: true, reason: 'exact_single' };
         }
         if (exactMatches.length > 1) {
             return { students: exactMatches, exactMatch: true, isSingle: false, reason: 'exact_multiple' };
         }
-        
-        // AŞAMA 2: İçerme Eşleşmesi (includes)
+
+        // AŞAMA 2: İçerme Eşleşmesi
         const includeMatches = allStudents.filter(s => {
             const nameLower = s.name.toLocaleLowerCase('tr-TR');
             return nameLower.includes(text) || text.includes(nameLower);
         });
-        
+
         if (includeMatches.length === 1) {
             return { students: includeMatches, exactMatch: false, isSingle: true, reason: 'include_single' };
         }
-        
-        // AŞAMA 3: Kelime Sırası Bağımsız Eşleşme
+
+        // AŞAMA 3: Kelime Sırası Bağımsız
         const inputWords = text.split(/\s+/).filter(w => w.length > 2);
         const wordOrderMatches = allStudents.filter(s => {
             const nameWords = s.name.toLocaleLowerCase('tr-TR').split(/\s+/);
             return inputWords.every(iw => nameWords.some(nw => nw.includes(iw) || iw.includes(nw)));
         });
-        
+
         if (wordOrderMatches.length === 1) {
             return { students: wordOrderMatches, exactMatch: false, isSingle: true, reason: 'wordorder_single' };
         }
-        
-        // AŞAMA 4: Ses Benzerliği (Metafonik)
+
+        // AŞAMA 4: Ses Benzerliği
         const phoneticMatches = allStudents.filter(s => {
             const nameNorm = turkishNormalize(s.name);
             const similarity = phoneticSimilarity(nameNorm, textNormalized);
-            return similarity > 0.75; // %75 benzerlik eşiği
+            return similarity > 0.75;
         }).sort((a, b) => {
             const simA = phoneticSimilarity(turkishNormalize(a.name), textNormalized);
             const simB = phoneticSimilarity(turkishNormalize(b.name), textNormalized);
             return simB - simA;
         });
-        
+
         if (phoneticMatches.length === 1) {
             return { students: phoneticMatches, exactMatch: false, isSingle: true, reason: 'phonetic_single' };
         }
-        
-        // AŞAMA 5: Fuse.js Fuzzy (Daha sıkı threshold)
+
+        // AŞAMA 5: Fuse.js Fuzzy
         const fuse = new Fuse(allStudents, { 
             keys: ['name'], 
-            threshold: 0.3, // Daha sıkı (önceki 0.4'tü)
+            threshold: 0.3,
             includeScore: true, 
             ignoreLocation: true,
             minMatchCharLength: 2
         });
         const fuseResults = fuse.search(text);
-        
+
         if (fuseResults.length === 0) {
-            // AŞAMA 6: Karakter düzeyi Levenshtein (son çare)
+            // AŞAMA 6: Levenshtein
             const levMatches = allStudents.map(s => ({
                 student: s,
                 distance: levenshteinDistance(turkishNormalize(s.name), textNormalized)
             })).filter(m => m.distance <= 3).sort((a, b) => a.distance - b.distance);
-            
+
             if (levMatches.length === 1) {
                 return { students: [levMatches[0].student], exactMatch: false, isSingle: true, reason: 'levenshtein_single' };
             }
             if (levMatches.length > 1) {
                 return { students: levMatches.slice(0, 5).map(m => m.student), exactMatch: false, isSingle: false, reason: 'levenshtein_multiple' };
             }
-            
+
             return { students: [], exactMatch: false, reason: 'no_match' };
         }
-        
-        // En iyi skoru al ve yakın skorluları grupla
+
         const bestScore = fuseResults[0].score;
         const scoreThreshold = bestScore + 0.15;
-        
+
         let matchedStudents = fuseResults
             .filter(r => r.score <= scoreThreshold)
             .map(r => r.item);
-        
-        // AŞAMA 7: Aynı isimdeki öğrencileri grupla ve VIP/Sınıf ayrımı yap
+
+        // AŞAMA 7: Aynı isimdeki öğrencileri grupla
         const nameGroups = {};
         matchedStudents.forEach(s => {
             const baseName = s.name.toLocaleLowerCase('tr-TR');
             if (!nameGroups[baseName]) nameGroups[baseName] = [];
             nameGroups[baseName].push(s);
         });
-        
-        // Eğer tek isim grubu varsa ve o grupta tek öğrenci varsa
+
         const groupKeys = Object.keys(nameGroups);
         if (groupKeys.length === 1 && nameGroups[groupKeys[0]].length === 1) {
             return { students: [nameGroups[groupKeys[0]][0]], exactMatch: false, isSingle: true, reason: 'fuse_single' };
         }
-        
-        // Tek isim grubu ama çoklu öğrenci (İrem Atış senaryosu)
+
         if (groupKeys.length === 1 && nameGroups[groupKeys[0]].length > 1) {
             return { 
                 students: nameGroups[groupKeys[0]], 
@@ -373,7 +364,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 nameGroup: groupKeys[0]
             };
         }
-        
+
         return { 
             students: matchedStudents.slice(0, 5), 
             exactMatch: false, 
@@ -382,30 +373,25 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         };
     }, [allStudents]);
 
-    // ═══════════════════════════════════════════════════════════════
-    // 📚 KONU/KAYNAK BULMA MOTORU (Gelişmiş)
-    // ═══════════════════════════════════════════════════════════════
     const findBestComponentLocal = useCallback((items, targetProperty, inputTranscript) => {
         if (!items || items.length === 0 || !inputTranscript) return null;
-        
+
         const text = inputTranscript.toLocaleLowerCase('tr-TR');
         const textNorm = turkishNormalize(text);
-        
+
         let bestItem = null;
         let highestScore = 0;
-        
+
         items.forEach(item => {
             const targetText = getSafeText(item[targetProperty]).toLocaleLowerCase('tr-TR');
             const targetNorm = turkishNormalize(targetText);
-            
-            // Tam eşleşme (100 puan)
+
             if (text.includes(targetText) || targetText.includes(text)) {
                 highestScore = 100;
                 bestItem = item;
                 return;
             }
-            
-            // Normalize edilmiş tam eşleşme (95 puan)
+
             if (textNorm.includes(targetNorm) || targetNorm.includes(textNorm)) {
                 if (95 > highestScore) {
                     highestScore = 95;
@@ -413,8 +399,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 }
                 return;
             }
-            
-            // Kısaltma eşleşmeleri (98 puan)
+
             const shortcuts = {
                 'video ders defteri': ['vdd', 'video ders', 've de', 've d', 'bide', 'video defter', 'ders defteri'],
                 'soru bankası': ['sb', 'soru banka', 'se be', 'soru b', 'banka'],
@@ -424,7 +409,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 'deneme sınavı': ['ds', 'deneme', 'sınav', 'deneme s'],
                 'yaprak test': ['yt', 'yaprak', 'test y', 'yaprak t']
             };
-            
+
             Object.entries(shortcuts).forEach(([full, shorts]) => {
                 if (targetText.includes(full)) {
                     if (shorts.some(s => text.includes(s))) {
@@ -435,11 +420,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     }
                 }
             });
-            
-            // Token bazlı eşleşme
+
             const targetTokens = targetText.split(/\s+/).filter(t => t.length > 2);
             const inputTokens = text.split(/\s+/).filter(t => t.length > 2);
-            
+
             let matchedTokens = 0;
             targetTokens.forEach(tt => {
                 const ttNorm = turkishNormalize(tt);
@@ -451,15 +435,14 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     matchedTokens++;
                 }
             });
-            
+
             const tokenScore = (matchedTokens / targetTokens.length) * 85;
             if (tokenScore > highestScore && tokenScore >= 40) {
                 highestScore = tokenScore;
                 bestItem = item;
             }
         });
-        
-        // Fuse.js fallback (daha sıkı)
+
         if (highestScore < 50) {
             const fuse = new Fuse(items, { 
                 keys: [targetProperty], 
@@ -470,25 +453,22 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             const results = fuse.search(text);
             if (results.length > 0) bestItem = results[0].item;
         }
-        
+
         return bestItem;
     }, []);
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🔬 AKILLI KOMUT ANALİZİ (Mükemmel Versiyon)
-    // ═══════════════════════════════════════════════════════════════
     const analyzeCommandLocal = useCallback((transcript, isFinalFallback = true) => {
         let text = transcript.toLocaleLowerCase('tr-TR').trim();
-        
+
         if (isFinalFallback) {
             setPendingAction(null);
             setPendingSources([]);
             setPendingStatusSelect(null);
         }
-        
-        // 🎯 GLOBAL KOMUTLAR
+
+        // Global komutlar
         if (text.match(/kaydet|onayla|sisteme işle|kaydet ve kapat/)) { 
-            applyChanges(); 
+            applyChangesRef.current?.(); 
             return true; 
         }
         if (text === 'kapat' || text === 'çık' || text === 'iptal') { 
@@ -500,7 +480,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             return true; 
         }
 
-        // Sayı dönüşümleri (Türkçe ve Arapça rakamlar)
+        // Sayı dönüşümleri
         text = text.replace(/birinci/g, '1').replace(/ikinci/g, '2').replace(/üçüncü/g, '3')
                    .replace(/dördüncü/g, '4').replace(/beşinci/g, '5').replace(/altıncı/g, '6')
                    .replace(/yedinci/g, '7').replace(/sekizinci/g, '8').replace(/dokuzuncu/g, '9')
@@ -510,40 +490,37 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                    .replace(/\byedi\b/g, '7').replace(/\bsekiz\b/g, '8').replace(/\bdokuz\b/g, '9')
                    .replace(/\bon\b/g, '10');
 
-        // 🎓 ÖĞRENCİ MODU
+        // ÖĞRENCİ MODU
         if (commandMode === 'student' || !selectedStudent) {
             const searchResult = findStudentsAdvanced(text);
-            
+
             if (searchResult.students.length === 0) {
                 if (isFinalFallback) {
                     setJarvisFeedback("❌ Öğrenci bulunamadı. Lütfen adı tekrar söyleyin.");
-                    setTimeout(() => startListening(), 1500);
+                    autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
                 }
                 return false;
             }
-            
+
             if (searchResult.isSingle) {
-                // TEK ÖĞRENCİ → DİREKT KİLİTLE
                 const student = searchResult.students[0];
                 const targetClass = (classes || []).find(c => c.id === student.classId);
-                
+
                 if (isFinalFallback) {
                     setFoundStudents([student]);
                     setSelectedStudent(student);
                     setFoundTopics(targetClass?.topics || []);
                     setCommandMode('homework');
                     setJarvisFeedback(`✅ ${student.name} ${student.isVip ? '(VIP)' : ''} kilitlendi. Ödev durumunu söyleyin.`);
-                    // Otomatik ödev dinlemesine geç
-                    autoListenTimerRef.current = setTimeout(() => startListening(), 1000);
+                    autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1000);
                 }
                 return true;
             } else {
-                // ÇOKLU ÖĞRENCİ → LİSTE GÖSTER
                 if (isFinalFallback) {
                     setFoundStudents(searchResult.students);
                     setSelectedStudent(null);
                     setFoundTopics([]);
-                    
+
                     if (searchResult.reason === 'same_name_multiple') {
                         setJarvisFeedback(`⚠️ ${searchResult.nameGroup}: ${searchResult.students.length} öğrenci bulundu. VIP veya sınıf tipini söyleyin.`);
                     } else {
@@ -554,13 +531,11 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             }
         }
 
-        // 📝 ÖDEV MODU
+        // ÖDEV MODU
         if (!selectedStudent) return false;
 
-        // Durum tespiti (Gelişmiş NLP)
         const status = detectStatus(text);
-        
-        // Toplu işlem anahtar kelimeleri
+
         const isAllSources = text.match(/tümünü|tamamını|hepsini|bütün kaynaklar|tüm kaynaklar|tümü|tamamı|hepsi|hepsine|tümüne|tüm kaynağı|bütünü/);
         const isNoneSources = text.match(/hiçbiri|hiçbirini|hiçbirine|hiç biri|hiç|sıfır|boş hepsi/);
         const isAllTopics = text.match(/tüm konular|bütün konular|her konu|tüm konu|bütünü|hepsini|tüm dersler|bütün dersler/);
@@ -568,33 +543,31 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         const targetClass = (classes || []).find(c => c.id === selectedStudent.classId);
         const topics = targetClass?.topics || [];
 
-        // 🎯 TÜM KONULARDA TOPLU İŞLEM
+        // TÜM KONULARDA TOPLU İŞLEM
         if (isAllTopics && status) {
             if (isFinalFallback) {
                 let changeCount = 0;
                 topics.forEach(topic => {
                     (topic.subColumns || []).forEach(col => {
-                        handleDraftGradeChange(selectedStudent.id, col.id, status);
+                        handleDraftGradeChangeRef.current?.(selectedStudent.id, col.id, status);
                         changeCount++;
                     });
                 });
                 setJarvisFeedback(`🎯 ${changeCount} kaynak "${status}" olarak işaretlendi.`);
-                autoListenTimerRef.current = setTimeout(() => startListening(), 1200);
+                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
             }
             return true;
         }
 
-        // 🎯 KONU ARAMA (Sıra no + İsim)
+        // KONU ARAMA
         let targetTopic = null;
-        
-        // Sıra numarası ile arama: "3. konu", "üçüncü ünite"
+
         const topicOrderMatch = text.match(/(\d+)\.\s*(konu|ünite|ders|bölüm|konular|üniteler)/);
         if (topicOrderMatch) {
             const topicIndex = parseInt(topicOrderMatch[1]) - 1;
             if (topics[topicIndex]) targetTopic = topics[topicIndex];
         }
-        
-        // İsimle arama
+
         if (!targetTopic) {
             targetTopic = findBestComponentLocal(topics, 'title', text);
         }
@@ -602,7 +575,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         if (!targetTopic) {
             if (isFinalFallback) {
                 setJarvisFeedback("📚 Konu anlaşılmadı. Konu adını veya numarasını söyleyin.");
-                autoListenTimerRef.current = setTimeout(() => startListening(), 1500);
+                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
             }
             return false;
         }
@@ -610,31 +583,31 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         const subColumns = targetTopic.subColumns || [];
         const subColumnsCount = subColumns.length;
 
-        // 🎯 KONUNUN TÜM KAYNAKLARINA TOPLU İŞLEM
+        // KONUNUN TÜM KAYNAKLARINA TOPLU İŞLEM
         if ((isAllSources || isNoneSources) && status) {
             const targetStatus = isNoneSources ? 'missing' : status;
             if (isFinalFallback) {
                 subColumns.forEach(col => {
-                    handleDraftGradeChange(selectedStudent.id, col.id, targetStatus);
+                    handleDraftGradeChangeRef.current?.(selectedStudent.id, col.id, targetStatus);
                 });
                 setJarvisFeedback(`✅ ${targetTopic.title}: ${subColumnsCount} kaynak "${targetStatus}" olarak güncellendi.`);
-                autoListenTimerRef.current = setTimeout(() => startListening(), 1200);
+                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
             }
             return true;
         }
 
-        // 🎯 TEK KAYNAK VARSA DİREKT İŞARETLE (Sorma!)
+        // TEK KAYNAK VARSA DİREKT İŞARETLE (Sorma!)
         if (subColumnsCount === 1 && status) {
             const onlyCol = subColumns[0];
             if (isFinalFallback) {
-                handleDraftGradeChange(selectedStudent.id, onlyCol.id, status);
+                handleDraftGradeChangeRef.current?.(selectedStudent.id, onlyCol.id, status);
                 setJarvisFeedback(`✅ ${targetTopic.title} → ${onlyCol.title}: "${status}" olarak kaydedildi.`);
-                autoListenTimerRef.current = setTimeout(() => startListening(), 1200);
+                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
             }
             return true;
         }
 
-        // 🎯 TEK KAYNAK VARSA DURUM BELİRTİLMEMİŞ (Durum bekle)
+        // TEK KAYNAK VARSA DURUM BELİRTİLMEMİŞ (Durum bekle)
         if (subColumnsCount === 1 && !status) {
             const onlyCol = subColumns[0];
             if (isFinalFallback) {
@@ -650,19 +623,18 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             return true;
         }
 
-        // 🎯 ÇOKLU KAYNAK + DURUM VAR → KAYNAK BUL
+        // ÇOKLU KAYNAK + DURUM VAR → KAYNAK BUL
         if (status) {
             const targetCol = findBestComponentLocal(subColumns, 'title', text);
-            
+
             if (targetCol) {
                 if (isFinalFallback) {
-                    handleDraftGradeChange(selectedStudent.id, targetCol.id, status);
+                    handleDraftGradeChangeRef.current?.(selectedStudent.id, targetCol.id, status);
                     setJarvisFeedback(`✅ ${targetTopic.title} → ${targetCol.title}: "${status}" kaydedildi.`);
-                    autoListenTimerRef.current = setTimeout(() => startListening(), 1200);
+                    autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
                 }
                 return true;
             } else {
-                // Kaynak bulunamadı, kullanıcıdan seçmesini iste
                 if (isFinalFallback) {
                     setPendingAction({ 
                         studentId: selectedStudent.id, 
@@ -677,7 +649,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             }
         }
 
-        // 🎯 DURUM BELİRTİLMEMİŞ → KAYNAK BUL, DURUM BEKLE
+        // DURUM BELİRTİLMEMİŞ → KAYNAK BUL, DURUM BEKLE
         const targetCol = findBestComponentLocal(subColumns, 'title', text);
         if (targetCol && isFinalFallback) {
             setPendingStatusSelect({ 
@@ -691,18 +663,16 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             return true;
         }
 
-        // Hiçbir şey bulunamadı
         if (isFinalFallback) {
             setJarvisFeedback(`"${targetTopic.title}" anlaşıldı ama kaynak bulunamadı. Tekrar söyleyin.`);
-            autoListenTimerRef.current = setTimeout(() => startListening(), 1500);
+            autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
         }
         return false;
     }, [commandMode, selectedStudent, classes, findStudentsAdvanced, findBestComponentLocal, handleResetStudent]);
 
-    // 🎤 ALTERNATİF KOMUT İŞLEME (Gelişmiş)
     const handleCommandAlternatives = useCallback((alternatives) => {
         setIsProcessing(true);
-        
+
         for (const transcript of alternatives) {
             let hasProcessed = analyzeCommandLocal(transcript, false);
             if (hasProcessed) {
@@ -712,30 +682,28 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 return;
             }
         }
-        
-        // Hiçbiri işlenemedi, en iyi tahmini dene
+
         setSpeechTranscript(alternatives[0]);
         analyzeCommandLocal(alternatives[0], true);
         setIsProcessing(false);
     }, [analyzeCommandLocal]);
 
-    // 🎤 DİNLEME BAŞLAT/DURDUR (Gelişmiş)
+    // 🆕 DÜZELTME: startListening artık düzgün bağımlılık dizisi ile tanımlı
     const startListening = useCallback(() => {
-        // Önceki timer'ı temizle
         if (autoListenTimerRef.current) clearTimeout(autoListenTimerRef.current);
-        
+
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) { 
             setJarvisFeedback("❌ Ses modülü aktif değil."); 
             return; 
         }
         if (recognitionRef.current) recognitionRef.current.abort();
-        
+
         const recognition = new SpeechRecognition();
         recognitionRef.current = recognition;
         recognition.lang = 'tr-TR';
         recognition.continuous = false;
-        recognition.maxAlternatives = 5; // 5 alternatif
+        recognition.maxAlternatives = 5;
         recognition.interimResults = false;
 
         recognition.onstart = () => { 
@@ -743,12 +711,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             setSpeechTranscript(""); 
             setIsProcessing(false);
         };
-        
+
         recognition.onresult = (event) => { 
             const alternatives = Array.from(event.results[0]).map(r => r.transcript);
             handleCommandAlternatives(alternatives);
         };
-        
+
         recognition.onerror = (e) => { 
             setIsListening(false);
             if (e.error === 'no-speech') {
@@ -760,13 +728,16 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 setJarvisFeedback("🚫 Mikrofon izni reddedildi.");
             }
         };
-        
+
         recognition.onend = () => { 
             setIsListening(false); 
         }; 
-        
+
         recognition.start();
     }, [handleCommandAlternatives]);
+
+    // Ref'lere fonksiyonları atayalım ki useEffect içinde kullanabilelim
+    startListeningRef.current = startListening;
 
     const stopListening = useCallback(() => {
         if (autoListenTimerRef.current) clearTimeout(autoListenTimerRef.current);
@@ -776,17 +747,15 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         }
     }, []);
 
-    // 🖱️ MANUEL KAYNAK SEÇİMİ
     const handleManualSourceSelect = useCallback((col) => {
         if (!pendingAction) return;
-        handleDraftGradeChange(pendingAction.studentId, col.id, pendingAction.status);
+        handleDraftGradeChangeRef.current?.(pendingAction.studentId, col.id, pendingAction.status);
         setJarvisFeedback(`✅ ${pendingAction.topicTitle} → ${getSafeText(col.title)}: "${pendingAction.status}" kaydedildi.`);
         setPendingAction(null);
         setPendingSources([]);
-        autoListenTimerRef.current = setTimeout(() => startListening(), 800);
+        autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 800);
     }, [pendingAction]);
 
-    // 📝 NOT DEĞİŞİMİ
     const handleDraftGradeChange = useCallback((studentId, colId, statusId) => { 
         setDraftGrades(prev => ({ 
             ...prev, 
@@ -794,12 +763,15 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         })); 
     }, []);
 
-    // 💾 DEĞİŞİKLİKLERİ UYGULA
+    // Ref'e atama
+    const handleDraftGradeChangeRef = useRef(handleDraftGradeChange);
+    handleDraftGradeChangeRef.current = handleDraftGradeChange;
+
     const applyChanges = useCallback(() => {
         if (!selectedStudent) { onClose(); return; }
         const targetClass = (classes || []).find(c => c.id === selectedStudent.classId); 
         if (!targetClass) return;
-        
+
         const updatedStudents = Array.isArray(targetClass.students) 
             ? targetClass.students.filter(Boolean).map(s => {
                 if (s.id === selectedStudent.id) {
@@ -808,13 +780,15 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 return s;
             }) 
             : [];
-        
+
         updateClassInDb({ ...targetClass, students: updatedStudents });
         setDraftGrades({}); 
         onClose(); 
     }, [selectedStudent, classes, draftGrades, updateClassInDb, onClose]);
 
-    // 🎯 ÖĞRENCİ MANUEL SEÇİM (Listeden tıklama)
+    const applyChangesRef = useRef(applyChanges);
+    applyChangesRef.current = applyChanges;
+
     const handleSelectStudentFromList = useCallback((student) => {
         const targetClass = (classes || []).find(c => c.id === student.classId);
         setSelectedStudent(student);
@@ -822,16 +796,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         setFoundStudents([student]);
         setCommandMode('homework');
         setJarvisFeedback(`✅ ${student.name} seçildi. Ödev durumunu söyleyin.`);
-        setTimeout(() => startListening(), 600);
+        setTimeout(() => startListeningRef.current?.(), 600);
     }, [classes]);
 
-    // Değişiklik sayısı
-    const changeCount = useMemo(() => {
-        return Object.values(draftGrades).reduce((acc, studentGrades) => {
-            return acc + Object.keys(studentGrades || {}).length;
-        }, 0);
-    }, [draftGrades]);
-
+    // ════════ JSX RENDER (En sonda!) ════════
     return (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
             <motion.div 
@@ -840,20 +808,18 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 exit={{ opacity: 0, scale: 0.97, y: 12 }} 
                 className="bg-white border border-slate-200 rounded-[2.2rem] w-full max-w-2xl overflow-hidden shadow-float flex flex-col max-h-[85vh]"
             >
-                {/* ═══════════════════════════════════════════════════════════════
-                    🎛️ ÜST RADAR VE KONTROL ALANI
-                ═══════════════════════════════════════════════════════════════ */}
+                {/* ÜST RADAR VE KONTROL ALANI */}
                 <div className="relative overflow-hidden bg-slate-50/70 border-b border-slate-100 p-6 flex flex-col items-center justify-center shrink-0">
                     <button onClick={onClose} className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors z-30">
                         <X size={20}/>
                     </button>
-                    
+
                     <div className="absolute top-5 left-6 flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-widest z-20">
                         <TerminalSquare size={13}/> 
                         {commandMode === 'student' ? '🔍 ÖĞRENCİ ARAMA MODU' : '📝 ÖDEV YÖNETİM MODU'}
                     </div>
-                    
-                    {/* 🎤 BEYAZ PREMIUM MIC RADAR */}
+
+                    {/* BEYAZ PREMIUM MIC RADAR */}
                     <div 
                         onClick={isListening ? stopListening : startListening} 
                         className="z-10 bg-white p-5 rounded-full border border-slate-200 shadow-sm mb-4 cursor-pointer relative hover:scale-105 active:scale-95 transition-all group mt-3"
@@ -875,7 +841,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         )}
                     </div>
 
-                    {/* 🎯 GELİŞMİŞ BAĞLAM / ÖĞRENCİ DEĞİŞTİRME SEKMESİ */}
+                    {/* GELİŞMİŞ BAĞLAM / ÖĞRENCİ DEĞİŞTİRME SEKMESİ */}
                     <div className="w-full max-w-xl z-10 flex gap-2">
                         <div className="flex-1 bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 flex items-center justify-between shadow-sm">
                             <div className="flex items-center gap-2.5">
@@ -892,8 +858,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                     </span>
                                 )}
                             </div>
-                            
-                            {/* 🆕 YENİ ÖĞRENCİ ARA BUTONU */}
+
                             {selectedStudent && (
                                 <button 
                                     onClick={handleResetStudent}
@@ -906,7 +871,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         </div>
                     </div>
 
-                    {/* 📢 DİNAMİK FEEDBACK ALANI */}
+                    {/* DİNAMİK FEEDBACK ALANI */}
                     <div className="z-10 text-center w-full px-4 min-h-[28px] flex flex-col justify-center items-center mt-3">
                         {speechTranscript && (
                             <motion.p 
@@ -924,7 +889,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                             {jarvisFeedback}
                         </div>
 
-                        {/* 🎯 BEKLEYEN KAYNAK SEÇİM PANELİ */}
+                        {/* BEKLEYEN KAYNAK SEÇİM PANELİ */}
                         <AnimatePresence>
                             {pendingSources.length > 0 && (
                                 <motion.div 
@@ -951,7 +916,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                             setPendingAction(null); 
                                             setPendingSources([]); 
                                             setJarvisFeedback("İptal edildi."); 
-                                            autoListenTimerRef.current = setTimeout(() => startListening(), 500);
+                                            autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 500);
                                         }} 
                                         className="text-[10px] font-black text-rose-500 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors"
                                     >
@@ -961,7 +926,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                             )}
                         </AnimatePresence>
 
-                        {/* 🎯 BEKLEYEN DURUM SEÇİM PANELİ */}
+                        {/* BEKLEYEN DURUM SEÇİM PANELİ */}
                         <AnimatePresence>
                             {pendingStatusSelect && (
                                 <motion.div 
@@ -977,10 +942,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                         <button 
                                             key={opt.id} 
                                             onClick={() => { 
-                                                handleDraftGradeChange(pendingStatusSelect.studentId, pendingStatusSelect.colId, opt.id); 
+                                                handleDraftGradeChangeRef.current?.(pendingStatusSelect.studentId, pendingStatusSelect.colId, opt.id); 
                                                 setJarvisFeedback(`✅ ${pendingStatusSelect.topicTitle} → ${pendingStatusSelect.colTitle}: "${opt.label}" kaydedildi.`); 
                                                 setPendingStatusSelect(null);
-                                                autoListenTimerRef.current = setTimeout(() => startListening(), 800);
+                                                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 800);
                                             }} 
                                             className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1 transition-all active:scale-95"
                                         >
@@ -991,7 +956,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                     <button 
                                         onClick={() => {
                                             setPendingStatusSelect(null);
-                                            autoListenTimerRef.current = setTimeout(() => startListening(), 500);
+                                            autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 500);
                                         }} 
                                         className="text-[10px] font-bold text-slate-400 px-3 py-1.5 hover:bg-slate-50 rounded-lg transition-colors"
                                     >
@@ -1003,12 +968,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     </div>
                 </div>
 
-                {/* ═══════════════════════════════════════════════════════════════
-                    📋 GÖREV VE SINIF MATRİS AKIŞI
-                ═══════════════════════════════════════════════════════════════ */}
+                {/* GÖREV VE SINIF MATRİS AKIŞI */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-slate-50/40 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
-                    
-                    {/* 🎓 ÇOKLU ÖĞRENCİ LİSTESİ */}
+
+                    {/* ÇOKLU ÖĞRENCİ LİSTESİ */}
                     {foundStudents.length > 1 && !selectedStudent && (
                         <motion.div 
                             initial={{ opacity: 0 }}
@@ -1047,14 +1010,14 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         </motion.div>
                     )}
 
-                    {/* 📝 KİLİTLİ ÖĞRENCİ ÖDEV LİSTESİ */}
+                    {/* KİLİTLİ ÖĞRENCİ ÖDEV LİSTESİ */}
                     {selectedStudent && foundStudents.length === 1 && (
                         <motion.div 
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             className="space-y-4 pb-6"
                         >
-                            {/* 🆕 ÖDEV ÖZETİ BAŞLIK */}
+                            {/* ÖDEV ÖZETİ BAŞLIK */}
                             <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
                                 <div className="flex items-center gap-3">
                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedStudent.isVip ? 'bg-amber-100' : 'bg-purple-100'}`}>
@@ -1089,11 +1052,11 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                             const studentData = (classes || [])
                                                 .find(c => c && c.id === selectedStudent.classId)
                                                 ?.students?.find(s => s && s.id === selectedStudent.id);
-                                                
+
                                             const displayGrade = draftGrades[selectedStudent.id]?.[col.id] !== undefined 
                                                 ? draftGrades[selectedStudent.id]?.[col.id] 
                                                 : (studentData?.grades?.[col.id] || 'assigned');
-                                                
+
                                             const isChanged = draftGrades[selectedStudent.id]?.[col.id] !== undefined;
 
                                             return (
@@ -1108,7 +1071,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                                         {STATUS_OPTIONS.map(opt => (
                                                             <button 
                                                                 key={opt.id} 
-                                                                onClick={() => handleDraftGradeChange(selectedStudent.id, col.id, opt.id)} 
+                                                                onClick={() => handleDraftGradeChangeRef.current?.(selectedStudent.id, col.id, opt.id)} 
                                                                 className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${displayGrade === opt.id ? lightStatusStyles[opt.id] : 'bg-white text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-50'}`}
                                                             >
                                                                 {opt.label}
@@ -1123,8 +1086,8 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                             ))}
                         </motion.div>
                     )}
-                    
-                    {/* 🎯 BOŞ DURUM */}
+
+                    {/* BOŞ DURUM */}
                     {!selectedStudent && foundStudents.length <= 1 && (
                         <motion.div 
                             initial={{ opacity: 0 }}
@@ -1151,9 +1114,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     )}
                 </div>
 
-                {/* ═══════════════════════════════════════════════════════════════
-                    💾 ALT PANEL: ONAY VE KAYIT
-                ═══════════════════════════════════════════════════════════════ */}
+                {/* ALT PANEL: ONAY VE KAYIT */}
                 <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-between items-center gap-4 shrink-0">
                     <div className="flex flex-col">
                         <span className="text-[11px] font-bold text-slate-400 tracking-wide ml-1">
