@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-// BOOM! UserPlus is now in the VIP lounge.
 import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, Loader2, UserPlus } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import Fuse from 'fuse.js';
@@ -80,40 +79,42 @@ const normalizeText = (text) => {
     return text.toLocaleLowerCase('tr-TR').split(/\s+/).map(turkishStem).join(' ');
 };
 
+// 🛠️ GELİŞTİRİLMİŞ DURUM TESPİTİ
 const detectStatus = (text) => {
     if (!text) return null;
-    const normalized = normalizeText(text);
-    const words = normalized.split(/\s+/).filter(w => w.length > 1);
+    
+    // Normalize edilmiş metin üzerinden işlem yapıyoruz
+    const normalizedText = turkishNormalize(text);
+    const words = normalizedText.split(/\s+/);
+
+    // Öncelikli olarak kesin ifadeleri arayalım (Kelime kökünden ziyade direkt kelime eşleşmesi)
+    const exactPhrases = {
+        done: ['yapildi', 'yapildi', 'tamam', 'tamamlandi', 'bitirildi', 'cozuldu', 'cozmus', 'yapti', 'bitti'],
+        missing: ['yapilmadi', 'eksik', 'bos', 'yapamadi', 'cozemedi', 'bitmedi', 'yarim'],
+        exempt: ['muaf', 'pas', 'es gec', 'gerek yok'],
+        assigned: ['verildi', 'atandi', 'odev verildi', 'yuklendi']
+    };
+
+    // 1. Aşama: Tam Kelime/Öbek Eşleşmesi (En Güvenilir)
+    for (const [status, phrases] of Object.entries(exactPhrases)) {
+        for (const phrase of phrases) {
+            // Kelime sınırlarıyla ara (örn: "yapıldı" ararken "yapılmadı"yı bulmamak için)
+            const regex = new RegExp(`\\b${phrase}\\b`);
+            if (regex.test(normalizedText)) {
+                return status;
+            }
+        }
+    }
+
+    // 2. Aşama: Kelime Kökü Eşleşmesi (Eğer tam eşleşme bulunamazsa)
+    const stemmedText = normalizeText(text);
+    const stemmedWords = stemmedText.split(/\s+/).filter(w => w.length > 1);
 
     const statusRoots = {
-        done: [
-            'yap', 'çöz', 'bit', 'tamamla', 'hallet', 'hazır', 'tamam',
-            'full', 'ful', 'ok', 'güzel', 'iyi', 'evet', 'ol', 'old',
-            'yapt', 'çözd', 'bitt', 'tamamlad', 'tamamland', 'hallold',
-            'hallett', 'bitird', 'tamamlan', 'hazırl', 'gerçekleş',
-            'tam', 'tamamdir', 'tamamd', 'peki', 'harika', 'mükemmel',
-            'başar', 'başarıl', 'tamamlanmış', 'yapılmış', 'çözülmüş'
-        ],
-        missing: [
-            'yapma', 'çözme', 'bitme', 'eksik', 'boş', 'yok', 'hiç',
-            'sıfır', 'kalm', 'yarım', 'bırak', 'yapamad', 'çözemed',
-            'bitiremed', 'tamamlayamad', 'yapmad', 'çözmed', 'bitmed',
-            'eksiklik', 'boşluk', 'yokluk', 'hiçlik', 'sıfırlık',
-            'kaldır', 'kalmışlık', 'yarımcalık', 'bırakılmışlık',
-            'yapılmamış', 'çözülmemiş', 'bitirilmemiş', 'tamamlanmamış',
-            'yapmamış', 'çözmemiş', 'bitirmemiş', 'tamamlamamış'
-        ],
-        assigned: [
-            'ver', 'at', 'bırak', 'ödev', 'veril', 'atand', 'bırakıl',
-            'verd', 'atad', 'bırakt', 'vermiş', 'atmış', 'bırakmış',
-            'ödevlendir', 'görevlendir', 'yükle', 'yükl',
-            'verildi', 'atandı', 'bırakıldı', 'ödev ver'
-        ],
-        exempt: [
-            'muaf', 'muafiyet', 'gerek', 'pas', 'geç', 'say',
-            'muafiyetl', 'gereksiz', 'pas geç', 'sayıl', 'sayıld',
-            'muaf ol', 'muaf tut', 'muaf bırak', 'muafiyetli'
-        ]
+        done: ['yap', 'coz', 'bit', 'tamamla', 'hallet', 'hazir', 'full', 'ful', 'basar'],
+        missing: ['yapma', 'cozme', 'bitme', 'eksik', 'bos', 'yok', 'hic', 'sifir', 'yarim', 'kald', 'birak'],
+        exempt: ['muaf', 'pas'],
+        assigned: ['ver', 'ata', 'odevlendir', 'gorev']
     };
 
     let bestMatch = { status: null, score: 0 };
@@ -121,14 +122,15 @@ const detectStatus = (text) => {
     Object.entries(statusRoots).forEach(([status, roots]) => {
         let score = 0;
         roots.forEach(root => {
-            if (normalized.includes(root)) {
-                score += root.length * 2;
+            // Kök metin içinde geçiyorsa puan ver, ama negatiflere dikkat et
+            if (stemmedText.includes(root)) {
+                 // Eğer "yap" kelimesi aranıyorsa ve metinde "yapma" varsa "done" olarak sayma.
+                 if(status === 'done' && (stemmedText.includes('yapma') || stemmedText.includes('cozme') || stemmedText.includes('bitme'))) {
+                    // Puan ekleme
+                 } else {
+                     score += root.length * 2;
+                 }
             }
-            words.forEach(word => {
-                if (word.includes(root) || root.includes(word)) {
-                    score += Math.min(word.length, root.length);
-                }
-            });
         });
 
         if (score > bestMatch.score) {
@@ -249,14 +251,13 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         setTimeout(() => startListeningRef.current?.(), 500);
     }, []);
 
-    // 🧠 GELİŞMİŞ ÖĞRENCİ ARAMA (7 AŞAMA)
+    // 🧠 GELİŞMİŞ ÖĞRENCİ ARAMA (Aynı kalıyor)
     const findStudentsAdvanced = useCallback((inputText) => {
         if (!inputText || allStudents.length === 0) return { students: [], exactMatch: false, reason: 'empty' };
 
         let text = inputText.toLocaleLowerCase('tr-TR').trim();
         const textNormalized = turkishNormalize(text);
 
-        // AŞAMA 1: Tam Ad Soyad (===)
         const exactMatches = allStudents.filter(s => {
             const nameLower = s.name.toLocaleLowerCase('tr-TR');
             return nameLower === text || turkishNormalize(nameLower) === textNormalized;
@@ -265,7 +266,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         if (exactMatches.length === 1) return { students: exactMatches, exactMatch: true, isSingle: true, reason: 'exact_single' };
         if (exactMatches.length > 1) return { students: exactMatches, exactMatch: true, isSingle: false, reason: 'exact_multiple' };
 
-        // AŞAMA 2: İçerme (includes)
         const includeMatches = allStudents.filter(s => {
             const nameLower = s.name.toLocaleLowerCase('tr-TR');
             return nameLower.includes(text) || text.includes(nameLower);
@@ -273,7 +273,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
         if (includeMatches.length === 1) return { students: includeMatches, exactMatch: false, isSingle: true, reason: 'include_single' };
 
-        // AŞAMA 3: Kelime Sırası Bağımsız
         const inputWords = text.split(/\s+/).filter(w => w.length > 2);
         const wordOrderMatches = allStudents.filter(s => {
             const nameWords = s.name.toLocaleLowerCase('tr-TR').split(/\s+/);
@@ -282,7 +281,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
         if (wordOrderMatches.length === 1) return { students: wordOrderMatches, exactMatch: false, isSingle: true, reason: 'wordorder_single' };
 
-        // AŞAMA 4: Ses Benzerliği (Metafonik)
         const phoneticMatches = allStudents.filter(s => {
             const similarity = phoneticSimilarity(turkishNormalize(s.name), textNormalized);
             return similarity > 0.75;
@@ -290,12 +288,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
         if (phoneticMatches.length === 1) return { students: phoneticMatches, exactMatch: false, isSingle: true, reason: 'phonetic_single' };
 
-        // AŞAMA 5: Fuse.js Fuzzy (daha sıkı)
         const fuse = new Fuse(allStudents, { keys: ['name'], threshold: 0.3, includeScore: true, ignoreLocation: true, minMatchCharLength: 2 });
         const fuseResults = fuse.search(text);
 
         if (fuseResults.length === 0) {
-            // AŞAMA 6: Levenshtein (son çare)
             const levMatches = allStudents.map(s => ({
                 student: s,
                 distance: levenshteinDistance(turkishNormalize(s.name), textNormalized)
@@ -310,7 +306,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         const scoreThreshold = bestScore + 0.15;
         let matchedStudents = fuseResults.filter(r => r.score <= scoreThreshold).map(r => r.item);
 
-        // AŞAMA 7: Aynı isimdeki öğrencileri grupla
         const nameGroups = {};
         matchedStudents.forEach(s => {
             const baseName = s.name.toLocaleLowerCase('tr-TR');
@@ -386,9 +381,9 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         if (type === 'source') {
              const shortcuts = {
                 'video ders defteri': ['vdd', 'video ders', 've de', 've d', 'bide', 'video defter', 'ders defteri', 'ders defter'],
-                'soru bankası': ['sb', 'soru banka', 'se be', 'soru b', 'banka', 'soru bank'],
+                'soru bankası': ['sb', 'soru banka', 'se be', 'soru b', 'banka', 'soru bank', 'bankası'],
                 'konu anlatımı': ['ka', 'konu anlat', 'konu anl', 'anlatım', 'konu anlatım'],
-                'ek kaynak': ['ek', 'ek kay', 'kaynak ek', 'ekk', 'ek kaynak'],
+                'ek kaynak': ['ek', 'ek kay', 'kaynak ek', 'ekk', 'ek kaynak', 'ek 1', 'ek 2'], // 'ek 1' gibi ifadeler eklendi
                 'çalışma kitabı': ['çk', 'çalışma kit', 'kitapçık', 'çalışma k', 'çalışma kitab'],
                 'deneme sınavı': ['ds', 'deneme', 'sınav', 'deneme s', 'deneme sınav'],
                 'yaprak test': ['yt', 'yaprak', 'test y', 'yaprak t', 'yaprak test'],
@@ -403,9 +398,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             items.forEach(item => {
                  const itemTitle = getSafeText(item.title).toLocaleLowerCase('tr-TR');
                  Object.entries(shortcuts).forEach(([full, shorts]) => {
+                    // Kaynak adında kısaltmanın tam hali geçiyorsa (örn: "Ek Kaynak 1")
                     if (itemTitle.includes(full)) {
                         shorts.forEach(s => {
-                            if (text.includes(s) && 98 > highestShortcutScore) {
+                            // Kullanıcı "ek" dediyse ve kaynak adı "Ek Kaynak 1" ise eşleştir.
+                            // Ayrıca kullanıcının metni "ek 1" de olabilir. Bunu da yakala.
+                            if ((text.includes(s) || text.includes(itemTitle.replace(full, s).trim())) && 98 > highestShortcutScore) {
                                 highestShortcutScore = 98;
                                 shortcutMatch = item;
                             }
