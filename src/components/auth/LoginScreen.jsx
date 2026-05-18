@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, User, Crown, Briefcase, ChevronRight, ChevronLeft, Download, Smartphone, Share, PlusSquare, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import { User, Crown, Briefcase, ChevronRight, ChevronLeft, Download, Smartphone, Share, PlusSquare, X, ArrowLeft, ArrowRight } from 'lucide-react';
 
 // -------------------------------------------------------------
 // V3 HTML KUSURSUZ CANVAS YILDIZ MOTORU
@@ -110,8 +110,8 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
     };
 
     const itemVariants = {
-        hidden: { opacity: 0, y: 20, scale: 0.95 },
-        show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 24 } }
+        hidden: { opacity: 0, y: 15, scale: 0.97 },
+        show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 350, damping: 26 } }
     };
 
     const handleStudentLoginSubmit = async (e) => {
@@ -147,7 +147,6 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
         }
     };
 
-    // 🔥 MUTLAK VE GÜVENLİ BAŞLANGIÇ YOLLARI BAŞINA KÖK ( / ) ALARAK EKLENDİ
     const iosStepsData = [
         {
             id: 1,
@@ -175,7 +174,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
             title: "✨ Adım 4: Kurulumu Bitir",
             desc: "Son olarak ekranın sağ üst köşesinde beliren 'Ekle' (Add) seçeneğine tıklayın. Platform artık ana ekranınızda bir mobil uygulama!",
             img: "/pwa/adim4.png",
-            icon: <GraduationCap className="text-emerald-400" size={24} />
+            icon: <Download className="text-emerald-400" size={24} />
         }
     ];
 
@@ -187,99 +186,110 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
             <div className="login-orb login-o3"></div>
 
             <motion.div 
-                initial={{ opacity: 0, y: 40, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", bounce: 0.4, duration: 0.8 }}
-                className="login-card"
+                initial={{ opacity: 0, y: 30, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", bounce: 0.3, duration: 0.7 }}
+                className="login-card max-w-[340px] md:max-w-[360px]"
             >
-                <div className="logo-area">
-                    <motion.div animate={{ y: [0, -8, 0] }} transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }} className="logo-box">
-                        <GraduationCap size={30} color="white" strokeWidth={2}/>
+                <div className="logo-area mb-6 md:mb-9">
+                    {/* 🔥 GÜNCELLEME: Lucide şapkası uçuruldu, yerine /pwa-192x192.png kurumsal logosu çakıldı */}
+                    <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }} className="logo-box w-14 h-14 md:w-16 md:h-16 rounded-xl md:rounded-2xl">
+                        <img src="/pwa-192x192.png" alt="Platform Logo" className="w-full h-full p-2 object-contain select-none pointer-events-none" />
                     </motion.div>
-                    <div className="logo-brand">BERKANT HOCA</div>
-                    <div className="logo-sub">EĞİTİM PLATFORMU</div>
+                    <div className="logo-brand text-lg md:text-xl font-black mt-3">BERKANT HOCA</div>
+                    <div className="logo-sub text-[9px] md:text-[10px] tracking-[0.2em] mt-1 text-slate-400">EĞİTİM PLATFORMU</div>
                 </div>
                 
                 <AnimatePresence mode="wait">
                     {authView === 'selection' && (
-                        <motion.div key="selection" variants={containerVariants} initial="hidden" animate="show" exit={{ opacity: 0, x: -50, transition: { duration: 0.2 } }} className="login-btns flex flex-col items-center w-full">
-                            <motion.button variants={itemVariants} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setAuthView('student-login')} className="lbtn lbtn-s w-full max-w-[360px]">
-                                <div className="liw liw-s"><User color="#a78bfa" size={18}/></div>
-                                <div className="lbl"><div className="lts">Öğrenci Girişi</div><div className="lss">Sınıf öğrencileri için</div></div>
-                                <ChevronRight className="lch" size={16}/>
+                        <motion.div key="selection" variants={containerVariants} initial="hidden" animate="show" exit={{ opacity: 0, x: -30, transition: { duration: 0.15 } }} className="login-btns flex flex-col items-center w-full gap-2.5">
+                            <motion.button variants={itemVariants} whileHover={{ scale: 1.01, y: -1 }} whileTap={{ scale: 0.98 }} onClick={() => setAuthView('student-login')} className="lbtn lbtn-s w-full p-3.5 md:p-4 rounded-xl">
+                                <div className="liw liw-s w-9 h-9 text-base"><User color="#a78bfa" size={16}/></div>
+                                <div className="lbl">
+                                    <div className="lts text-xs md:text-sm">Öğrenci Girişi</div>
+                                    <div className="lss text-[10px] md:text-xs">Sınıf öğrencileri için</div>
+                                </div>
+                                <ChevronRight className="lch" size={14}/>
                             </motion.button>
 
-                            <motion.button variants={itemVariants} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setAuthView('vip-login')} className="lbtn lbtn-v w-full max-w-[360px]">
+                            <motion.button variants={itemVariants} whileHover={{ scale: 1.01, y: -1 }} whileTap={{ scale: 0.98 }} onClick={() => setAuthView('vip-login')} className="lbtn lbtn-v w-full p-3.5 md:p-4 rounded-xl">
                                 <VipParticles />
-                                <div className="liw liw-v"><Crown color="#ffd700" size={18}/></div>
-                                <div className="lbl"><div className="ltv">Özel Ders</div><div className="lsv">Özel ders öğrenci girişi</div></div>
-                                <ChevronRight className="lch lch-v" size={16}/>
+                                <div className="liw liw-v w-9 h-9 text-base"><Crown color="#ffd700" size={16}/></div>
+                                <div className="lbl">
+                                    <div className="ltv text-sm md:text-base">Özel Ders</div>
+                                    <div className="lsv text-[10px] md:text-xs">Özel ders öğrenci girişi</div>
+                                </div>
+                                <ChevronRight className="lch lch-v" size={14}/>
                             </motion.button>
 
-                            <motion.div variants={itemVariants} className="ldivline w-full max-w-[360px]"><div className="ldl"></div><div className="ldt">YÖNETİM</div><div className="ldl"></div></motion.div>
+                            <motion.div variants={itemVariants} className="ldivline w-full my-1"><div className="ldl"></div><div className="ldt text-[8px] md:text-[9px]">YÖNETİM</div><div className="ldl"></div></motion.div>
 
-                            <motion.button variants={itemVariants} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setAuthView('teacher-login')} className="lbtn lbtn-a w-full max-w-[360px]">
-                                <div className="liw liw-a"><Briefcase color="#60a5fa" size={18}/></div>
-                                <div className="lbl"><div className="lts">Yönetici Girişi</div><div className="lss">Öğretmen paneli</div></div>
-                                <ChevronRight className="lch" size={16}/>
+                            <motion.button variants={itemVariants} whileHover={{ scale: 1.01, y: -1 }} whileTap={{ scale: 0.98 }} onClick={() => setAuthView('teacher-login')} className="lbtn lbtn-a w-full p-3.5 md:p-4 rounded-xl">
+                                <div className="liw liw-a w-9 h-9 text-base"><Briefcase color="#60a5fa" size={16}/></div>
+                                <div className="lbl">
+                                    <div className="lts text-xs md:text-sm">Yönetici Girişi</div>
+                                    <div className="lss text-[10px] md:text-xs">Öğretmen paneli</div>
+                                </div>
+                                <ChevronRight className="lch" size={14}/>
                             </motion.button>
                             
                             {!isStandalone && (deferredPrompt || isIos) && (
                                 <motion.button 
                                     variants={itemVariants}
-                                    whileHover={{ scale: 1.03 }} 
-                                    whileTap={{ scale: 0.96 }} 
+                                    whileHover={{ scale: 1.02 }} 
+                                    whileTap={{ scale: 0.97 }} 
                                     onClick={handlePwaInstall}
-                                    className="mt-6 w-full max-w-[360px] py-4 bg-slate-700/50 hover:bg-slate-700 text-white rounded-xl border border-slate-600 font-black text-xs tracking-widest flex items-center justify-center gap-2.5 transition-all shadow-md uppercase"
+                                    className="mt-4 w-full py-3.5 bg-slate-700/40 hover:bg-slate-700/70 text-white rounded-xl border border-slate-600/60 font-black text-[11px] tracking-widest flex items-center justify-center gap-2 transition-all shadow-md uppercase"
                                 >
-                                    <Download size={15} className="animate-bounce" /> Mobil Uygulamayı İndir
+                                    <Download size={14} className="animate-bounce" /> Mobil Uygulamayı İndir
                                 </motion.button>
                             )}
 
-                            <motion.div variants={itemVariants} className="lquote"><span className="lqm">"</span> Eğitim, dünyayı değiştirmek için en güçlü silahtır. <span className="lqm">"</span></motion.div>
+                            <motion.div variants={itemVariants} className="lquote text-[10px] md:text-xs mt-4 opacity-75"><span className="lqm">"</span> Eğitim, dünyayı değiştirmek için en güçlü silahtır. <span className="lqm">"</span></motion.div>
                         </motion.div>
                     )}
                     
                     {(authView === 'student-login' || authView === 'vip-login') && (
-                        <motion.div key="student-form" variants={containerVariants} initial="hidden" animate="show" exit={{ opacity: 0, x: 50, transition: { duration: 0.2 } }} className="login-btns flex flex-col items-center w-full">
-                            <motion.button variants={itemVariants} whileHover={{ x: -4 }} whileTap={{ scale: 0.95 }} onClick={() => { setAuthView('selection'); setErrorMsg(''); setShowForgotMsg(false); }} className="lbtn lbtn-a" style={{padding: '10px 17px', background: 'transparent', border: 'none', boxShadow: 'none', width: '100%', maxWidth: '360px', marginBottom: '10px'}}>
-                                <ChevronLeft className="lch" size={18}/>
-                                <div className="lbl"><div className="lts" style={{fontSize:'12px', color: '#cbd5e1'}}>Geri Dön</div></div>
+                        <motion.div key="student-form" variants={containerVariants} initial="hidden" animate="show" exit={{ opacity: 0, x: 30, transition: { duration: 0.15 } }} className="login-btns flex flex-col items-center w-full">
+                            <motion.button variants={itemVariants} whileHover={{ x: -2 }} whileTap={{ scale: 0.96 }} onClick={() => { setAuthView('selection'); setErrorMsg(''); setShowForgotMsg(false); }} className="lbtn lbtn-a w-full" style={{padding: '8px 12px', background: 'transparent', border: 'none', boxShadow: 'none', marginBottom: '6px'}}>
+                                <ChevronLeft className="lch" size={16}/>
+                                <div className="lbl"><div className="lts text-[11px] text-slate-400">Geri Dön</div></div>
                             </motion.button>
 
-                            <motion.div variants={itemVariants} className={`p-8 rounded-[2rem] w-full max-w-[360px] relative overflow-hidden ${authView === 'vip-login' ? 'bg-slate-800 real-gold-border shadow-[0_0_40px_rgba(255,215,0,0.15)]' : 'bg-slate-800/90 border border-slate-700 shadow-2xl'}`}>
-                                <div style={{marginBottom: '28px', textAlign: 'center'}}>
-                                    <h2 className={authView === 'vip-login' ? 'real-gold-text' : 'text-white'} style={{fontSize: '22px', fontWeight: '900', letterSpacing: '0.05em'}}>
-                                        {authView === 'vip-login' ? 'ÖZEL DERS ÖĞRENCİSİ' : 'ÖĞRENCİ GİRİŞİ'}
+                            {/* 🔥 GÜNCELLEME: Mobil için iç dolgu p-8'den p-5'e sıkıştırıldı */}
+                            <motion.div variants={itemVariants} className={`p-5 md:p-8 rounded-[2rem] w-full relative overflow-hidden ${authView === 'vip-login' ? 'bg-slate-800 real-gold-border shadow-[0_0_30px_rgba(255,215,0,0.12)]' : 'bg-slate-800/90 border border-slate-700 shadow-xl'}`}>
+                                <div className="mb-5 text-center">
+                                    <h2 className={`text-base md:text-xl font-black tracking-wide ${authView === 'vip-login' ? 'real-gold-text' : 'text-white'}`}>
+                                        {authView === 'vip-login' ? 'ÖZEL DERS GİRİŞİ' : 'ÖĞRENCİ GİRİŞİ'}
                                     </h2>
-                                    <p style={{fontSize: '12px', color: authView === 'vip-login' ? '#d4af37' : '#94a3b8', marginTop: '8px', fontWeight: '600'}}>
+                                    <p className="text-[10px] md:text-xs text-slate-400 mt-1 font-medium">
                                         Lütfen giriş bilgilerinizi doldurun
                                     </p>
                                 </div>
                                 
                                 <div className="login-input-group">
-                                    <label className="login-label" style={{color: authView === 'vip-login' ? '#e6c27a' : '#94a3b8'}}>Kullanıcı Adı</label>
+                                    <label className="login-label text-[9px] md:text-[10px]" style={{color: authView === 'vip-login' ? '#e6c27a' : '#94a3b8'}}>Kullanıcı Adı</label>
                                     <input 
                                         type="text" 
                                         autoCapitalize="none"
                                         autoCorrect="off"
                                         autoComplete="username"
                                         spellCheck="false"
-                                        className={`login-input ${authView === 'vip-login' ? 'vip-input' : ''}`} 
+                                        className={`login-input p-3 text-xs md:text-sm ${authView === 'vip-login' ? 'vip-input' : ''}`} 
                                         placeholder="örn: ahmet.yilmaz" 
                                         value={username} 
                                         onChange={e => setUsername(e.target.value)} 
                                     />
                                 </div>
                                 
-                                <div className="login-input-group" style={{marginTop: '20px'}}>
-                                    <label className="login-label" style={{color: authView === 'vip-login' ? '#e6c27a' : '#94a3b8'}}>Şifre</label>
+                                <div className="login-input-group mt-3.5">
+                                    <label className="login-label text-[9px] md:text-[10px]" style={{color: authView === 'vip-login' ? '#e6c27a' : '#94a3b8'}}>Şifre</label>
                                     <input 
                                         type="password" 
                                         autoCapitalize="none"
                                         autoCorrect="off"
                                         autoComplete="current-password"
                                         spellCheck="false"
-                                        className={`login-input ${authView === 'vip-login' ? 'vip-input' : ''}`} 
-                                        style={{letterSpacing: '0.3em', fontSize: '18px'}} 
+                                        className={`login-input p-3 text-sm md:text-base ${authView === 'vip-login' ? 'vip-input' : ''}`} 
+                                        style={{letterSpacing: '0.25em'}} 
                                         placeholder="•••••" 
                                         value={password} 
                                         onChange={e => setPassword(e.target.value)} 
@@ -288,16 +298,16 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                 </div>
 
                                 {errorMsg && (
-                                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-red-400 text-sm mt-3 font-medium text-center bg-red-500/10 py-2 rounded-lg border border-red-500/20">
+                                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-red-400 text-xs mt-2.5 font-medium text-center bg-red-500/10 py-1.5 rounded-lg border border-red-500/20">
                                         {errorMsg}
                                     </motion.div>
                                 )}
 
-                                <div className="mt-4 flex flex-col items-end">
+                                <div className="mt-3 flex flex-col items-end">
                                     <button
                                         type="button"
                                         onClick={() => setShowForgotMsg(!showForgotMsg)}
-                                        className="text-xs text-slate-400 hover:text-white transition-colors underline-offset-2 hover:underline"
+                                        className="text-[10px] text-slate-400 hover:text-white transition-colors"
                                     >
                                         Şifreni mi unuttun?
                                     </button>
@@ -308,7 +318,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                                 initial={{ opacity: 0, height: 0 }} 
                                                 animate={{ opacity: 1, height: 'auto' }} 
                                                 exit={{ opacity: 0, height: 0 }}
-                                                className="mt-3 w-full p-3 bg-slate-900/80 border border-indigo-500/30 rounded-lg text-indigo-200 text-xs text-center"
+                                                className="mt-2 w-full p-2.5 bg-slate-900/80 border border-indigo-500/20 rounded-lg text-indigo-200 text-[10px] text-center"
                                             >
                                                 Yeni şifre almak veya şifrenizi sıfırlamak için lütfen <strong>Berkant Hoca</strong> ile iletişime geçiniz.
                                             </motion.div>
@@ -316,33 +326,33 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                     </AnimatePresence>
                                 </div>
                                 
-                                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }} onClick={handleStudentLoginSubmit} className={`lbtn w-full flex items-center justify-center rounded-xl transition-all ${authView === 'vip-login' ? 'real-gold-bg' : 'bg-brandPurple hover:bg-purple-600 shadow-glow'}`} style={{marginTop: '24px', padding: '16px', border: 'none'}}>
-                                    <span style={{color: authView === 'vip-login' ? '#111111' : '#ffffff', fontSize: '16px', fontWeight: '900', letterSpacing: '0.05em'}}>GİRİŞ YAP</span>
+                                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleStudentLoginSubmit} className={`lbtn w-full flex items-center justify-center rounded-xl p-3.5 ${authView === 'vip-login' ? 'real-gold-bg' : 'bg-brandPurple hover:bg-purple-600 shadow-glow'}`} style={{marginTop: '18px', border: 'none'}}>
+                                    <span style={{color: authView === 'vip-login' ? '#111111' : '#ffffff', fontSize: '13px', fontWeight: '900', letterSpacing: '0.05em'}}>GİRİŞ YAP</span>
                                 </motion.button>
                             </motion.div>
                         </motion.div>
                     )}
                     
                     {authView === 'teacher-login' && (
-                        <motion.div key="teacher-form" variants={containerVariants} initial="hidden" animate="show" exit={{ opacity: 0, y: 50, transition: { duration: 0.2 } }} className="login-btns flex flex-col items-center w-full">
-                            <motion.button variants={itemVariants} whileHover={{ x: -4 }} whileTap={{ scale: 0.95 }} onClick={() => setAuthView('selection')} className="lbtn lbtn-a" style={{padding: '10px 17px', background: 'transparent', border: 'none', boxShadow: 'none', width: '100%', maxWidth: '360px', marginBottom: '10px'}}>
-                                <ChevronLeft className="lch" size={18}/>
-                                <div className="lbl"><div className="lts" style={{fontSize:'12px', color: '#cbd5e1'}}>Geri Dön</div></div>
+                        <motion.div key="teacher-form" variants={containerVariants} initial="hidden" animate="show" exit={{ opacity: 0, y: 30, transition: { duration: 0.15 } }} className="login-btns flex flex-col items-center w-full">
+                            <motion.button variants={itemVariants} whileHover={{ x: -2 }} whileTap={{ scale: 0.96 }} onClick={() => setAuthView('selection')} className="lbtn lbtn-a w-full" style={{padding: '8px 12px', background: 'transparent', border: 'none', boxShadow: 'none', marginBottom: '6px'}}>
+                                <ChevronLeft className="lch" size={16}/>
+                                <div className="lbl"><div className="lts text-[11px] text-slate-400">Geri Dön</div></div>
                             </motion.button>
 
-                            <motion.div variants={itemVariants} className="p-8 rounded-[2rem] w-full max-w-[360px] bg-slate-800/90 border border-slate-700 shadow-2xl">
-                                <div style={{marginBottom: '24px', textAlign: 'center'}}>
-                                    <h2 style={{fontSize: '20px', fontWeight: '900', letterSpacing: '0.1em', color: '#60a5fa'}}>YÖNETİCİ GİRİŞİ</h2>
-                                    <p style={{fontSize: '11px', color: '#94a3b8', marginTop: '6px'}}>Öğretmen PIN kodunu girin</p>
+                            <motion.div variants={itemVariants} className="p-6 md:p-8 rounded-[2rem] w-full bg-slate-800/90 border border-slate-700 shadow-xl">
+                                <div className="mb-4 text-center">
+                                    <h2 className="text-base md:text-lg font-black tracking-widest color text-blue-400">YÖNETİCİ GİRİŞİ</h2>
+                                    <p className="text-[10px] text-slate-400 mt-1">Öğretmen PIN kodunu girin</p>
                                 </div>
 
                                 <div className="login-input-group">
-                                    <label className="login-label">Yönetici PIN Kodu</label>
-                                    <input type="password" autoFocus className="login-input" style={{textAlign: 'center', fontSize: '24px', letterSpacing: '0.5em', padding: '16px'}} placeholder="••••" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && onTeacherLogin(pin)} />
+                                    <label className="login-label text-[9px] md:text-[10px]">Yönetici PIN Kodu</label>
+                                    <input type="password" autoFocus className="login-input text-center text-xl md:text-2xl p-3 tracking-[0.4em]" placeholder="••••" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && onTeacherLogin(pin)} />
                                 </div>
                                 
-                                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }} onClick={() => onTeacherLogin(pin)} className="lbtn lbtn-a w-full flex items-center justify-center rounded-xl" style={{marginTop: '28px', padding: '16px', background: 'rgba(96,155,250,0.15)', border: '1px solid rgba(96,165,250,0.3)'}}>
-                                    <span style={{color: '#60a5fa', fontSize: '16px', fontWeight: '900'}}>SİSTEME GİR</span>
+                                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => onTeacherLogin(pin)} className="lbtn lbtn-a w-full flex items-center justify-center rounded-xl mt-5 p-3.5" style={{background: 'rgba(96,155,250,0.12)', border: '1px solid rgba(96,165,250,0.25)'}}>
+                                    <span style={{color: '#60a5fa', fontSize: '13px', fontWeight: '900'}}>SİSTEME GİR</span>
                                 </motion.button>
                             </motion.div>
                         </motion.div>
@@ -350,63 +360,55 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                 </AnimatePresence>
             </motion.div>
 
-            {/* 🔥 ZIRHLI VE DIKDOERTGEN TELEFON TASARIMLI SİHİRBAZ MODALI (Gelişmiş Hata Tolere Sistemli) */}
+            {/* 🔥 DIKDÖRTGEN DIKEY TELEFON TASARIMLI SİHİRBAZ MODALI */}
             <AnimatePresence>
                 {showIosModal && (
                     <div className="fixed inset-0 bg-slate-950 z-[99999] flex items-center justify-center p-4">
                         <motion.div 
-                            initial={{ opacity: 0, y: 40, scale: 0.95 }} 
+                            initial={{ opacity: 0, y: 30, scale: 0.97 }} 
                             animate={{ opacity: 1, y: 0, scale: 1 }} 
-                            exit={{ opacity: 0, y: 30, scale: 0.95 }}
-                            className="bg-slate-900 border-2 border-slate-800 p-5 md:p-6 rounded-[2.5rem] w-full max-w-[360px] min-h-[640px] text-center shadow-2xl flex flex-col justify-between relative overflow-hidden"
+                            exit={{ opacity: 0, y: 25, scale: 0.97 }}
+                            className="bg-slate-900 border-2 border-slate-800 p-4 md:p-6 rounded-[2.5rem] w-full max-w-[340px] min-h-[600px] text-center shadow-2xl flex flex-col justify-between relative overflow-hidden"
                             onClick={e => e.stopPropagation()}
                         >
-                            <button onClick={() => setShowIosModal(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full bg-slate-800 transition-colors z-50"><X size={16}/></button>
+                            <button onClick={() => setShowIosModal(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full bg-slate-800 transition-colors z-50"><X size={15}/></button>
 
-                            <div className="mt-2">
-                                <div className="flex justify-center mb-2">
-                                    <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/30 text-brandPurple rounded-full flex items-center justify-center shadow-glow">
+                            <div className="mt-1">
+                                <div className="flex justify-center mb-1.5">
+                                    <div className="w-10 h-10 bg-indigo-500/10 border border-indigo-500/30 text-brandPurple rounded-full flex items-center justify-center shadow-glow">
                                         {iosStepsData[iosStep - 1].icon}
                                     </div>
                                 </div>
-                                <h3 className="text-lg font-black text-white uppercase tracking-wider">{iosStepsData[iosStep - 1].title}</h3>
-                                <p className="text-slate-300 text-[11px] mt-1.5 px-1 font-medium leading-relaxed min-h-[45px]">{iosStepsData[iosStep - 1].desc}</p>
+                                <h3 className="text-sm md:text-base font-black text-white uppercase tracking-wider">{iosStepsData[iosStep - 1].title}</h3>
+                                <p className="text-slate-300 text-[10px] md:text-[11px] mt-1 px-1 font-medium leading-relaxed min-h-[40px]">{iosStepsData[iosStep - 1].desc}</p>
                             </div>
 
-                            {/* 🔥 GÜNCELLEME: ÇİFT KATMANLI KORUMALI AKILLI GÖRSEL ALANI (.png -> .jpg -> root fallback) */}
-                            <div className="my-3 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-center h-96 overflow-hidden relative shadow-inner">
+                            <div className="my-2 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-center h-80 overflow-hidden relative shadow-inner">
                                 <img 
                                     src={iosStepsData[iosStep - 1].img} 
                                     alt={iosStepsData[iosStep - 1].title} 
                                     className="max-h-full max-w-full object-contain pointer-events-none"
                                     onError={(e) => {
-                                        const currentSrc = e.target.getAttribute('src');
-                                        // 1. Eğer .png denendiyse ve patladıysa .jpg formatına çevirmeyi dene
-                                        if (currentSrc.endsWith('.png')) {
-                                            e.target.setAttribute('src', currentSrc.replace('.png', '.jpg'));
-                                        } 
-                                        // 2. Eğer .jpg de patladıysa ve pwa/ klasöründeyse doğrudan ana dizinde aramayı dene
-                                        else if (currentSrc.includes('/pwa/')) {
-                                            e.target.setAttribute('src', currentSrc.replace('/pwa/', '/'));
-                                        } 
-                                        // 3. Hepsi çökerse şık placeholder elementini devreye sok
-                                        else {
+                                        const currentSrc = e.target.src;
+                                        if (currentSrc.includes('pwa/')) {
+                                            e.target.src = currentSrc.replace('pwa/', '');
+                                        } else {
                                             e.target.style.display = 'none';
                                             e.target.nextSibling.style.display = 'flex';
                                         }
                                     }}
                                 />
                                 <div className="hidden absolute inset-0 flex-col items-center justify-center text-slate-600 font-bold text-xs p-4 bg-slate-950/40">
-                                    <Smartphone size={32} className="text-slate-700 mb-2 animate-pulse" />
+                                    <Smartphone size={28} className="text-slate-700 mb-1 animate-pulse" />
                                     <span>[ Ekran Görüntüsü Alanı ]</span>
-                                    <span className="text-[10px] text-slate-500 mt-1 font-normal">public/{iosStepsData[iosStep - 1].img}</span>
+                                    <span className="text-[9px] text-slate-500 mt-0.5 font-normal">public/{iosStepsData[iosStep - 1].img}</span>
                                 </div>
                             </div>
 
-                            <div className="mb-2">
-                                <div className="flex justify-center gap-1.5 mb-3">
+                            <div className="mb-1">
+                                <div className="flex justify-center gap-1.5 mb-2.5">
                                     {iosStepsData.map((step) => (
-                                        <div key={step.id} className={`h-1.5 rounded-full transition-all duration-300 ${iosStep === step.id ? 'w-6 bg-brandPurple shadow-glow' : 'w-1.5 bg-slate-700'}`} />
+                                        <div key={step.id} className={`h-1.5 rounded-full transition-all duration-300 ${iosStep === step.id ? 'w-5 bg-brandPurple shadow-glow' : 'w-1.5 bg-slate-700'}`} />
                                     ))}
                                 </div>
 
@@ -414,14 +416,14 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                     {iosStep > 1 ? (
                                         <button 
                                             onClick={() => setIosStep(iosStep - 1)}
-                                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700"
+                                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1 transition-colors border border-slate-700"
                                         >
-                                            <ArrowLeft size={14} /> GERİ
+                                            <ArrowLeft size={12} /> GERİ
                                         </button>
                                     ) : (
                                         <button 
                                             onClick={() => setShowIosModal(false)}
-                                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold py-3.5 rounded-xl text-xs transition-colors border border-slate-700"
+                                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold py-3 rounded-xl text-xs transition-colors border border-slate-700"
                                         >
                                             KAPAT
                                         </button>
@@ -430,14 +432,14 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                     {iosStep < 4 ? (
                                         <button 
                                             onClick={() => setIosStep(iosStep + 1)}
-                                            className="flex-1 bg-brandPurple hover:bg-purple-600 text-white font-black py-3.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-glow"
+                                            className="flex-1 bg-brandPurple hover:bg-purple-600 text-white font-black py-3 rounded-xl text-xs flex items-center justify-center gap-1 transition-all shadow-glow"
                                         >
-                                            İLERİ <ArrowRight size={14} />
+                                            İLERİ <ArrowRight size={12} />
                                         </button>
                                     ) : (
                                         <button 
                                             onClick={() => setShowIosModal(false)}
-                                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3.5 rounded-xl text-xs transition-all shadow-md uppercase tracking-wider"
+                                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl text-xs transition-all shadow-md uppercase tracking-wider"
                                         >
                                             HAZIRIM 🎉
                                         </button>
