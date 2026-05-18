@@ -46,42 +46,67 @@ const ClassDetail = ({
 
     return (
         <motion.div key="class-detail" initial={{ opacity: 0, y: 30, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: "spring", stiffness: 260, damping: 20 }} className="bg-white rounded-[2rem] shadow-float border border-slate-200 overflow-hidden relative z-10">
-            <div className={`p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${selectedClass.type === 'vip' ? 'bg-gradient-to-r from-yellow-50 to-white border-yellow-100' : 'bg-gradient-to-r from-slate-50 to-white border-slate-100'}`}>
-                <div className="flex items-center gap-4 w-full md:w-auto">
-                    <div className={`p-3 rounded-xl shadow-inner ${selectedClass.type === 'vip' ? 'bg-yellow-100 text-amber-600' : 'bg-purple-100 text-brandPurple'}`}><Layout size={24}/></div>
-                    <div><h3 className={`text-xl md:text-2xl font-black flex items-center gap-2 ${selectedClass.type === 'vip' ? 'text-amber-700' : 'text-slate-800'}`}>{selectedClass.type === 'vip' && <Crown size={20} className="text-amber-500"/>}{getSafeText(selectedClass.className)} <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); setModalData({ classId: selectedClass.id, currentName: selectedClass.className }); setModalInputVal(selectedClass.className); setModalType('edit-class'); }} className={`p-1.5 rounded-lg transition-colors ${selectedClass.type === 'vip' ? 'text-amber-500 hover:text-amber-600 hover:bg-yellow-100' : 'text-slate-400 hover:text-brandPurple hover:bg-purple-50'}`}><Pencil size={16} /></motion.button></h3><div className="text-xs text-slate-500 font-medium mt-1">{selectedClass.students?.length || 0} Öğrenci • {selectedClass.topics?.length || 0} Görev</div></div>
+            
+            {/* 🔥 GÜNCELLEME: Başlık paneli iç dolgusu mobilde p-6'dan p-4'e düşürüldü */}
+            <div className={`p-4 md:p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4 ${selectedClass.type === 'vip' ? 'bg-gradient-to-r from-yellow-50 to-white border-yellow-100' : 'bg-gradient-to-r from-slate-50 to-white border-slate-100'}`}>
+                <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
+                    <div className={`p-2.5 md:p-3 rounded-xl shadow-inner ${selectedClass.type === 'vip' ? 'bg-yellow-100 text-amber-600' : 'bg-purple-100 text-brandPurple'}`}><Layout size={20}/></div>
+                    <div>
+                        <h3 className={`text-lg md:text-2xl font-black flex items-center gap-1.5 ${selectedClass.type === 'vip' ? 'text-amber-700' : 'text-slate-800'}`}>
+                            {selectedClass.type === 'vip' && <Crown size={16} className="text-amber-500"/>}
+                            {getSafeText(selectedClass.className)} 
+                            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); setModalData({ classId: selectedClass.id, currentName: selectedClass.className }); setModalInputVal(selectedClass.className); setModalType('edit-class'); }} className={`p-1 rounded-lg transition-colors ${selectedClass.type === 'vip' ? 'text-amber-500 hover:text-amber-600 hover:bg-yellow-100' : 'text-slate-400 hover:text-brandPurple hover:bg-purple-50'}`}><Pencil size={14} /></motion.button>
+                        </h3>
+                        <div className="text-[10px] md:text-xs text-slate-500 font-medium mt-0.5">{selectedClass.students?.length || 0} Öğrenci • {selectedClass.topics?.length || 0} Görev</div>
+                    </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-                    <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm mr-2"><div className={`w-8 h-8 rounded-full border-4 ${selectedClass.type === 'vip' ? 'border-yellow-200' : 'border-purple-100'} flex items-center justify-center relative`}><svg className="w-full h-full transform -rotate-90 absolute" viewBox="0 0 36 36"><path className={selectedClass.type === 'vip' ? "text-amber-500" : "text-brandPurple"} strokeDasharray={`${calculateStats(selectedClass.students, selectedClass.topics).percentage}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4" /></svg></div><div className="flex flex-col"><span className="text-xs font-black text-slate-800">%{calculateStats(selectedClass.students, selectedClass.topics).percentage}</span><span className="text-[9px] font-bold text-slate-400 uppercase">Başarı</span></div></div>
-                    {selectedClass.type !== 'vip' && <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleOpenRisk(selectedClass)} className="text-xs bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-1 transition-colors"><AlertOctagon size={14}/> Risk</motion.button>}
-                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handlePrintPasswords(selectedClass)} className="text-xs bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-1 transition-colors"><KeyRound size={14}/> Şifreler</motion.button>
-                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setActiveTab(activeTab === 'curriculum' ? 'homework' : 'curriculum')} className={`text-xs px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-1.5 transition-colors ${activeTab === 'curriculum' ? 'bg-purple-50 text-brandPurple border border-purple-200 hover:bg-purple-100' : 'bg-slate-800 text-white border border-slate-700 hover:bg-slate-700'}`}><BookOpen size={16}/> {activeTab === 'curriculum' ? 'Ödev Takibine Dön' : 'Müfredat Listesi'}</motion.button>
-                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => { setModalData({ classId: selectedClass.id }); setModalType('topic'); }} className={`text-xs text-white px-4 py-2 rounded-xl font-bold shadow-md flex items-center gap-1 ${selectedClass.type === 'vip' ? 'real-gold-bg text-slate-900 shadow-vip-glow' : 'bg-brandPurple hover:bg-purple-700 shadow-glow'}`}><Plus size={14}/> Ödev Ekle</motion.button>
-                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={(e) => deleteClass(e, selectedClass.id)} className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={18}/></motion.button>
+                
+                {/* 🔥 GÜNCELLEME: Aksiyon butonlarının dolguları ve yazı boyutları mobil için optimize edildi */}
+                <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto justify-end">
+                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200 shadow-sm mr-1">
+                        <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full border-2 md:border-4 ${selectedClass.type === 'vip' ? 'border-yellow-200' : 'border-purple-100'} flex items-center justify-center relative`}>
+                            <svg className="w-full h-full transform -rotate-90 absolute" viewBox="0 0 36 36"><path className={selectedClass.type === 'vip' ? "text-amber-500" : "text-brandPurple"} strokeDasharray={`${calculateStats(selectedClass.students, selectedClass.topics).percentage}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4" /></svg>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] md:text-xs font-black text-slate-800">%{calculateStats(selectedClass.students, selectedClass.topics).percentage}</span>
+                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Başarı</span>
+                        </div>
+                    </div>
+                    {selectedClass.type !== 'vip' && <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleOpenRisk(selectedClass)} className="text-[10px] md:text-xs bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 px-2.5 py-1.5 rounded-xl font-bold shadow-sm flex items-center gap-1 transition-colors"><AlertOctagon size={12}/> Risk</motion.button>}
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handlePrintPasswords(selectedClass)} className="text-[10px] md:text-xs bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 px-2.5 py-1.5 rounded-xl font-bold shadow-sm flex items-center gap-1 transition-colors"><KeyRound size={12}/> Şifreler</motion.button>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setActiveTab(activeTab === 'curriculum' ? 'homework' : 'curriculum')} className={`text-[10px] md:text-xs px-3 py-1.5 rounded-xl font-bold shadow-sm flex items-center gap-1 transition-colors ${activeTab === 'curriculum' ? 'bg-purple-50 text-brandPurple border border-purple-200 hover:bg-purple-100' : 'bg-slate-800 text-white border border-slate-700 hover:bg-slate-700'}`}><BookOpen size={12}/> {activeTab === 'curriculum' ? 'Ödevler' : 'Müfredat'}</motion.button>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => { setModalData({ classId: selectedClass.id }); setModalType('topic'); }} className={`text-[10px] md:text-xs text-white px-3 py-1.5 rounded-xl font-black shadow-md flex items-center gap-1 ${selectedClass.type === 'vip' ? 'real-gold-bg text-slate-900 shadow-vip-glow' : 'bg-brandPurple hover:bg-purple-700 shadow-glow'}`}><Plus size={12}/> Ödev Ekle</motion.button>
+                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={(e) => deleteClass(e, selectedClass.id)} className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={16}/></motion.button>
                 </div>
             </div>
 
             {activeTab === 'homework' && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`p-4 ${selectedClass.type === 'vip' ? 'bg-yellow-50/30' : 'bg-slate-50/50'}`}>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`p-3 md:p-4 ${selectedClass.type === 'vip' ? 'bg-yellow-50/30' : 'bg-slate-50/50'}`}>
                     {isMobile ? (
-                        <div className="space-y-4">
-                            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-float mb-6"><h4 className="font-black text-slate-800 mb-4 text-sm flex items-center gap-2 uppercase tracking-widest"><BookOpen size={18} className="text-brandPurple"/> Mobil Ödev Yönetimi</h4>
-                                <div className="space-y-4">
+                        <div className="space-y-3.5">
+                            {/* 🔥 GÜNCELLEME: Mobil ödev yönetim kart dolguları p-5'den p-4'e sıkıştırıldı */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-float mb-4">
+                                <h4 className="font-black text-slate-800 mb-3 text-xs flex items-center gap-1.5 uppercase tracking-widest"><BookOpen size={15} className="text-brandPurple"/> Mobil Ödev Yönetimi</h4>
+                                <div className="space-y-3">
                                     {reversedTopics.map(topic => (
-                                        <div key={topic.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                            <div className="flex justify-between items-center mb-3 pb-3 border-b border-slate-200"><span className="font-black text-slate-700 text-sm uppercase tracking-wide truncate pr-2">{getSafeText(topic.title)}</span><div className="flex gap-1.5 shrink-0"><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id, currentTitle: topic.title }); setModalInputVal(topic.title); setModalDateVal(topic.date || ''); setModalType('edit-topic'); }} className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-brandPurple rounded-xl shadow-sm transition-colors hover-lift"><Pencil size={16}/></button><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id }); setModalType('source'); }} className="px-3 py-2 bg-brandPurple text-white rounded-xl shadow-glow flex items-center gap-1.5 text-xs font-black tracking-wider transition-colors hover-lift"><Plus size={14}/> KAYNAK</button></div></div>
-                                            <div className="flex flex-col gap-2">
+                                        // 🔥 GÜNCELLEME: Alt ödev blok dolgusu p-4'ten p-3'e düşürüldü
+                                        <div key={topic.id} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-200"><span className="font-black text-slate-700 text-xs uppercase tracking-wide truncate pr-2">{getSafeText(topic.title)}</span><div className="flex gap-1 shrink-0"><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id, currentTitle: topic.title }); setModalInputVal(topic.title); setModalDateVal(topic.date || ''); setModalType('edit-topic'); }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-brandPurple rounded-lg shadow-sm transition-colors"><Pencil size={12}/></button><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id }); setModalType('source'); }} className="px-2 py-1.5 bg-brandPurple text-white rounded-lg shadow-glow flex items-center gap-1 text-[10px] font-black tracking-wider transition-colors"><Plus size={10}/> KAYNAK</button></div></div>
+                                            <div className="flex flex-col gap-1.5">
                                                 {topic.subColumns?.map(col => (
-                                                    <div key={col.id} className="flex justify-between items-center text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200 shadow-sm"><span className="font-bold truncate pr-2">{getSafeText(col.title)}</span><div className="flex gap-1 shrink-0"><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id, colId: col.id, currentTitle: col.title }); setModalInputVal(col.title); setModalPdfVal(col.pdfLink || ""); setModalType('edit-source'); }} className="p-2 bg-slate-50 text-slate-500 hover:text-brandPurple rounded-lg transition-colors"><Pencil size={14}/></button><button onClick={() => deleteColumn(selectedClass.id, topic.id, col.id)} className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-lg transition-colors"><Trash2 size={14}/></button></div></div>
+                                                    // 🔥 GÜNCELLEME: Kaynak listesi dolgusu p-3'ten p-2.5'e sıkıştırıldı
+                                                    <div key={col.id} className="flex justify-between items-center text-[11px] text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm"><span className="font-bold truncate pr-2">{getSafeText(col.title)}</span><div className="flex gap-0.5 shrink-0"><button onClick={() => { setModalData({ classId: selectedClass.id, topicId: topic.id, colId: col.id, currentTitle: col.title }); setModalInputVal(col.title); setModalPdfVal(col.pdfLink || ""); setModalType('edit-source'); }} className="p-1.5 bg-slate-50 text-slate-500 hover:text-brandPurple rounded-md transition-colors"><Pencil size={11}/></button><button onClick={() => deleteColumn(selectedClass.id, topic.id, col.id)} className="p-1.5 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-md transition-colors"><Trash2 size={11}/></button></div></div>
                                                 ))}
-                                                {(!topic.subColumns || topic.subColumns.length === 0) && <span className="text-[11px] text-slate-400 font-bold bg-white p-2 rounded-lg border border-slate-100 text-center">Bu ödeve henüz kaynak eklenmemiş.</span>}
+                                                {(!topic.subColumns || topic.subColumns.length === 0) && <span className="text-[10px] text-slate-400 font-bold bg-white p-1.5 rounded-lg border border-slate-100 text-center">Bu ödeve henüz kaynak eklenmemiş.</span>}
                                             </div>
                                         </div>
                                     ))}
-                                    {reversedTopics.length === 0 && <div className="text-sm font-bold text-slate-400 text-center py-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">Sınıfa ait ödev bulunmuyor.</div>}
+                                    {reversedTopics.length === 0 && <div className="text-xs font-bold text-slate-400 text-center py-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">Sınıfa ait ödev bulunmuyor.</div>}
                                 </div>
                             </div>
-                            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex gap-2"><input type="text" placeholder="Yeni Öğrenci Ekle..." className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-700 w-full focus:border-brandPurple outline-none font-medium" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') addStudent(selectedClass.id); }} /><motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => addStudent(selectedClass.id)} className={`text-white px-4 rounded-xl text-sm font-bold shadow-md ${selectedClass.type === 'vip' ? 'real-gold-bg text-slate-900' : 'bg-brandPurple'}`}>EKLE</motion.button></div>
+                            
+                            {/* 🔥 GÜNCELLEME: Yeni öğrenci ekleme çubuğu ve butonu responsive küçültüldü */}
+                            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex gap-1.5"><input type="text" placeholder="Yeni Öğrenci Ekle..." className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 w-full focus:border-brandPurple outline-none font-medium" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') addStudent(selectedClass.id); }} /><motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => addStudent(selectedClass.id)} className={`text-white px-3.5 rounded-xl text-xs font-black shadow-md ${selectedClass.type === 'vip' ? 'real-gold-bg text-slate-900' : 'bg-brandPurple'}`}>EKLE</motion.button></div>
                             {selectedClass.students?.map((std) => ( 
                                 <MobileStudentCard 
                                     key={std.id} 
@@ -96,6 +121,7 @@ const ClassDetail = ({
                             ))}
                         </div>
                     ) : (
+                        /* 🔥 MASAÜSTÜ TABLOSU: Kullanıcı talebi üzerine geniş ekran ihtişamı ve yapısı %100 aynen korundu */
                         <div className="table-container">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -103,8 +129,6 @@ const ClassDetail = ({
                                         <th rowSpan={2} className="sticky-corner border-b border-r border-slate-200 min-w-[250px] shadow-sm p-4 text-xs font-black text-slate-500 uppercase tracking-widest bg-white">Öğrenci Listesi</th>
                                         {reversedTopics.map((topic, i) => {
                                             const theme = TOPIC_THEMES[i % TOPIC_THEMES.length];
-                                            
-                                            // 🔥 YENİ: ÖĞRETMEN PANELİ TARİH / KALAN ZAMAN HESAPLAYICI
                                             const deadlineInfo = getDeadlineStatus(topic.date);
                                             
                                             return ( 
@@ -191,7 +215,7 @@ const ClassDetail = ({
             )}
 
             {activeTab === 'curriculum' && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-slate-50/50 border-t border-slate-100">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 md:p-4 bg-slate-50/50 border-t border-slate-100">
                     <CurriculumTracker 
                         cls={selectedClass} 
                         updateClassInDb={updateClassInDb}
