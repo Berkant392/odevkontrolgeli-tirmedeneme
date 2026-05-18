@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { Zap, X, TerminalSquare, Keyboard, Mic, Send, User, CheckCircle2, Activity, Calendar, StickyNote, AlertTriangle, Save, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Zap, X, TerminalSquare, Keyboard, Mic, Send, User, CheckCircle2, Activity, Calendar, StickyNote, AlertTriangle, Save, ChevronRight, HelpCircle } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
@@ -36,22 +36,26 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [foundTopics, setFoundTopics] = useState([]);
     const [selectedStudent, setSelectedStudent] = useState(null);
     
-    // YENİ: Çoklu eşleşme sonrası bekleyen eylem hafızası
+    // Çoklu eşleşme (Merve) hafızası
     const [pendingTranscript, setPendingTranscript] = useState(null);
+    
+    // 🔥 YENİ: Etkileşimli Kaynak (Source) Sorma Hafızası
+    const [pendingAction, setPendingAction] = useState(null); // { studentId, topicId, status }
+    const [pendingSources, setPendingSources] = useState([]); // Alt kaynakların listesi
     
     const [draftGrades, setDraftGrades] = useState({});
     const [draftNotes, setDraftNotes] = useState({});
     const inputRef = useRef(null);
     const reversedFoundTopics = [...foundTopics].reverse();
 
-    // 🔒 SCROLL KİLİDİ (Arkaplanın kaymasını engeller)
+    // 🔒 SCROLL KİLİDİ
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         return () => { document.body.style.overflow = ''; };
     }, []);
 
     // ------------------------------------------------------------------------
-    // 🧠 J.A.R.V.I.S 3.0: ÇOKLU EŞLEŞME NLP MOTORU
+    // 🧠 J.A.R.V.I.S 3.0 NLP MOTORU
     // ------------------------------------------------------------------------
     const determineStatus = (text) => {
         if (text.match(/çözmemiş|yapmamış|yapmadı|eksik|boş|yok|çözmüyor|yapılmadı|çözülmedi/)) return 'missing';
@@ -93,6 +97,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const analyzeCommand = (transcript) => {
         if (!transcript || transcript.trim() === "") return;
         
+        // Yeni bir komut geldiğinde önceki bekleyen kaynak sorgularını sıfırla
+        setPendingAction(null);
+        setPendingSources([]);
+
         let text = transcript.toLocaleLowerCase('tr-TR')
                    .replace(/birinci/g, '1').replace(/ikinci/g, '2').replace(/üçüncü/g, '3')
                    .replace(/\bbir\b/g, '1').replace(/\biki\b/g, '2').replace(/\b[uü]ç\b/g, '3');
@@ -100,18 +108,17 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
 
         const status = determineStatus(text);
         
-        // 1. ÖĞRENCİ ARAMA (Çoklu Eşleşme Desteği)
+        // ÖĞRENCİ ARAMA
         const allStudents = classes.flatMap(cls => (cls.students || []).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })));
         const safeItems = allStudents.map(item => ({ ...item, _safeSearchKey: getSafeText(item.name).toLocaleLowerCase('tr-TR') }));
         const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.35, includeScore: true, ignoreLocation: true });
 
-        const words = text.replace(/[.,!?]/g, "").split(/\s+/).filter(w => w.length > 3); // Kısa kelimeleri atla
+        const words = text.replace(/[.,!?]/g, "").split(/\s+/).filter(w => w.length > 3);
         let candidatesMap = new Map();
 
         words.forEach((w, i) => {
             const ngrams = [w];
             if (i < words.length - 1) ngrams.push(w + " " + words[i+1]);
-            
             ngrams.forEach(ngram => {
                 fuse.search(ngram).forEach(res => {
                     if (!candidatesMap.has(res.item.id) || candidatesMap.get(res.item.id).score > res.score) {
@@ -121,33 +128,26 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
             });
         });
 
-        // Eşik değerin altındaki tüm eşleşmeleri al ve skora göre sırala
-        let matches = Array.from(candidatesMap.values())
-            .filter(c => c.score < 0.35)
-            .sort((a,b) => a.score - b.score)
-            .map(c => c.item);
+        let matches = Array.from(candidatesMap.values()).filter(c => c.score < 0.35).sort((a,b) => a.score - b.score).map(c => c.item);
 
         if (matches.length === 0) {
             setFoundStudents([]); setSelectedStudent(null); setFoundTopics([]);
             setJarvisFeedback("Sistemde bu komutla eşleşen bir profil bulunamadı."); return;
         }
 
-        // Eğer ilk eşleşme diğerlerinden çok çok iyiyse, diğerlerini yoksay
         if (matches.length > 1 && matches[0].score < 0.1 && matches[1].score > 0.25) {
             matches = [matches[0]];
         }
 
-        // BİRDEN FAZLA EŞLEŞME VARSA:
+        // BİRDEN FAZLA İSİM EŞLEŞMESİ (Örn: 3 tane Merve var)
         if (matches.length > 1) {
-            setFoundStudents(matches);
-            setSelectedStudent(null);
-            setFoundTopics([]);
-            setPendingTranscript(text); // Aksiyonu hafızaya al
+            setFoundStudents(matches); setSelectedStudent(null); setFoundTopics([]);
+            setPendingTranscript(text);
             setJarvisFeedback(`"${matches[0].name.split(' ')[0]}" isminde ${matches.length} kişi tespit ettim. Lütfen hedef profili doğrulayın.`);
             return;
         }
 
-        // TEK EŞLEŞME VARSA: Direkt İşle
+        // TEK EŞLEŞME VARSA
         processStudentAction(matches[0], text, status);
     };
 
@@ -165,19 +165,28 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         if (bestTopic) bestCol = findBestMatch(bestTopic.subColumns || [], 'title', text, 0.4);
 
         if (bestTopic && bestCol && status) {
+            // Tam Eşleşme (Öğrenci + Konu + Kaynak + Durum biliniyor)
             handleDraftGradeChange(student.id, bestCol.id, status);
             const statusLabels = { 'done': 'Yapıldı', 'missing': 'Eksik', 'assigned': 'Verildi', 'exempt': 'Muaf' };
             setJarvisFeedback(`Doğrulandı: ${getSafeText(student.name)} -> ${getSafeText(bestTopic.title)} -> ${getSafeText(bestCol.title)} [${statusLabels[status]}] olarak işaretlendi.`);
-        } else if (bestTopic && !bestCol) { 
-            setJarvisFeedback(`${getSafeText(bestTopic.title)} algoritması eşleşti ancak alt kaynak eksik.`); 
-        } else if (!bestTopic) { 
-            setJarvisFeedback(`${getSafeText(student.name)} profiline erişildi. Eylem tanımlanamadı.`); 
-        } else if (bestTopic && bestCol && !status) { 
+        } 
+        else if (bestTopic && !bestCol && status) { 
+            // 🔥 YENİ: Etkileşimli Kaynak Sorusu (Öğrenci + Konu + Durum biliniyor, Kanyak BİLİNMİYOR)
+            setPendingAction({ studentId: student.id, topicId: bestTopic.id, status: status });
+            setPendingSources(bestTopic.subColumns || []);
+            setJarvisFeedback(`"${getSafeText(bestTopic.title)}" konusu için eylem anlaşıldı. Lütfen işlemi uygulamak istediğiniz KAYNAĞI seçin:`); 
+        } 
+        else if (bestTopic && !bestCol) {
+            setJarvisFeedback(`${getSafeText(bestTopic.title)} algoritması eşleşti ancak alt kaynak ve eylem anlaşılamadı.`); 
+        } 
+        else if (!bestTopic) { 
+            setJarvisFeedback(`${getSafeText(student.name)} profiline erişildi. Ek görev parametreleri tanımlanamadı.`); 
+        } 
+        else if (bestTopic && bestCol && !status) { 
             setJarvisFeedback(`Görev bulundu ancak durum (Yapıldı/Eksik vb.) anlaşılamadı.`); 
         }
     };
 
-    // Tıklayarak öğrenci seçildiğinde bekleyen (pending) aksiyonu devreye sok
     const handleStudentSelect = (student) => {
         if (pendingTranscript) {
             const status = determineStatus(pendingTranscript);
@@ -189,6 +198,16 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
             setFoundTopics(targetClass?.topics || []);
             setJarvisFeedback(`${getSafeText(student.name)} profiline erişildi.`);
         }
+    };
+
+    // 🔥 YENİ: Ekrana çıkan kaynak (source) butonuna tıklandığında işlemi tamamlama
+    const handleManualSourceSelect = (col) => {
+        if (!pendingAction) return;
+        handleDraftGradeChange(pendingAction.studentId, col.id, pendingAction.status);
+        const statusLabels = { 'done': 'Yapıldı', 'missing': 'Eksik', 'assigned': 'Verildi', 'exempt': 'Muaf' };
+        setJarvisFeedback(`Manuel Seçim Tamamlandı: ${getSafeText(col.title)} [${statusLabels[pendingAction.status]}] olarak işaretlendi.`);
+        setPendingAction(null);
+        setPendingSources([]);
     };
 
     const handleManualSubmit = () => {
@@ -233,19 +252,16 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
                 
                 {/* 1. HOLOGRAFİK RADAR VE INPUT BÖLÜMÜ */}
                 <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 shrink-0 flex flex-col items-center justify-center pt-8 pb-6 px-4">
-                    {/* Dönen Radar Animasyonları */}
                     <motion.div animate={{ rotate: 360 }} transition={{ duration: 15, repeat: Infinity, ease: 'linear' }} className="absolute w-64 h-64 border border-cyan-500/10 rounded-full border-t-cyan-400/30" />
                     <motion.div animate={{ rotate: -360 }} transition={{ duration: 25, repeat: Infinity, ease: 'linear' }} className="absolute w-48 h-48 border border-cyan-500/10 rounded-full border-b-cyan-400/40" />
                     
                     <button onClick={onClose} className="absolute top-4 right-4 text-cyan-500/50 hover:text-cyan-400 transition-colors z-20"><X size={24}/></button>
                     <div className="absolute top-4 left-4 flex items-center gap-2 text-cyan-500/40 text-[10px] font-mono tracking-widest z-20"><TerminalSquare size={14}/> SYSTEM J.A.R.V.I.S v3.0</div>
 
-                    {/* Merkez İkon */}
                     <div className="z-10 bg-slate-900 p-4 rounded-full border border-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.2)] mb-6">
                         <Activity size={32} className={`text-cyan-400 ${isListening ? 'animate-pulse' : ''}`} />
                     </div>
 
-                    {/* Manuel Input Alanı */}
                     <div className="w-full max-w-2xl z-10 relative flex items-center mb-4">
                         <div className="absolute left-4 text-cyan-500/50 pointer-events-none"><Keyboard size={18} /></div>
                         <input 
@@ -259,12 +275,28 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
                         </div>
                     </div>
 
-                    {/* Daktilo Efektli Geri Bildirim */}
                     <div className="z-10 text-center min-h-[40px] flex flex-col items-center justify-center">
                         {speechTranscript && <p className="text-xs text-slate-500 italic mb-1">"{speechTranscript}"</p>}
-                        <p className="font-mono text-cyan-300 text-sm flex items-center justify-center">
-                            <span className="mr-2 text-cyan-500/50">&gt;</span> {jarvisFeedback} <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity }} className="ml-1 inline-block w-2 h-4 bg-cyan-400" />
+                        <p className="font-mono text-cyan-300 text-sm flex items-center justify-center text-center px-4">
+                            {pendingSources.length > 0 && <HelpCircle size={16} className="text-amber-400 mr-2 animate-pulse"/>}
+                            {!pendingSources.length && <span className="mr-2 text-cyan-500/50">&gt;</span>} 
+                            {jarvisFeedback}
+                            {!pendingSources.length && <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity }} className="ml-1 inline-block w-2 h-4 bg-cyan-400" />}
                         </p>
+                        
+                        {/* 🔥 YENİ: ETKİLEŞİMLİ KAYNAK SEÇİM PANELİ (Awaiting Source) */}
+                        <AnimatePresence>
+                            {pendingSources.length > 0 && (
+                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mt-4 flex flex-wrap justify-center gap-2 max-w-3xl">
+                                    {pendingSources.map(col => (
+                                        <button key={col.id} onClick={() => handleManualSourceSelect(col)} className="px-4 py-2 bg-cyan-950 border border-cyan-500/50 hover:bg-cyan-900 hover:border-cyan-400 text-cyan-100 text-xs font-bold rounded-lg transition-all shadow-[0_0_10px_rgba(34,211,238,0.2)]">
+                                            {getSafeText(col.title)}
+                                        </button>
+                                    ))}
+                                    <button onClick={() => { setPendingAction(null); setPendingSources([]); setJarvisFeedback("Kaynak seçimi iptal edildi. Yeni komut bekliyorum."); }} className="px-4 py-2 bg-rose-950 border border-rose-500/50 hover:bg-rose-900 text-rose-200 text-xs font-bold rounded-lg transition-all">İptal</button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </div>
                 
@@ -312,7 +344,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
                                                 const isChanged = (draftGrade !== undefined && draftGrade !== currentDbGrade) || (draftNote !== undefined && draftNote !== currentDbNote);
                                                 
                                                 return (
-                                                    <div key={col.id} className={`flex flex-col gap-3 p-4 rounded-xl transition-all ${isChanged ? 'bg-cyan-900/10 border border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'bg-slate-900 border border-slate-800'}`}>
+                                                    <div key={col.id} id={`col-${col.id}`} className={`flex flex-col gap-3 p-4 rounded-xl transition-all duration-500 ${isChanged ? 'bg-cyan-900/10 border border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'bg-slate-900 border border-slate-800'}`}>
                                                         <div className="text-sm font-medium text-slate-300 flex justify-between items-center">
                                                             {getSafeText(col.title)}
                                                             {isChanged && <span className="text-[9px] bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded flex items-center gap-1 font-mono uppercase"><Zap size={10}/> Sync Bekliyor</span>}
