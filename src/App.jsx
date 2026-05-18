@@ -73,8 +73,10 @@ const App = () => {
     // CUSTOM ALERT / DIALOG MODALI STATE'İ
     const [dialogData, setDialogData] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: null });
 
-    // 🔥 PWA YAŞAM DÖNGÜSÜ VE İNTERNET KONTROLÜ STATE'LERİ
+    // 🔥 PWA YAŞAM DÖNGÜSÜ, İNTERNET KONTROLÜ VE NATIVE KURULUM STATE'LERİ
     const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [deferredPrompt, setDeferredPrompt] = useState(null);
+    const [isStandalone, setIsStandalone] = useState(false);
 
     const {
         needRefresh: [needRefresh, setNeedRefresh],
@@ -94,9 +96,29 @@ const App = () => {
         const handleOffline = () => setIsOnline(false);
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
+
+        // Uygulamanın zaten kurulup kurulmadığını donanımsal kontrol etme
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+            setIsStandalone(true);
+        }
+
+        // Android/Chrome yükleme isteğini yakalama dinleyicisi
+        const handleBeforeInstallPrompt = (e) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        
+        window.addEventListener('appinstalled', () => {
+            setDeferredPrompt(null);
+            setIsStandalone(true);
+        });
+
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         };
     }, []);
 
@@ -158,7 +180,6 @@ const App = () => {
         showAlert('warning', 'Emin misiniz?', 'Bu öğe kütüphaneden silinecek.', async () => { await deleteDoc(doc(db, LIBRARY_COLLECTION, id)); }); 
     };
     
-    // 🔥 SÖZDİZİMİ (SYNTAX) OPTİMİZASYONU YAPILDI
     const addStudent = (classId) => { 
         if(!newStudentName.trim()) return; 
         const targetId = classId || selectedClass?.id;
@@ -307,7 +328,15 @@ const App = () => {
         setModalEditPassword("");
     };
 
-    if (!currentUserRole) return <LoginScreen onStudentLogin={handleStudentLogin} onTeacherLogin={verifyPin} />;
+    if (!currentUserRole) return (
+        // 🔥 GÜNCELLEME: YÜKLEME PROMPT PROPS'LARI GİRİŞ EKRANINA AKTARILDI
+        <LoginScreen 
+            onStudentLogin={handleStudentLogin} 
+            onTeacherLogin={verifyPin} 
+            deferredPrompt={deferredPrompt}
+            isStandalone={isStandalone}
+        />
+    );
 
     return (
         <div className={`min-h-screen pb-32 relative transition-colors duration-1000 ${currentUserRole === 'vip-student' ? 'bg-slate-900' : 'bg-lightBg'}`}>
@@ -505,7 +534,7 @@ const App = () => {
                 <button onClick={() => { deleteTopic(activeTopicMenu.classId, activeTopicMenu.topicId); setActiveTopicMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={16}/> Ödevi Sil</button>
             </motion.div></div>}
             
-            {cellNoteModal && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4"><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"><h3 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2"><Edit3 size={20} className="text-amber-500"/>Öğretmen Notu</h3><textarea autoFocus rows="4" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-medium text-sm outline-none focus:border-amber-400" placeholder="Öğrenci için notunuzu buraya yazın..." value={cellNoteModal.note} onChange={e => setCellNoteModal({ ...cellNoteModal, note: e.target.value })}></textarea><div className="flex gap-2 justify-end mt-2"><button onClick={() => setCellNoteModal(null)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button><button onClick={() => { const cls = classes.find(c => c.id === cellNoteModal.classId); const updatedStudents = cls.students.map(s => s.id === cellNoteModal.studentId ? { ...s, assignmentNotes: { ...(s.assignmentNotes || {}), [cellNoteModal.colId]: cellNoteModal.note } } : s); updateClassInDb({ ...cls, students: updatedStudents }); setCellNoteModal(null); }} className="px-4 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 shadow-md">Notu Kaydet</button></div></motion.div></div>}
+            {cellNoteModal && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4"><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"><h3 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2"><Edit3 size={20} className="text-amber-500"/>Öğretmen Notu</h3><textarea autoFocus rows="4" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-medium text-sm outline-none focus:border-amber-400" placeholder="Öğrenci için notunuzu buraya yazın..." value={cellNoteModal.note} onChange={e => setCellNoteModal({ ...cellNoteModal, note: e.target.value })}></textarea><div className="flex gap-2 justify-end mt-2"><button onClick={() => setCellNoteModal(null)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button><button onClick={() => { const cls = classes.find(c => c.id === cellNoteModal.classId); const updatedStudents = cls.students.map(s => s.id === studentId ? { ...s, assignmentNotes: { ...(s.assignmentNotes || {}), [cellNoteModal.colId]: cellNoteModal.note } } : s); updateClassInDb({ ...cls, students: updatedStudents }); setCellNoteModal(null); }} className="px-4 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 shadow-md">Notu Kaydet</button></div></motion.div></div>}
             
             {isTeacherMode && <button onClick={() => setShowAssistant(true)} className="fab-button bg-brandPurple text-white" title="Akıllı Asistan"><div className="fab-pulse"></div><Mic size={28} /></button>}
 
