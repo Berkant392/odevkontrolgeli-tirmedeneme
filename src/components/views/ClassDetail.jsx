@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Layout, Crown, Pencil, AlertOctagon, KeyRound, BookOpen, Plus, Trash2, Calendar, MoreVertical, UserPlus, Printer } from 'lucide-react';
-import { calculateStats, formatDate } from '../../utils/helpers';
+import { calculateStats, formatDate, getDeadlineStatus } from '../../utils/helpers';
 import { TOPIC_THEMES, STATUS_OPTIONS } from '../../utils/constants';
 import MobileStudentCard from '../student/MobileCard';
 import PdfDownloadButton from '../ui/PdfButton';
@@ -103,9 +103,31 @@ const ClassDetail = ({
                                         <th rowSpan={2} className="sticky-corner border-b border-r border-slate-200 min-w-[250px] shadow-sm p-4 text-xs font-black text-slate-500 uppercase tracking-widest bg-white">Öğrenci Listesi</th>
                                         {reversedTopics.map((topic, i) => {
                                             const theme = TOPIC_THEMES[i % TOPIC_THEMES.length];
+                                            
+                                            // 🔥 YENİ: ÖĞRETMEN PANELİ TARİH / KALAN ZAMAN HESAPLAYICI
+                                            const deadlineInfo = getDeadlineStatus(topic.date);
+                                            
                                             return ( 
                                                 <th key={topic.id} colSpan={Math.max(1, (topic.subColumns?.length || 0) + 1)} className={`text-center p-3 border-b border-r border-slate-200 sticky-header-top ${theme.main} min-w-[280px]`}>
-                                                    <div className="flex flex-col justify-center items-center gap-1.5">{topic.date && ( <motion.div whileHover={{ scale: 1.05 }} className="text-[10px] bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full text-slate-600 font-bold flex items-center gap-1 cursor-pointer hover:bg-white shadow-sm border border-white/50 mb-1 transition-colors" onContextMenu={(e) => { e.preventDefault(); setModalData({ classId: selectedClass.id, topicId: topic.id }); setModalDateVal(topic.date); setModalType('edit-date'); }}><Calendar size={12}/> Son Teslim: <span className={theme.text}>{formatDate(topic.date)}</span></motion.div> )}<div className={`flex items-center gap-2 text-sm font-black uppercase tracking-wider mt-1`}>{getSafeText(topic.title)}<button onClick={(e) => { e.stopPropagation(); setActiveTopicMenu({ classId: selectedClass.id, topicId: topic.id, anchorEl: e.currentTarget }); }} className="p-1 rounded-md hover:bg-black/5 transition-colors"><MoreVertical size={16}/></button></div></div>
+                                                    <div className="flex flex-col justify-center items-center gap-1.5">
+                                                        {topic.date && ( 
+                                                            <motion.div 
+                                                                whileHover={{ scale: 1.05 }} 
+                                                                className={`text-[10px] px-3 py-1 rounded-full font-black flex items-center gap-1 cursor-pointer shadow-sm border mb-1 transition-colors ${
+                                                                    deadlineInfo.isOverdue 
+                                                                        ? 'bg-rose-50 text-rose-600 border-rose-200' 
+                                                                        : deadlineInfo.isToday
+                                                                            ? 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse'
+                                                                            : 'bg-white/80 backdrop-blur-sm text-slate-600 border-white/50 hover:bg-white'
+                                                                }`}
+                                                                onContextMenu={(e) => { e.preventDefault(); setModalData({ classId: selectedClass.id, topicId: topic.id }); setModalDateVal(topic.date); setModalType('edit-date'); }}
+                                                            >
+                                                                <Calendar size={12}/> Son Teslim: <span className={theme.text}>{formatDate(topic.date)}</span>
+                                                                {deadlineInfo.text && <span className="ml-1 opacity-90 font-black">({deadlineInfo.text})</span>}
+                                                            </motion.div> 
+                                                        )}
+                                                        <div className={`flex items-center gap-2 text-sm font-black uppercase tracking-wider mt-1`}>{getSafeText(topic.title)}<button onClick={(e) => { e.stopPropagation(); setActiveTopicMenu({ classId: selectedClass.id, topicId: topic.id, anchorEl: e.currentTarget }); }} className="p-1 rounded-md hover:bg-black/5 transition-colors"><MoreVertical size={16}/></button></div>
+                                                    </div>
                                                 </th> 
                                             );
                                         })}
@@ -135,7 +157,6 @@ const ClassDetail = ({
                                                             <span className={`text-sm font-bold text-slate-700 group-hover:${selectedClass.type === 'vip' ? 'text-amber-600' : 'text-brandPurple'} transition-colors`}>{getSafeText(std.name)}</span>
                                                             <button onClick={(e) => { e.stopPropagation(); handleEditStudentClick(std); }} className="text-slate-300 hover:text-brandPurple opacity-0 group-hover:opacity-100 transition-opacity"><Pencil size={14}/></button>
                                                         </div>
-                                                        {/* 🔥 KULLANICI ADI VE ŞİFRE GÖSTERİMİ BURADAN KALDIRILDI */}
                                                     </div>
                                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); handlePrintStudentReport(selectedClass, std); }} className={`p-2 rounded-lg transition-colors ${selectedClass.type === 'vip' ? 'bg-yellow-50 text-amber-500 hover:bg-yellow-100' : 'bg-purple-50 text-brandPurple hover:bg-purple-100'}`} title="Rapor Yazdır"><Printer size={16}/></motion.button>
