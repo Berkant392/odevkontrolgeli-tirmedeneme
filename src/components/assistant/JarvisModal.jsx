@@ -26,7 +26,7 @@ const lightStatusStyles = {
     'exempt': 'bg-slate-50 border-slate-200 text-slate-500 font-bold shadow-sm'
 };
 
-// 🧠 TÜRKÇE NLP MOTORU VE DÜZELTME SÖZLÜĞÜ (YANLIŞ ANLAŞILAN KELİMELER)
+// 🧠 TÜRKÇE NLP MOTORU
 const FIX_MAPPINGS = {
     "uley": "ali",
     "aliyi": "ali",
@@ -46,7 +46,6 @@ const FIX_MAPPINGS = {
 const fixMisheardWords = (text) => {
     let fixedText = text.toLocaleLowerCase('tr-TR');
     Object.entries(FIX_MAPPINGS).forEach(([bad, good]) => {
-        // Kelimeyi tam eşleşme ile bulup düzeltir
         const regex = new RegExp(`\\b${bad}\\b`, 'g');
         fixedText = fixedText.replace(regex, good);
     });
@@ -63,35 +62,134 @@ const turkishNormalize = (text) => {
         .replace(/İ/g, 'i');
 };
 
+const turkishStem = (word) => {
+    if (!word || word.length < 3) return word;
+    let w = word.toLocaleLowerCase('tr-TR');
+
+    const verbSuffixes = [
+        'mıştı', 'mişti', 'muştu', 'müştü', 'ıyordu', 'iyordu', 'uyordu', 'üyordu',
+        'acak', 'ecek', 'acağı', 'eceği', 'mışım', 'mişim', 'muşum', 'müşüm',
+        'mışsın', 'mişsin', 'muşsun', 'müşsün', 'mış', 'miş', 'muş', 'müş',
+        'dı', 'di', 'du', 'dü', 'tı', 'ti', 'tu', 'tü',
+        'ar', 'er', 'ır', 'ir', 'ur', 'ür', 'mıştır', 'miştir', 'muştur', 'müştür',
+        'ıyor', 'iyor', 'uyor', 'üyor', 'madan', 'meden', 'madıkça', 'medikçe',
+        'ınca', 'ince', 'unca', 'ünce', 'dığında', 'diğinde', 'duğunda', 'düğünde',
+        'arak', 'erek', 'malı', 'meli', 'sa', 'se', 'dıkça', 'dikçe',
+    ];
+
+    const nounSuffixes = [
+        'ları', 'leri', 'larına', 'lerine', 'ların', 'lerin', 'lardan', 'lerden',
+        'la', 'le', 'ta', 'te', 'da', 'de', 'tan', 'ten', 'dan', 'den',
+        'ın', 'in', 'un', 'ün', 'a', 'e', 'ı', 'i', 'u', 'ü',
+        'larım', 'lerim', 'larımız', 'lerimiz', 'taki', 'teki', 'daki', 'deki',
+    ];
+
+    for (const suffix of verbSuffixes) {
+        if (w.endsWith(suffix) && w.length - suffix.length >= 2) {
+            w = w.slice(0, -suffix.length);
+            break;
+        }
+    }
+    for (const suffix of nounSuffixes) {
+        if (w.endsWith(suffix) && w.length - suffix.length >= 2) {
+            w = w.slice(0, -suffix.length);
+            break;
+        }
+    }
+    return w;
+};
+
+const normalizeText = (text) => {
+    if (!text) return '';
+    return text.toLocaleLowerCase('tr-TR').split(/\s+/).map(turkishStem).join(' ');
+};
+
+// 🛠️ GELİŞTİRİLMİŞ DURUM TESPİTİ
 const detectStatus = (text) => {
     if (!text) return null;
+    
     const normalizedText = turkishNormalize(text);
+    const words = normalizedText.split(/\s+/);
 
-    // Daha net ve kesin durum tespiti
+    // 1. Aşama: Tam Kelime/Öbek Eşleşmesi (En Güvenilir)
     const exactPhrases = {
-        done: ['yapildi', 'tamamlandi', 'bitirildi', 'cozuldu', 'yapti', 'bitti', 'tamamdir', 'yapmis', 'cozmus'],
-        missing: ['yapilmadi', 'eksik', 'bos', 'yapamadi', 'cozemedi', 'bitmedi', 'yarim', 'yapmamis', 'cozmemis'],
+        done: ['yapildi', 'tamam', 'tamamlandi', 'bitirildi', 'cozuldu', 'yapti', 'bitti', 'yap', 'coz', 'bitir'],
+        missing: ['yapilmadi', 'eksik', 'bos', 'yapamadi', 'cozemedi', 'bitmedi', 'yarim', 'yapma', 'cozme', 'bitirme'],
         exempt: ['muaf', 'pas', 'es gec', 'gerek yok'],
-        assigned: ['verildi', 'atandi', 'odev verildi', 'yuklendi']
+        assigned: ['verildi', 'atandi', 'odev verildi', 'yuklendi', 'ver']
     };
 
-    // 1. Kesin Eşleşme
+    // Önce negatif durumları (eksik/yapılmadı) kontrol edelim ki "yapılmadı" ifadesi içindeki "yapıldı"ya takılmasın
+    for (const phrase of exactPhrases.missing) {
+        if (new RegExp(`\\b${phrase}\\b`).test(normalizedText)) {
+            return 'missing';
+        }
+    }
+
     for (const [status, phrases] of Object.entries(exactPhrases)) {
+        if (status === 'missing') continue; // Missing'i zaten kontrol ettik
         for (const phrase of phrases) {
-            if (new RegExp(`\\b${phrase}\\b`).test(normalizedText)) {
+            const regex = new RegExp(`\\b${phrase}\\b`);
+            if (regex.test(normalizedText)) {
                 return status;
             }
         }
     }
 
-    // 2. Kök Eşleşmesi (Daha dikkatli)
-    if (normalizedText.match(/yapma|cozme|bitme|eksi/)) return 'missing';
-    if (normalizedText.match(/yap|coz|bit|tamam/)) return 'done';
-    if (normalizedText.match(/muaf|pas/)) return 'exempt';
-    if (normalizedText.match(/ver|ata/)) return 'assigned';
+    // 2. Aşama: Fuse.js ile Bulanık Arama (Daha Esnek)
+    const statusItems = [
+        { status: 'done', keywords: exactPhrases.done },
+        { status: 'missing', keywords: exactPhrases.missing },
+        { status: 'exempt', keywords: exactPhrases.exempt },
+        { status: 'assigned', keywords: exactPhrases.assigned }
+    ];
+
+    let bestFuzzyMatch = { status: null, score: 1 };
+
+    statusItems.forEach(item => {
+        const fuse = new Fuse(item.keywords, {
+            includeScore: true,
+            threshold: 0.3,
+            ignoreLocation: true,
+            minMatchCharLength: 3
+        });
+
+        words.forEach(word => {
+             const results = fuse.search(word);
+             if (results.length > 0 && results[0].score < bestFuzzyMatch.score) {
+                 bestFuzzyMatch = { status: item.status, score: results[0].score };
+             }
+        });
+    });
+
+    if (bestFuzzyMatch.score <= 0.3) {
+        return bestFuzzyMatch.status;
+    }
 
     return null;
 };
+
+const levenshteinDistance = (str1, str2) => {
+    const track = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+    for (let i = 0; i <= str1.length; i++) track[0][i] = i;
+    for (let j = 0; j <= str2.length; j++) track[j][0] = j;
+    for (let j = 1; j <= str2.length; j++) {
+        for (let i = 1; i <= str1.length; i++) {
+            const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+            track[j][i] = Math.min(track[j][i - 1] + 1, track[j - 1][i] + 1, track[j - 1][i - 1] + indicator);
+        }
+    }
+    return track[str2.length][str1.length];
+};
+
+const phoneticSimilarity = (str1, str2) => {
+    const n1 = turkishNormalize(str1);
+    const n2 = turkishNormalize(str2);
+    const maxLen = Math.max(n1.length, n2.length);
+    if (maxLen === 0) return 1;
+    return 1 - levenshteinDistance(n1, n2) / maxLen;
+};
+
 
 // ═══════════════════════════════════════════════════════════════
 // 🎯 ANA BİLEŞEN
@@ -114,7 +212,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
     // ════════ REFS ════════
     const recognitionRef = useRef(null);
     const autoListenTimerRef = useRef(null);
-    const processTimerRef = useRef(null); // NEFES ALMA PAYI İÇİN YENİ TİMER
+    const processTimerRef = useRef(null);
     const startListeningRef = useRef(null);
     const handleDraftGradeChangeRef = useRef(null);
     const applyChangesRef = useRef(null);
@@ -128,7 +226,8 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     ...std,
                     classId: cls.id,
                     className: cls.className,
-                    isVip: cls.type === 'vip'
+                    isVip: cls.type === 'vip',
+                    classType: cls.type || 'normal'
                 }))
                 : []
         );
@@ -184,170 +283,411 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
     // 🧠 GELİŞMİŞ ÖĞRENCİ ARAMA
     const findStudentsAdvanced = useCallback((inputText) => {
-        if (!inputText || allStudents.length === 0) return { students: [], isSingle: false };
-        const textNormalized = turkishNormalize(inputText);
+        if (!inputText || allStudents.length === 0) return { students: [], exactMatch: false, reason: 'empty' };
 
-        // 1. Tam Eşleşme
-        const exactMatches = allStudents.filter(s => turkishNormalize(s.name) === textNormalized);
-        if (exactMatches.length > 0) return { students: exactMatches, isSingle: exactMatches.length === 1 };
+        let text = inputText.toLocaleLowerCase('tr-TR').trim();
+        const textNormalized = turkishNormalize(text);
 
-        // 2. Fuse.js ile Bulanık Arama
-        const fuse = new Fuse(allStudents, { keys: ['name'], threshold: 0.3, ignoreLocation: true });
-        const results = fuse.search(inputText).map(r => r.item);
-        
-        if (results.length > 0) return { students: results.slice(0, 5), isSingle: results.length === 1 };
-        return { students: [], isSingle: false };
+        const exactMatches = allStudents.filter(s => {
+            const nameLower = s.name.toLocaleLowerCase('tr-TR');
+            return nameLower === text || turkishNormalize(nameLower) === textNormalized;
+        });
+
+        if (exactMatches.length === 1) return { students: exactMatches, exactMatch: true, isSingle: true, reason: 'exact_single' };
+        if (exactMatches.length > 1) return { students: exactMatches, exactMatch: true, isSingle: false, reason: 'exact_multiple' };
+
+        const includeMatches = allStudents.filter(s => {
+            const nameLower = s.name.toLocaleLowerCase('tr-TR');
+            return nameLower.includes(text) || text.includes(nameLower);
+        });
+
+        if (includeMatches.length === 1) return { students: includeMatches, exactMatch: false, isSingle: true, reason: 'include_single' };
+
+        const inputWords = text.split(/\s+/).filter(w => w.length > 2);
+        const wordOrderMatches = allStudents.filter(s => {
+            const nameWords = s.name.toLocaleLowerCase('tr-TR').split(/\s+/);
+            return inputWords.every(iw => nameWords.some(nw => nw.includes(iw) || iw.includes(nw)));
+        });
+
+        if (wordOrderMatches.length === 1) return { students: wordOrderMatches, exactMatch: false, isSingle: true, reason: 'wordorder_single' };
+
+        const phoneticMatches = allStudents.filter(s => {
+            const similarity = phoneticSimilarity(turkishNormalize(s.name), textNormalized);
+            return similarity > 0.75;
+        }).sort((a, b) => phoneticSimilarity(turkishNormalize(b.name), textNormalized) - phoneticSimilarity(turkishNormalize(a.name), textNormalized));
+
+        if (phoneticMatches.length === 1) return { students: phoneticMatches, exactMatch: false, isSingle: true, reason: 'phonetic_single' };
+
+        const fuse = new Fuse(allStudents, { keys: ['name'], threshold: 0.3, includeScore: true, ignoreLocation: true, minMatchCharLength: 2 });
+        const fuseResults = fuse.search(text);
+
+        if (fuseResults.length === 0) {
+            const levMatches = allStudents.map(s => ({
+                student: s,
+                distance: levenshteinDistance(turkishNormalize(s.name), textNormalized)
+            })).filter(m => m.distance <= 3).sort((a, b) => a.distance - b.distance);
+
+            if (levMatches.length === 1) return { students: [levMatches[0].student], exactMatch: false, isSingle: true, reason: 'levenshtein_single' };
+            if (levMatches.length > 1) return { students: levMatches.slice(0, 5).map(m => m.student), exactMatch: false, isSingle: false, reason: 'levenshtein_multiple' };
+            return { students: [], exactMatch: false, reason: 'no_match' };
+        }
+
+        const bestScore = fuseResults[0].score;
+        const scoreThreshold = bestScore + 0.15;
+        let matchedStudents = fuseResults.filter(r => r.score <= scoreThreshold).map(r => r.item);
+
+        const nameGroups = {};
+        matchedStudents.forEach(s => {
+            const baseName = s.name.toLocaleLowerCase('tr-TR');
+            if (!nameGroups[baseName]) nameGroups[baseName] = [];
+            nameGroups[baseName].push(s);
+        });
+
+        const groupKeys = Object.keys(nameGroups);
+        if (groupKeys.length === 1 && nameGroups[groupKeys[0]].length === 1) return { students: [nameGroups[groupKeys[0]][0]], exactMatch: false, isSingle: true, reason: 'fuse_single' };
+        if (groupKeys.length === 1 && nameGroups[groupKeys[0]].length > 1) {
+            return { students: nameGroups[groupKeys[0]], exactMatch: false, isSingle: false, reason: 'same_name_multiple', nameGroup: groupKeys[0] };
+        }
+
+        return { students: matchedStudents.slice(0, 5), exactMatch: false, isSingle: matchedStudents.length === 1, reason: 'fuse_multiple' };
     }, [allStudents]);
 
     // 📚 KONU/KAYNAK BULMA
     const findTopicOrSource = useCallback((items, inputTranscript, type = 'topic') => {
         if (!items || items.length === 0 || !inputTranscript) return null;
 
-        const textNorm = turkishNormalize(inputTranscript);
+        const text = inputTranscript.toLocaleLowerCase('tr-TR');
+        const textNorm = turkishNormalize(text);
+        
         let bestMatch = null;
         let maxLength = -1;
+        let maxMatchedWords = -1;
 
-        // 1. TAM EŞLEŞME (En Uzun Olanı Seç)
+        // 1. TAM EŞLEŞME - EN UZUN EŞLEŞMEYİ BUL
         items.forEach(item => {
-            const itemNorm = turkishNormalize(getSafeText(item.title));
-            if (textNorm.includes(itemNorm) || itemNorm.includes(textNorm)) {
-                if (itemNorm.length > maxLength) {
-                    maxLength = itemNorm.length;
+            const itemTitle = getSafeText(item.title).toLocaleLowerCase('tr-TR');
+            const itemNorm = turkishNormalize(itemTitle);
+
+            if (text.includes(itemTitle) || textNorm.includes(itemNorm)) {
+                if (itemTitle.length > maxLength) {
+                    maxLength = itemTitle.length;
                     bestMatch = item;
                 }
             }
         });
+
+        if (bestMatch) return bestMatch; 
+
+        // 2. KELİME BAZLI ARAMA
+        const inputWords = textNorm.split(/\s+/).filter(w => w.length > 2);
+        
+        items.forEach(item => {
+            const itemTitle = getSafeText(item.title).toLocaleLowerCase('tr-TR');
+            const itemNorm = turkishNormalize(itemTitle);
+            const itemWords = itemNorm.split(/\s+/).filter(w => w.length > 2);
+            
+            let matchedWords = 0;
+            inputWords.forEach(iw => {
+                if(itemWords.some(tw => tw.includes(iw) || iw.includes(tw))) {
+                   matchedWords++; 
+                }
+            });
+
+            if (matchedWords > 0) {
+                if (matchedWords > maxMatchedWords || (matchedWords === maxMatchedWords && itemTitle.length > maxLength)) {
+                    maxMatchedWords = matchedWords;
+                    maxLength = itemTitle.length;
+                    bestMatch = item;
+                }
+            }
+        });
+
         if (bestMatch) return bestMatch;
 
-        // 2. KISALTMALAR (Sadece Kaynaklar)
+        // 3. KISALTMALAR VE ÖZEL DURUMLAR (Sadece Kaynaklar için)
         if (type === 'source') {
              const shortcuts = {
-                'video ders defteri': ['vdd', 'video ders'],
-                'soru bankası': ['sb', 'soru banka'],
-                'konu anlatımı': ['ka', 'anlatim'],
-                'ek kaynak': ['ek', 'ekk', 'ek kaynak', 'ek 1', 'ek 2'],
-                'çıkmış sorular': ['çs', 'cikmis']
+                'video ders defteri': ['vdd', 'video ders', 've de', 've d', 'bide', 'video defter', 'ders defteri', 'ders defter'],
+                'soru bankası': ['sb', 'soru banka', 'se be', 'soru b', 'banka', 'soru bank', 'bankası'],
+                'konu anlatımı': ['ka', 'konu anlat', 'konu anl', 'anlatım', 'konu anlatım'],
+                'ek kaynak': ['ek', 'ek kay', 'kaynak ek', 'ekk', 'ek kaynak', 'ek 1', 'ek 2'],
+                'çalışma kitabı': ['çk', 'çalışma kit', 'kitapçık', 'çalışma k', 'çalışma kitab'],
+                'deneme sınavı': ['ds', 'deneme', 'sınav', 'deneme s', 'deneme sınav'],
+                'yaprak test': ['yt', 'yaprak', 'test y', 'yaprak t', 'yaprak test'],
+                'çıkmış sorular': ['çs', 'çıkmış', 'sorular', 'çıkmış soru', 'eski sorular'],
+                'formül kitabı': ['fk', 'formül', 'formül kit', 'formül k'],
+                'konu testi': ['kt', 'konu test', 'konu t', 'test konu']
             };
+
+            let highestShortcutScore = 0;
+            let shortcutMatch = null;
+
             items.forEach(item => {
-                 const itemNorm = turkishNormalize(getSafeText(item.title));
+                 const itemTitle = getSafeText(item.title).toLocaleLowerCase('tr-TR');
                  Object.entries(shortcuts).forEach(([full, shorts]) => {
-                    if (itemNorm.includes(turkishNormalize(full))) {
-                        if (shorts.some(s => textNorm.includes(s))) bestMatch = item;
+                    if (itemTitle.includes(full)) {
+                        shorts.forEach(s => {
+                            if ((text.includes(s) || text.includes(itemTitle.replace(full, s).trim())) && 98 > highestShortcutScore) {
+                                highestShortcutScore = 98;
+                                shortcutMatch = item;
+                            }
+                        });
                     }
                 });
             });
-            if(bestMatch) return bestMatch;
+            if(shortcutMatch) return shortcutMatch;
         }
 
-        // 3. FUSE.JS (Bulanık)
-        const fuse = new Fuse(items, { keys: ['title'], threshold: 0.4 });
-        const results = fuse.search(inputTranscript);
-        return results.length > 0 ? results[0].item : null;
+        // 4. FUSE.JS (Son çare, hafif esnek arama)
+        const fuse = new Fuse(items, {
+            keys: ['title'],
+            threshold: 0.4, 
+            ignoreLocation: true,
+            minMatchCharLength: 3
+        });
+        const results = fuse.search(text);
+        if (results.length > 0) return results[0].item;
+
+        return null;
     }, []);
 
-    // 🔬 AKILLI KOMUT ANALİZİ
-    const analyzeCommandLocal = useCallback((transcript) => {
-        // SES DÜZELTME YAMASI (Uley -> Ali, wdd -> vdd)
-        let text = fixMisheardWords(transcript);
-        
-        setPendingAction(null);
-        setPendingSources([]);
-        setPendingStatusSelect(null);
 
-        // GLOBAL KOMUTLAR
-        if (text.match(/kaydet|onayla|sisteme isley|kapat/)) {
-            applyChangesRef.current?.();
-            return;
+    // 🔬 AKILLI KOMUT ANALİZİ
+    const analyzeCommandLocal = useCallback((transcript, isFinalFallback = true) => {
+        // Ses düzeltme yamasını uygula
+        let text = fixMisheardWords(transcript.trim());
+        let originalText = text;
+
+        if (isFinalFallback) {
+            setPendingAction(null);
+            setPendingSources([]);
+            setPendingStatusSelect(null);
         }
-        if (text.match(/ogrenci degistir|yeni ogrenci|baska ogrenci/)) {
+
+        // --- GLOBAL KOMUTLAR ---
+        if (text.match(/kaydet|onayla|sisteme isley|kaydet ve kapat|kapat|cik|iptal/)) {
+            if (text.match(/kaydet|onayla|sisteme isley|kaydet ve kapat/)) {
+                applyChangesRef.current?.();
+            } else {
+                onClose();
+            }
+            return true;
+        }
+        
+        if (text.match(/ogrenci degistir|yeni ogrenci|ogrenci ara|baska ogrenci|degistir/)) {
             handleResetStudent();
-            return;
+            return true;
         }
+
+        // Sayı dönüşümleri
+        const numberMap = {
+            'birinci': '1', 'ikinci': '2', 'üçüncü': '3', 'dördüncü': '4', 'beşinci': '5',
+            'altıncı': '6', 'yedinci': '7', 'sekizinci': '8', 'dokuzuncu': '9', 'onuncu': '10',
+            'bir': '1', 'iki': '2', 'üç': '3', 'dört': '4', 'beş': '5',
+            'altı': '6', 'yedi': '7', 'sekiz': '8', 'dokuz': '9', 'on': '10'
+        };
+
+        Object.entries(numberMap).forEach(([word, num]) => {
+            text = text.replace(new RegExp(`\\b${word}\\b`, 'g'), num);
+        });
 
         // 🎓 ÖĞRENCİ MODU
         if (commandMode === 'student' || !selectedStudent) {
             const searchResult = findStudentsAdvanced(text);
 
             if (searchResult.students.length === 0) {
-                setJarvisFeedback("❌ Öğrenci bulunamadı. Lütfen adı tekrar söyleyin.");
-                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
-                return;
+                if (isFinalFallback) {
+                    setJarvisFeedback("❌ Öğrenci bulunamadı. Lütfen adı tekrar söyleyin.");
+                    autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
+                }
+                return false;
             }
 
             if (searchResult.isSingle) {
                 const student = searchResult.students[0];
                 const targetClass = (classes || []).find(c => c.id === student.classId);
-                
-                setFoundStudents([student]);
-                setSelectedStudent(student);
-                setFoundTopics(targetClass?.topics || []);
-                setCommandMode('homework');
-                setJarvisFeedback(`✅ ${student.name} kilitlendi. Ödev durumunu söyleyin.`);
-                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1000);
+
+                if (isFinalFallback) {
+                    setFoundStudents([student]);
+                    setSelectedStudent(student);
+                    setFoundTopics(targetClass?.topics || []);
+                    setCommandMode('homework');
+                    setJarvisFeedback(`✅ ${student.name} ${student.isVip ? '(VIP)' : ''} kilitlendi. Ödev durumunu söyleyin.`);
+                    autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1000);
+                }
+                return true;
             } else {
-                setFoundStudents(searchResult.students);
-                setJarvisFeedback(`⚠️ Birden fazla öğrenci bulundu. Lütfen ekrandan seçin.`);
+                if (isFinalFallback) {
+                    setFoundStudents(searchResult.students);
+                    setSelectedStudent(null);
+                    setFoundTopics([]);
+
+                    if (searchResult.reason === 'same_name_multiple') {
+                        setJarvisFeedback(`⚠️ ${searchResult.nameGroup}: ${searchResult.students.length} öğrenci bulundu. VIP veya sınıf tipini söyleyin.`);
+                    } else {
+                        setJarvisFeedback(`⚠️ ${searchResult.students.length} öğrenci bulundu. Lütfen listeden seçin.`);
+                    }
+                }
+                return false;
             }
-            return;
         }
 
         // 📝 ÖDEV MODU
+        if (!selectedStudent) return false;
+
+        // 1. Önce durumu tespit et
         const status = detectStatus(text);
+        
+        // 2. "Tümü/Hepsi" veya "Hiçbiri" ifadelerini kontrol et
+        const hasAllKeyword = text.match(/tumunu|tamamini|hepsini|butun kaynaklar|tum kaynaklar|tumu|tamami|hepsi|hepsine|tumune|tum kaynagi|butunu|hepsin|tamamin/);
+        const hasNoneKeyword = text.match(/hicbiri|hicbirini|hicbirine|hic biri|sifir|bos hepsi|hicbir|hic/);
+        
+        const isBulkAction = hasAllKeyword || hasNoneKeyword;
+
         const targetClass = (classes || []).find(c => c.id === selectedStudent.classId);
         const topics = targetClass?.topics || [];
-        
-        let targetTopic = findTopicOrSource(topics, text, 'topic');
+        let targetTopic = null;
+
+        // 3. Önce Konuyu Bul
+        const topicOrderMatch = text.match(/(\d+)\.\s*(konu|ünite|ders|bölüm|konular|üniteler|topic)/) || text.match(/(?:konu|ünite|ders)\s+(\d+)/);
+        if (topicOrderMatch) {
+            const topicIndex = parseInt(topicOrderMatch[1]) - 1;
+            if (topics[topicIndex]) targetTopic = topics[topicIndex];
+        }
 
         if (!targetTopic) {
-            setJarvisFeedback("📚 Konu anlaşılmadı. Önce konunun adını söyleyin.");
-            autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 2000);
-            return;
+            targetTopic = findTopicOrSource(topics, originalText, 'topic');
+        }
+
+        if (!targetTopic) {
+            if (isFinalFallback) {
+                setJarvisFeedback("📚 Konu anlaşılmadı. Lütfen önce konunun adını veya numarasını söyleyin.");
+                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
+            }
+            return false;
         }
 
         const subColumns = targetTopic.subColumns || [];
-        
-        // "TÜMÜ" MANTIĞI: Sadece konunun adı cümleden çıkarıldıktan sonra "tümü/hepsi" geçiyorsa
-        const topicTitleNorm = turkishNormalize(getSafeText(targetTopic.title));
-        const textWithoutTopic = turkishNormalize(text).replace(topicTitleNorm, "").trim();
-        
-        const isAllSources = textWithoutTopic.match(/tumunu|tamamini|hepsini|butun|tumu|tamami|hepsi/);
+        const subColumnsCount = subColumns.length;
 
-        if (!status) {
-            if (subColumns.length === 1) {
-                setPendingStatusSelect({ studentId: selectedStudent.id, colId: subColumns[0].id, topicTitle: targetTopic.title, colTitle: subColumns[0].title });
-                setJarvisFeedback(`"${targetTopic.title} -> ${subColumns[0].title}" için durum seçin.`);
-            } else {
-                setPendingSources(subColumns);
-                setJarvisFeedback(`"${targetTopic.title}" anlaşıldı. Lütfen ekrandan kaynak seçin veya sesli belirtin.`);
+        // 4. İŞLEM MANTIĞI
+        
+        // A) Eğer "Tümü" veya "Hiçbiri" denmişse VE durum belli ise -> O konunun TÜM kaynaklarını işaretle
+        if (isBulkAction && status) {
+            const finalStatus = hasNoneKeyword ? 'missing' : status;
+            
+            if (isFinalFallback) {
+                subColumns.forEach(col => {
+                    handleDraftGradeChangeRef.current?.(selectedStudent.id, col.id, finalStatus);
+                });
+                setJarvisFeedback(`✅ ${targetTopic.title} altındaki tüm kaynaklar "${finalStatus}" olarak güncellendi.`);
+                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
             }
-            return;
+            return true;
         }
 
-        // DURUM VARSA İŞLE
-        if (isAllSources) {
-            // TÜMÜNÜ İŞARETLE
-            subColumns.forEach(col => {
-                handleDraftGradeChangeRef.current?.(selectedStudent.id, col.id, status);
-            });
-            setJarvisFeedback(`✅ ${targetTopic.title} altındaki tüm kaynaklar "${status}" yapıldı.`);
-            autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
-        } else if (subColumns.length === 1) {
-            handleDraftGradeChangeRef.current?.(selectedStudent.id, subColumns[0].id, status);
-            setJarvisFeedback(`✅ ${targetTopic.title} -> ${subColumns[0].title}: "${status}" kaydedildi.`);
-            autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
-        } else {
+        // B) Durum belirtilmiş ama "tümü/hepsi" denmemişse (Tekil işlem yapmaya çalış)
+        if (status) {
+            // Eğer konuda zaten tek 1 kaynak varsa, direkt ona ata
+            if (subColumnsCount === 1) {
+                const onlyCol = subColumns[0];
+                if (isFinalFallback) {
+                    handleDraftGradeChangeRef.current?.(selectedStudent.id, onlyCol.id, status);
+                    setJarvisFeedback(`✅ ${targetTopic.title} → ${onlyCol.title}: "${status}" olarak kaydedildi.`);
+                    autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
+                }
+                return true;
+            }
+
+            // Birden fazla kaynak varsa, cümlede kaynak adı arayalım
+            // Konu başlığını cümleden çıkaralım ki kaynak adıyla karışmasın
+            const topicTitleNorm = turkishNormalize(getSafeText(targetTopic.title));
+            const textWithoutTopic = turkishNormalize(originalText).replace(topicTitleNorm, "").trim();
+            
             const targetCol = findTopicOrSource(subColumns, textWithoutTopic, 'source');
+            
             if (targetCol) {
-                handleDraftGradeChangeRef.current?.(selectedStudent.id, targetCol.id, status);
-                setJarvisFeedback(`✅ ${targetTopic.title} -> ${targetCol.title}: "${status}" kaydedildi.`);
-                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
+                if (isFinalFallback) {
+                    handleDraftGradeChangeRef.current?.(selectedStudent.id, targetCol.id, status);
+                    setJarvisFeedback(`✅ ${targetTopic.title} → ${targetCol.title}: "${status}" kaydedildi.`);
+                    autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
+                }
+                return true;
             } else {
-                setPendingAction({ studentId: selectedStudent.id, status: status, topicTitle: targetTopic.title });
-                setPendingSources(subColumns);
-                setJarvisFeedback(`"${targetTopic.title}" anlaşıldı. Hangi kaynak "${status}" yapılacak?`);
+                // Konu bulundu, durum bulundu ama HANGİ Kayanak olduğu anlaşılamadı. Listeden seçtir.
+                if (isFinalFallback) {
+                    setPendingAction({
+                        studentId: selectedStudent.id,
+                        topicId: targetTopic.id,
+                        status: status,
+                        topicTitle: targetTopic.title
+                    });
+                    setPendingSources(subColumns);
+                    setJarvisFeedback(`"${targetTopic.title}" anlaşıldı. Hangi kaynak "${status}" işaretlenecek?`);
+                }
+                return false;
             }
         }
+
+        // C) Durum belirtilmemişse
+        if (!status) {
+            // Tek kaynak varsa durum sor
+            if (subColumnsCount === 1 && isFinalFallback) {
+                const onlyCol = subColumns[0];
+                setPendingStatusSelect({
+                    studentId: selectedStudent.id,
+                    topicId: targetTopic.id,
+                    colId: onlyCol.id,
+                    colTitle: onlyCol.title,
+                    topicTitle: targetTopic.title
+                });
+                setJarvisFeedback(`"${targetTopic.title} → ${onlyCol.title}" için durum seçin.`);
+                return true;
+            }
+
+            // Birden fazla kaynak var, kaynağı bulmaya çalış
+            const topicTitleNorm = turkishNormalize(getSafeText(targetTopic.title));
+            const textWithoutTopic = turkishNormalize(originalText).replace(topicTitleNorm, "").trim();
+            const targetCol = findTopicOrSource(subColumns, textWithoutTopic, 'source');
+            
+            if (targetCol && isFinalFallback) {
+                 setPendingStatusSelect({
+                    studentId: selectedStudent.id,
+                    topicId: targetTopic.id,
+                    colId: targetCol.id,
+                    colTitle: targetCol.title,
+                    topicTitle: targetTopic.title
+                });
+                setJarvisFeedback(`"${targetTopic.title} → ${targetCol.title}" için durum seçin.`);
+                return true;
+            } else if (isFinalFallback) {
+                 // Ne kaynak bulundu ne de durum, kaynakları listele
+                 setPendingSources(subColumns);
+                 setJarvisFeedback(`"${targetTopic.title}" anlaşıldı. Lütfen kaynak ve durum belirtin.`);
+                 return true;
+            }
+            return false;
+        }
+
     }, [commandMode, selectedStudent, classes, findStudentsAdvanced, findTopicOrSource, handleResetStudent]);
+
+    const handleCommandAlternatives = useCallback((alternatives) => {
+        setIsProcessing(true);
+
+        for (const transcript of alternatives) {
+            let hasProcessed = analyzeCommandLocal(transcript, false);
+            if (hasProcessed) {
+                setSpeechTranscript(transcript);
+                analyzeCommandLocal(transcript, true);
+                setIsProcessing(false);
+                return;
+            }
+        }
+
+        setSpeechTranscript(alternatives[0]);
+        analyzeCommandLocal(alternatives[0], true);
+        setIsProcessing(false);
+    }, [analyzeCommandLocal]);
 
     // 🎤 SES DİNLEME (Nefes Alma Payı ile)
     const startListening = useCallback(() => {
@@ -366,7 +706,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         recognitionRef.current = recognition;
         recognition.lang = 'tr-TR';
         
-        // ÖNEMLİ: Continuous ve Interim aktif edilerek nefes alma payı bırakılıyor
+        // ÖNEMLİ: Sürekli dinleme ve ara sonuçlar aktif edildi (Nefes payı için)
         recognition.continuous = true; 
         recognition.interimResults = true;
 
@@ -377,6 +717,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         };
 
         recognition.onresult = (event) => {
+            // Sonuçları birleştir
             let currentTranscript = Array.from(event.results)
                 .map(result => result[0].transcript)
                 .join('');
@@ -384,12 +725,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             setSpeechTranscript(currentTranscript);
             setIsProcessing(true);
 
-            // Her yeni kelimede sayacı sıfırla (NEFES ALMA SÜRESİ)
+            // Her yeni kelime geldiğinde zamanlayıcıyı sıfırla
             if (processTimerRef.current) clearTimeout(processTimerRef.current);
 
-            // Kullanıcı 1.5 saniye susarsa komutu işlet
+            // Kullanıcı 1.5 saniye (1500ms) susarsa komutu işleme al
             processTimerRef.current = setTimeout(() => {
-                recognition.stop();
+                recognition.stop(); // Dinlemeyi manuel olarak durdur
                 analyzeCommandLocal(currentTranscript);
                 setIsProcessing(false);
             }, 1500); 
@@ -400,6 +741,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             if (e.error === 'no-speech') {
                 setJarvisFeedback("🔇 Ses algılanmadı. Bekleniyor...");
                 autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 2000);
+            } else if (e.error === 'audio-capture') {
+                setJarvisFeedback("🎤 Mikrofon erişimi yok.");
+            } else if (e.error === 'not-allowed') {
+                setJarvisFeedback("🚫 Mikrofon izni reddedildi.");
             }
         };
 
