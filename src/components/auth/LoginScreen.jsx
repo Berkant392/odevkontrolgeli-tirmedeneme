@@ -20,7 +20,7 @@ const CanvasStarfield = () => {
         const G=['#ffd700','#ffe566','#ffc107','#fff8c0'];
         const W=['rgba(255,255,255,0.9)','rgba(200,190,255,0.75)','rgba(255,255,255,0.65)'];
         const pts=[];
-        for(let i=0;i<85;i++){
+        for(let i=0; i<85; i++){
             const g=Math.random()<0.2;
             pts.push({
                 x:Math.random()*2000, y:Math.random()*1000,
@@ -97,8 +97,6 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
 
     const [isIos, setIsIos] = useState(false);
     const [showIosModal, setShowIosModal] = useState(false);
-    
-    // 🔥 SİHİRBAZ ADIM TAKİBİ İÇİN STATE
     const [iosStep, setIosStep] = useState(1);
 
     useEffect(() => {
@@ -139,7 +137,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
 
     const handlePwaInstall = async () => {
         if (isIos) {
-            setIosStep(1); // Sihirbazı birinci adımdan başlat
+            setIosStep(1); 
             setShowIosModal(true);
         } else if (deferredPrompt) {
             deferredPrompt.prompt();
@@ -149,33 +147,33 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
         }
     };
 
-    // 🔥 ADIM ADIM REHBER İÇERİK VERİ MODELİ
+    // 🔥 EVRENSEL HALE GETİRİLEN IOT SİHİRBAZ ADIMLARI (Safari & Chrome Ortak)
     const iosStepsData = [
         {
             id: 1,
-            title: "🧭 Adım 1: Safari Tarayıcı",
-            desc: "Uygulamaya kesinlikle iPhone'unuzun kendi tarayıcısı olan Safari üzerinden girdiğinizden emin olun. Chrome veya diğer tarayıcılarda kurulum yapılamaz.",
+            title: "📤 Adım 1: Paylaş veya Menü Butonu",
+            desc: "Kullandığınız tarayıcıda 'Paylaş' simgesine dokunun. (Safari'de ekranın alt ortasında, Chrome'da ise sağ üst köşede veya adres çubuğunun yanındadır).",
             img: "/pwa/adim1.png",
-            icon: <Smartphone className="text-blue-400" size={24} />
+            icon: <Share className="text-blue-400" size={24} />
         },
         {
             id: 2,
-            title: "📤 Adım 2: Paylaş Butonu",
-            desc: "Safari ekranının en alt ortasında (veya tabletlerde sağ üstte) yer alan yukarı doğru ok işaretli 'Paylaş' simgesine dokunun.",
+            title: "📜 Adım 2: Seçenekleri Kaydırın",
+            desc: "Açılan tarayıcı menüsünü veya paylaşım panelini parmağınızla yukarıya doğru kaydırarak alt seçeneklere ilerleyin.",
             img: "/pwa/adim2.png",
-            icon: <Share className="text-sky-400" size={24} />
+            icon: <Smartphone className="text-sky-400" size={24} />
         },
         {
             id: 3,
             title: "➕ Adım 3: Ana Ekrana Ekle",
-            desc: "Açılan paylaşım menüsünü parmağınızla hafifçe yukarı kaydırın ve seçenekler arasından listelenen 'Ana Ekrana Ekle' seçeneğini bulun ve basın.",
+            desc: "Seçenekler listesinin içinde yer alan 'Ana Ekrana Ekle' (Add to Home Screen) butonunu bulun ve dokunun.",
             img: "/pwa/adim3.png",
             icon: <PlusSquare className="text-indigo-400" size={24} />
         },
         {
             id: 4,
-            title: "💎 Adım 4: Kurulumu Tamamla",
-            desc: "Son olarak açılan onay penceresinin sağ üst köşesindeki 'Ekle' butonuna tıklayın. Berkant Hoca Platformu artık telefonunuzun ana ekranında hazır!",
+            title: "🎉 Adım 4: Kurulumu Tamamla",
+            desc: "Son olarak ekranın sağ üst köşesinde beliren 'Ekle' (Add) seçeneğine tıklayın. Berkant Hoca Platformu artık ana ekranınızda bir mobil uygulama!",
             img: "/pwa/adim4.png",
             icon: <GraduationCap className="text-emerald-400" size={24} />
         }
@@ -352,7 +350,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                 </AnimatePresence>
             </motion.div>
 
-            {/* 🔥 SAFARI HATASI VERMEYEN KATI ARKA PLANLI SİHİRBAZ MODALI */}
+            {/* 🔥 SAFARI VE CHROME İÇİN KUSURSUZ ÇALIŞAN KATI ARKA PLANLI REHBER MODALI */}
             <AnimatePresence>
                 {showIosModal && (
                     <div className="fixed inset-0 bg-slate-950 z-[99999] flex items-center justify-center p-4">
@@ -361,11 +359,10 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                             animate={{ opacity: 1, y: 0, scale: 1 }} 
                             exit={{ opacity: 0, y: 30, scale: 0.95 }}
                             className="bg-slate-900 border-2 border-slate-800 p-5 md:p-7 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl flex flex-col justify-between min-h-[500px] relative overflow-hidden"
+                            onClick={e => e.stopPropagation()}
                         >
-                            {/* Kapat Butonu */}
                             <button onClick={() => setShowIosModal(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full bg-slate-800 transition-colors z-50"><X size={16}/></button>
 
-                            {/* Üst Kısım: Başlık */}
                             <div>
                                 <div className="flex justify-center mb-2 mt-2">
                                     <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/30 text-brandPurple rounded-full flex items-center justify-center shadow-glow">
@@ -376,14 +373,12 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                 <p className="text-slate-300 text-xs mt-2 px-1 font-medium leading-relaxed min-h-[50px]">{iosStepsData[iosStep - 1].desc}</p>
                             </div>
 
-                            {/* Orta Kısım: Görsel Alanı (GitHub'a attığın resimler burada yüklenecek) */}
                             <div className="my-4 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-center h-48 overflow-hidden relative shadow-inner">
                                 <img 
                                     src={iosStepsData[iosStep - 1].img} 
                                     alt={iosStepsData[iosStep - 1].title} 
                                     className="max-h-full max-w-full object-contain pointer-events-none"
                                     onError={(e) => {
-                                        // Eğer resim henüz GitHub/Public içerisine yüklenmediyse şık bir placeholder gösterir
                                         e.target.style.display = 'none';
                                         e.target.nextSibling.style.display = 'flex';
                                     }}
@@ -395,9 +390,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin, deferredPrompt, isStandal
                                 </div>
                             </div>
 
-                            {/* Alt Kısım: Navigasyon Kontrolleri */}
                             <div>
-                                {/* Sayfa İndikatör Noktaları */}
                                 <div className="flex justify-center gap-1.5 mb-4">
                                     {iosStepsData.map((step) => (
                                         <div key={step.id} className={`h-1.5 rounded-full transition-all duration-300 ${iosStep === step.id ? 'w-6 bg-brandPurple shadow-glow' : 'w-1.5 bg-slate-700'}`} />
