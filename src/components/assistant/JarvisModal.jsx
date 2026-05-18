@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, Loader2 } from 'lucide-react';
+// BOOM! UserPlus is now in the VIP lounge.
+import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, Loader2, UserPlus } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import Fuse from 'fuse.js';
 
