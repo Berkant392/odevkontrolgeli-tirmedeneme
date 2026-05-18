@@ -27,11 +27,10 @@ const darkStatusStyles = {
 
 const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) => {
     const [isListening, setIsListening] = useState(false);
-    const [isThinking, setIsThinking] = useState(false); 
     const [speechTranscript, setSpeechTranscript] = useState("");
     const [textCommand, setTextCommand] = useState("");
     
-    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem aktif. Komutunuzu bekliyorum.");
+    const [jarvisFeedback, setJarvisFeedback] = useState("Yerel sistem aktif. Komutunuzu bekliyorum.");
     
     const [foundStudents, setFoundStudents] = useState(initialStudent ? [initialStudent] : []);
     const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
@@ -41,14 +40,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
     const [pendingSources, setPendingSources] = useState([]); 
     
     const [draftGrades, setDraftGrades] = useState({});
-    const [draftNotes, setDraftNotes] = useState({});
     
     const recognitionRef = useRef(null);
     const inputRef = useRef(null);
 
     const sortedFoundTopics = Array.isArray(foundTopics) ? [...foundTopics].filter(Boolean).reverse() : [];
 
-    // Başlangıç Kurulumu
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         
@@ -56,7 +53,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             const safeClasses = Array.isArray(classes) ? classes.filter(Boolean) : [];
             const targetClass = safeClasses.find(c => c.id === initialStudent.classId);
             setFoundTopics(targetClass?.topics || []);
-            setJarvisFeedback(`${initialStudent.name} profili kilitli.`);
+            setJarvisFeedback(`${initialStudent.name} profili aktif. Komut bekliyorum.`);
         }
 
         return () => { 
@@ -65,118 +62,110 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         };
     }, [initialStudent, classes]);
 
-    // 🧠 SAF NİYET OKUYUCU (Veritabanı API'ye gönderilmez, Token israfı %99 engellendi)
-    const callGroqAPI = async (transcript) => {
-        const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-        if (!apiKey) { return { error: "API Anahtarı bulunamadı." }; }
-
-        const systemPrompt = `
-Sen bir veri çıkarım asistanısın. Görevin, kullanıcının cümlesini SADECE JSON formatına çevirmektir. Asla yorum yazma.
-
-Kullanıcı cümlesinden şu değerleri çıkar:
-1. "student": Öğrenci adı. Yoksa null bırak.
-2. "topic": Konu başlığı (Örn: Logaritma, Silindir, Fonksiyonlar). Yoksa null bırak.
-3. "source": Kaynak adı (Örn: VDD, Soru Bankası). Kullanıcı "tüm kaynaklar" veya "hepsi" diyorsa 'all' yaz. Yoksa null bırak.
-4. "status": İşlem durumu. Şunlardan birini seç: 
-   - "done" (yaptı, çözdü, bitti, yapıldı, full, yapıyoruz)
-   - "missing" (eksik, yapmadı, boş, yok, unuttu)
-   - "assigned" (verildi, atandı)
-   - "exempt" (muaf, es geç)
-   Yoksa null bırak.
-5. "action": Niyet. 
-   - "select_student": Sadece öğrenci adı söylendiyse (Örn: "Ahmet", "Merve eski").
-   - "update": Not veya durum giriliyorsa (Örn: "Üslü sayılar VDD bitti").
-   - "save_and_close": "Kaydet kapat", "Onayla" deniyorsa.
-   - "close_request": Sadece "Kapat", "Çık" deniyorsa.
-6. "feedback": Ekrana yazılacak kısa, net Türkçe onay mesajı (Örn: "Öğrenci seçildi", "Tüm kaynaklar işaretlendi").
-
-ÖNEMLİ: SADECE GEÇERLİ JSON DÖNDÜR.
-`;
-
-        try {
-            const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'llama-3.3-70b-versatile',
-                    messages: [ { role: 'system', content: systemPrompt }, { role: 'user', content: transcript } ],
-                    response_format: { type: 'json_object' },
-                    temperature: 0.1
-                })
-            });
-            
-            if (!response.ok) {
-                // Eğer kotan dolduysa veya API patlarsa anında ekranda göreceksin
-                return { error: `Groq API Hatası (${response.status}): Sinyal kesildi.` };
-            }
-
-            const data = await response.json();
-            return JSON.parse(data.choices[0].message.content);
-        } catch (error) {
-            return { error: `Sistem Hatası: ${error.message}` };
-        }
-    };
-
-    const processGroqResult = (aiResult) => {
-        if (!aiResult) {
-            setJarvisFeedback("Sinyal anlaşılamadı. Lütfen tekrar edin.");
-            return;
-        }
-
-        // HATA YAKALAYICI EKRAN
-        if (aiResult.error) {
-            setJarvisFeedback(aiResult.error);
-            return;
-        }
-
-        // 1. KAYDET VE KAPAT
-        if (aiResult.action === 'save_and_close') {
+    // 🧠 100% YEREL (LOCAL) NLP MOTORU (API'siz, Kısıtlamasız, Işık Hızında)
+    const analyzeCommandLocal = (transcript) => {
+        let text = transcript.toLocaleLowerCase('tr-TR');
+        setPendingAction(null);
+        setPendingSources([]);
+        
+        // 1. SİSTEM KOMUTLARI
+        if (text.includes('kaydet') || text.includes('onayla')) {
             setJarvisFeedback("Değişiklikler kaydediliyor...");
             applyChanges();
             return;
         }
-
-        // 2. SADECE KAPAT
-        if (aiResult.action === 'close_request') {
+        if (text === 'kapat' || text === 'çık') {
             if (Object.keys(draftGrades).length > 0) {
-                setJarvisFeedback("Kaydedilmemiş notlar var. Lütfen önce 'Kaydet' deyin.");
-                return;
+                setJarvisFeedback("Kaydedilmemiş notlar var. Lütfen 'Kaydet' butonunu kullanın.");
             } else {
                 onClose();
-                return;
             }
+            return;
         }
+
+        // 2. KELİME VE RAKAM DÜZELTMELERİ
+        text = text.replace(/birinci/g, '1').replace(/ikinci/g, '2').replace(/üçüncü/g, '3')
+                   .replace(/\bbir\b/g, '1').replace(/\biki\b/g, '2').replace(/\b[uü]ç\b/g, '3')
+                   .replace(/testi/g, 'test').replace(/testini/g, 'test');
+        if (text.includes('vdd')) text += " video ders defteri";
+
+        // 3. DURUM (STATUS) TESPİTİ
+        let status = null;
+        if (text.match(/çözmemiş|yapmamış|yapmadı|eksik|boş|yok|çözmüyor|yapılmadı|çözülmedi/)) status = 'missing';
+        else if (text.match(/çözdü|yaptı|tamamladı|bitirdi|full|bitti|çözmüş|yapmış|yapıldı|çözüldü|tamamlandı|yapıyoruz/)) status = 'done';
+        else if (text.match(/verdim|verildi|atadım|ödev ver|çözecek|yapacak/)) status = 'assigned';
+        else if (text.match(/muaf|gerek yok|çözmesin/)) status = 'exempt';
+
+        const isAllSources = text.match(/tüm kaynaklar|hepsi|bütün kaynaklar/);
+
+        // 4. BULANIK ARAMA (FUSE.JS) MOTORU
+        const extractNumbers = (str) => { const m = str.match(/\d+/g); return m ? m : []; };
+        const transcriptNumbers = extractNumbers(text);
+
+        const findBestMatch = (items, key, threshold = 0.4) => {
+            if (!items || items.length === 0) return null;
+            const safeItems = items.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item[key]).toLocaleLowerCase('tr-TR') }));
+            const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: threshold, distance: 100, includeScore: true, ignoreLocation: true });
+            
+            const words = text.replace(/[.,!?]/g, "").split(/\s+/).filter(w => w.length > 2);
+            let bestMatch = null; let bestScore = 1;
+
+            // Önce tüm metni ara (Net isim eşleşmeleri için)
+            const fullResults = fuse.search(text);
+            if (fullResults.length > 0 && fullResults[0].score < 0.2) return fullResults[0].item;
+
+            for (let i=0; i < words.length; i++) {
+                const ngrams = [words[i]];
+                if(i < words.length - 1) ngrams.push(words[i] + " " + words[i+1]);
+                if(i < words.length - 2) ngrams.push(words[i] + " " + words[i+1] + " " + words[i+2]);
+                
+                for (const ngram of ngrams) {
+                    if (ngram.length < 3) continue;
+                    const results = fuse.search(ngram);
+                    for (const res of results) {
+                        const itemNumbers = extractNumbers(res.item._safeSearchKey);
+                        const hasMissingNumber = itemNumbers.some(num => !transcriptNumbers.includes(num));
+                        if (hasMissingNumber) continue; 
+                        if (res.score < bestScore) { bestScore = res.score; bestMatch = res.item; }
+                    }
+                }
+            }
+            return bestMatch;
+        };
 
         const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
         const allStudents = safeClasses.flatMap(cls => 
             Array.isArray(cls.students) ? cls.students.filter(std => std && std.name).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })) : []
         );
-        
-        let bestStudent = null;
 
-        // 🧠 ÖĞRENCİ ARAMA (Yerel Cihazda Yapılır, Çok Hızlıdır)
-        if (aiResult.student) {
+        let bestStudent = findBestMatch(allStudents, 'name', 0.4);
+
+        // ÇOKLU İSİM (Merve / İrem) KONTROLÜ
+        if (bestStudent) {
             const safeItems = allStudents.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item.name).toLocaleLowerCase('tr-TR') }));
             const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.35, includeScore: true });
-            const results = fuse.search(aiResult.student);
-
+            
+            const firstName = bestStudent.name.split(' ')[0];
+            const results = fuse.search(firstName);
+            
             if (results.length > 0) {
-                const bestScore = results[0].score;
-                const identicalMatches = results.filter(r => r.score <= bestScore + 0.1).map(r => r.item);
-
-                if (identicalMatches.length > 1) {
+                const identicalMatches = results.filter(r => r.score <= results[0].score + 0.1).map(r => r.item);
+                // Eğer cümle içinde spesifik olarak "Merve Eski" denmediyse ve 2 Merve bulunduysa:
+                const isExactNameMentioned = identicalMatches.some(m => text.includes(m.name.toLowerCase()));
+                
+                if (identicalMatches.length > 1 && !isExactNameMentioned) {
                     setFoundStudents(identicalMatches);
                     setSelectedStudent(null);
                     setFoundTopics([]);
-                    setJarvisFeedback(`${aiResult.student} isminde ${identicalMatches.length} kişi bulundu. Listeden seçin.`);
+                    setJarvisFeedback(`"${firstName}" isminde ${identicalMatches.length} kişi bulundu. Lütfen listeden seçin.`);
                     return;
-                } else {
-                    bestStudent = identicalMatches[0];
+                } else if (isExactNameMentioned) {
+                    bestStudent = identicalMatches.find(m => text.includes(m.name.toLowerCase())) || identicalMatches[0];
                 }
             }
         }
-        
-        // Komutta isim yoksa aktif öğrenciyi kullan
+
+        // Eğer cümlede yeni bir isim bulunamadıysa aktif öğrenciye kilitlen
         if (!bestStudent && selectedStudent) {
             bestStudent = selectedStudent;
         }
@@ -186,88 +175,50 @@ Kullanıcı cümlesinden şu değerleri çıkar:
             return;
         }
 
-        // ÖĞRENCİ BULUNDU VEYA AKTİF
         setFoundStudents([bestStudent]);
         setSelectedStudent(bestStudent);
         const targetClass = safeClasses.find(c => c.id === bestStudent.classId); 
         const topics = targetClass?.topics || []; 
         setFoundTopics(topics);
 
-        const findTopicCol = (items, key, textToSearch) => {
-            if (!items || items.length === 0 || !textToSearch) return null;
-            const sItems = items.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item[key]) }));
-            const f = new Fuse(sItems, { keys: ['_safeSearchKey'], threshold: 0.45, includeScore: true });
-            const r = f.search(textToSearch);
-            return r.length > 0 ? r[0].item : null;
-        };
-
-        // 🎯 AKSİYONLARI UYGULAMA
-        if (aiResult.action === 'select_student') {
-            setJarvisFeedback(aiResult.feedback || `${bestStudent.name} seçildi. İşlem bekliyor.`);
-            return;
+        // KONU VE KAYNAK BUL (Sadece aktif öğrencinin müfredatından)
+        const bestTopic = findBestMatch(topics, 'title', 0.45);
+        let bestCol = null;
+        if (bestTopic && !isAllSources) {
+            bestCol = findBestMatch(bestTopic.subColumns || [], 'title', 0.45);
         }
 
-        if (aiResult.action === 'update' && aiResult.topic) {
-            const bestTopic = findTopicCol(topics, 'title', aiResult.topic);
-            
-            if (!bestTopic) {
-                setJarvisFeedback(`"${aiResult.topic}" konusu bu sınıfta bulunamadı.`);
-                return;
-            }
-
-            if (!aiResult.status) {
-                setJarvisFeedback(`İşlem durumu (Yapıldı/Eksik vb.) anlaşılamadı.`);
-                return;
-            }
-
-            // 🔥 "TÜM KAYNAKLAR" KOMUTU
-            if (aiResult.source === 'all') {
+        // AKSİYON İCRA KONTROLÜ
+        if (bestTopic && status) {
+            if (isAllSources) {
                 (bestTopic.subColumns || []).forEach(col => {
-                    handleDraftGradeChange(bestStudent.id, col.id, aiResult.status);
+                    handleDraftGradeChange(bestStudent.id, col.id, status);
                 });
-                setJarvisFeedback(aiResult.feedback || `Tüm kaynaklar '${aiResult.status}' yapıldı.`);
-                return;
+                setJarvisFeedback(`Tüm kaynaklar işaretlendi.`);
+            } else if (bestCol) {
+                handleDraftGradeChange(bestStudent.id, bestCol.id, status);
+                setJarvisFeedback(`Kaynak işaretlendi.`);
+            } else {
+                setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: status });
+                setPendingSources(bestTopic.subColumns || []);
+                setJarvisFeedback("Kaynak anlaşılamadı. Lütfen listeden seçin.");
             }
-
-            // TEK KAYNAK KOMUTU
-            if (aiResult.source) {
-                const bestCol = findTopicCol(bestTopic.subColumns || [], 'title', aiResult.source);
-                if (bestCol) {
-                    handleDraftGradeChange(bestStudent.id, bestCol.id, aiResult.status);
-                    setJarvisFeedback(aiResult.feedback || `Kaynak güncellendi.`);
-                } else {
-                    setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: aiResult.status });
-                    setPendingSources(bestTopic.subColumns || []);
-                    setJarvisFeedback(`"${aiResult.source}" kaynağı listede bulunamadı. Lütfen seçin.`);
-                }
-                return;
-            }
-
-            // KAYNAK SÖYLENMEDİYSE LİSTELE
-            setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: aiResult.status });
-            setPendingSources(bestTopic.subColumns || []);
-            setJarvisFeedback(aiResult.feedback || "Lütfen bu işlem için bir kaynak seçin.");
-            return;
+        } else if (bestTopic && !status) {
+            setJarvisFeedback(`"${bestTopic.title}" bulundu ama durum (yapıldı/eksik) anlaşılamadı.`);
+        } else {
+            setJarvisFeedback(`${bestStudent.name} seçildi. Komut bekliyorum.`);
         }
-
-        setJarvisFeedback("Komutta eksik bilgi var (Konu veya işlem). Tekrar edin.");
     };
 
-    const handleCommand = async (transcript) => {
+    const handleCommand = (transcript) => {
         if (!transcript.trim()) return;
-        setPendingAction(null);
-        setPendingSources([]);
-        
-        setIsThinking(true);
         setJarvisFeedback("Analiz ediliyor...");
-        
-        const aiResult = await callGroqAPI(transcript);
-        setIsThinking(false);
-        
-        processGroqResult(aiResult);
+        setTimeout(() => {
+            analyzeCommandLocal(transcript);
+        }, 100); // 100ms UI rahatlaması için
     };
 
-    // 🎙️ SAF DİNLEME MODU (Sadece sen butona basınca dinler, susunca kendi kapanır)
+    // 🎙️ SAF DİNLEME MODU (Sadece butona basınca dinler)
     const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) { setJarvisFeedback("Tarayıcınız ses modülünü desteklemiyor."); return; }
@@ -284,7 +235,7 @@ Kullanıcı cümlesinden şu değerleri çıkar:
             setSpeechTranscript(transcript); 
             handleCommand(transcript); 
         };
-        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Mikrofon kapatıldı."); };
+        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Mikrofon kapandı."); };
         recognition.onend = () => { setIsListening(false); }; 
         recognition.start();
     };
@@ -303,7 +254,7 @@ Kullanıcı cümlesinden şu değerleri çıkar:
     const handleManualSourceSelect = (col) => {
         if (!pendingAction) return;
         handleDraftGradeChange(pendingAction.studentId, col.id, pendingAction.status);
-        setJarvisFeedback("Kaynak manuel olarak işaretlendi.");
+        setJarvisFeedback("Kaynak seçimi tamamlandı.");
         setPendingAction(null);
         setPendingSources([]);
     };
@@ -336,28 +287,29 @@ Kullanıcı cümlesinden şu değerleri çıkar:
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }} className="bg-slate-900/95 border border-cyan-500/30 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col max-h-[85vh]">
                 
-                {/* RADAR PANEL (Sadeleştirilmiş) */}
-                <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 p-8 flex flex-col items-center justify-center shrink-0 min-h-[200px]">
+                {/* RADAR PANEL */}
+                <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 p-8 flex flex-col items-center justify-center shrink-0 min-h-[220px]">
                     <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute w-56 h-56 border border-cyan-500/10 rounded-full border-t-cyan-400/40 pointer-events-none" />
+                    <motion.div animate={{ rotate: -360 }} transition={{ duration: 30, repeat: Infinity, ease: 'linear' }} className="absolute w-36 h-36 border border-cyan-500/10 rounded-full border-b-cyan-400/40 pointer-events-none" />
                     
                     <button onClick={() => { stopListening(); onClose(); }} className="absolute top-4 right-4 text-slate-500 hover:text-cyan-400 transition-colors z-30"><X size={24}/></button>
                     
                     {/* MANUEL MİKROFON BUTONU */}
                     <div onClick={isListening ? stopListening : startListening} className="z-10 bg-slate-900 p-6 rounded-full border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.2)] mb-4 cursor-pointer relative hover:scale-105 transition-transform group mt-2">
                         {isListening && <span className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping"></span>}
-                        <Mic size={36} className={`text-cyan-400 ${(isListening || isThinking) ? 'animate-pulse' : 'group-hover:text-cyan-300'}`} />
+                        <Mic size={36} className={`text-cyan-400 ${isListening ? 'animate-pulse' : 'group-hover:text-cyan-300'}`} />
                     </div>
 
                     <div className="w-full max-w-xl z-10 relative flex items-center mb-4">
                         <div className="absolute left-4 text-cyan-500/50 pointer-events-none"><Keyboard size={18} /></div>
                         <input 
-                            ref={inputRef} type="text" placeholder="Manuel komut girin..." 
+                            ref={inputRef} type="text" placeholder="Manuel komut (Örn: Logaritma tüm kaynaklar eksik)" 
                             className="w-full bg-slate-900/80 border border-cyan-800/50 text-cyan-100 rounded-xl pl-12 pr-24 py-3 text-sm focus:outline-none focus:border-cyan-400 transition-all font-medium"
-                            value={textCommand} onChange={(e) => setTextCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} disabled={isListening || isThinking}
+                            value={textCommand} onChange={(e) => setTextCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} disabled={isListening}
                         />
                         <div className="absolute right-2 flex items-center gap-1">
                             <button onClick={isListening ? stopListening : startListening} className={`p-2 rounded-lg transition-colors ${isListening ? 'bg-cyan-500/20 text-cyan-400' : 'hover:bg-slate-800 text-slate-400'}`}><Mic size={18} className={isListening ? 'animate-pulse' : ''} /></button>
-                            <button onClick={handleManualSubmit} className="p-2 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-400 rounded-lg transition-colors" disabled={!textCommand.trim() || isListening || isThinking}><Send size={18} /></button>
+                            <button onClick={handleManualSubmit} className="p-2 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-400 rounded-lg transition-colors" disabled={!textCommand.trim() || isListening}><Send size={18} /></button>
                         </div>
                     </div>
 
