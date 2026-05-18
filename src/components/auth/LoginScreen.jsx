@@ -91,6 +91,10 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [pin, setPin] = useState("");
+    
+    // YENİ: Hata ve Şifremi Unuttum state'leri
+    const [errorMsg, setErrorMsg] = useState("");
+    const [showForgotMsg, setShowForgotMsg] = useState(false);
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -100,6 +104,27 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
     const itemVariants = {
         hidden: { opacity: 0, y: 20, scale: 0.95 },
         show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 24 } }
+    };
+
+    // YENİ: Giriş işlemini yöneten ve hata yakalayan fonksiyon
+    const handleStudentLoginSubmit = async (e) => {
+        if (e) e.preventDefault();
+        setErrorMsg(''); 
+        setShowForgotMsg(false);
+
+        if (!username.trim() || !password.trim()) {
+            setErrorMsg('Lütfen kullanıcı adı ve şifrenizi giriniz.');
+            return;
+        }
+
+        try {
+            // App.jsx tarafındaki giriş fonksiyonunu tetikliyoruz.
+            // Eğer App.jsx'teki fonksiyon giriş başarısız olduğunda hata fırlatıyorsa (throw error), buradaki catch bloğuna düşer.
+            await onStudentLogin(username, password, authView === 'vip-login');
+        } catch (error) {
+            console.error("Giriş hatası:", error);
+            setErrorMsg('Kullanıcı adı veya şifre hatalı!');
+        }
     };
 
     return (
@@ -151,7 +176,7 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
                     
                     {(authView === 'student-login' || authView === 'vip-login') && (
                         <motion.div key="student-form" variants={containerVariants} initial="hidden" animate="show" exit={{ opacity: 0, x: 50, transition: { duration: 0.2 } }} className="login-btns flex flex-col items-center w-full">
-                            <motion.button variants={itemVariants} whileHover={{ x: -4 }} whileTap={{ scale: 0.95 }} onClick={() => setAuthView('selection')} className="lbtn lbtn-a" style={{padding: '10px 17px', background: 'transparent', border: 'none', boxShadow: 'none', width: '100%', maxWidth: '360px', marginBottom: '10px'}}>
+                            <motion.button variants={itemVariants} whileHover={{ x: -4 }} whileTap={{ scale: 0.95 }} onClick={() => { setAuthView('selection'); setErrorMsg(''); setShowForgotMsg(false); }} className="lbtn lbtn-a" style={{padding: '10px 17px', background: 'transparent', border: 'none', boxShadow: 'none', width: '100%', maxWidth: '360px', marginBottom: '10px'}}>
                                 <ChevronLeft className="lch" size={18}/>
                                 <div className="lbl"><div className="lts" style={{fontSize:'12px', color: '#cbd5e1'}}>Geri Dön</div></div>
                             </motion.button>
@@ -173,10 +198,41 @@ const LoginScreen = ({ onStudentLogin, onTeacherLogin }) => {
                                 
                                 <div className="login-input-group" style={{marginTop: '20px'}}>
                                     <label className="login-label" style={{color: authView === 'vip-login' ? '#e6c27a' : '#94a3b8'}}>Şifre</label>
-                                    <input type="password" className={`login-input ${authView === 'vip-login' ? 'vip-input' : ''}`} style={{letterSpacing: '0.3em', fontSize: '18px'}} placeholder="••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && onStudentLogin(username, password, authView === 'vip-login')} />
+                                    <input type="password" className={`login-input ${authView === 'vip-login' ? 'vip-input' : ''}`} style={{letterSpacing: '0.3em', fontSize: '18px'}} placeholder="••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleStudentLoginSubmit(e)} />
+                                </div>
+
+                                {/* YENİ EKLENEN HATA MESAJI */}
+                                {errorMsg && (
+                                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-red-400 text-sm mt-3 font-medium text-center bg-red-500/10 py-2 rounded-lg border border-red-500/20">
+                                        {errorMsg}
+                                    </motion.div>
+                                )}
+
+                                {/* YENİ EKLENEN ŞİFREMİ UNUTTUM BUTONU VE UYARISI */}
+                                <div className="mt-4 flex flex-col items-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowForgotMsg(!showForgotMsg)}
+                                        className="text-xs text-slate-400 hover:text-white transition-colors underline-offset-2 hover:underline"
+                                    >
+                                        Şifreni mi unuttun?
+                                    </button>
+                                    
+                                    <AnimatePresence>
+                                        {showForgotMsg && (
+                                            <motion.div 
+                                                initial={{ opacity: 0, height: 0 }} 
+                                                animate={{ opacity: 1, height: 'auto' }} 
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="mt-3 w-full p-3 bg-slate-900/80 border border-indigo-500/30 rounded-lg text-indigo-200 text-xs text-center"
+                                            >
+                                                Yeni şifre almak veya şifrenizi sıfırlamak için lütfen <strong>Berkant Hoca</strong> ile iletişime geçiniz.
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                                 
-                                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }} onClick={() => onStudentLogin(username, password, authView === 'vip-login')} className={`lbtn w-full flex items-center justify-center rounded-xl transition-all ${authView === 'vip-login' ? 'real-gold-bg' : 'bg-brandPurple hover:bg-purple-600 shadow-glow'}`} style={{marginTop: '28px', padding: '16px', border: 'none'}}>
+                                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }} onClick={handleStudentLoginSubmit} className={`lbtn w-full flex items-center justify-center rounded-xl transition-all ${authView === 'vip-login' ? 'real-gold-bg' : 'bg-brandPurple hover:bg-purple-600 shadow-glow'}`} style={{marginTop: '24px', padding: '16px', border: 'none'}}>
                                     <span style={{color: authView === 'vip-login' ? '#111111' : '#ffffff', fontSize: '16px', fontWeight: '900', letterSpacing: '0.05em'}}>GİRİŞ YAP</span>
                                 </motion.button>
                             </motion.div>
