@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Activity, Calendar, StickyNote, AlertTriangle, Save, User, CheckCircle2, TerminalSquare, Keyboard, Send, ChevronRight } from 'lucide-react';
+import { X, Mic, Calendar, StickyNote, AlertTriangle, Save, User, CheckCircle2, Keyboard, Send, ChevronRight, HelpCircle } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
@@ -18,11 +18,12 @@ const getSafeText = (val) => {
     return String(val);
 };
 
-const darkStatusStyles = {
-    'done': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    'missing': 'bg-rose-500/20 text-rose-400 border-rose-500/30',
-    'assigned': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    'exempt': 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+// Beyaz ferah tema için hafif ve şık durum stilleri
+const lightStatusStyles = {
+    'done': 'bg-emerald-50 border-emerald-200 text-emerald-600 font-bold',
+    'missing': 'bg-rose-50 border-rose-200 text-rose-600 font-bold',
+    'assigned': 'bg-amber-50 border-amber-200 text-amber-600 font-bold',
+    'exempt': 'bg-slate-50 border-slate-200 text-slate-500 font-bold'
 };
 
 const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) => {
@@ -30,14 +31,16 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
     const [speechTranscript, setSpeechTranscript] = useState("");
     const [textCommand, setTextCommand] = useState("");
     
-    const [jarvisFeedback, setJarvisFeedback] = useState("Yerel sistem aktif. Komutunuzu bekliyorum.");
+    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem hazır. Komutunuzu dinliyorum.");
     
     const [foundStudents, setFoundStudents] = useState(initialStudent ? [initialStudent] : []);
     const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
     const [foundTopics, setFoundTopics] = useState([]);
     
-    const [pendingAction, setPendingAction] = useState(null); 
+    // Eksik bilgileri sormak için etkileşimli state'ler
+    const [pendingAction, setPendingAction] = useState(null); // { studentId, topicId, status, isAll }
     const [pendingSources, setPendingSources] = useState([]); 
+    const [pendingStatusSelect, setPendingStatusSelect] = useState(null); // { studentId, topicId, colId }
     
     const [draftGrades, setDraftGrades] = useState({});
     
@@ -46,6 +49,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
     const sortedFoundTopics = Array.isArray(foundTopics) ? [...foundTopics].filter(Boolean).reverse() : [];
 
+    // Başlangıç Ayarları ve Otomatik Dinleme Aktivasyonu
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         
@@ -53,125 +57,95 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             const safeClasses = Array.isArray(classes) ? classes.filter(Boolean) : [];
             const targetClass = safeClasses.find(c => c.id === initialStudent.classId);
             setFoundTopics(targetClass?.topics || []);
-            setJarvisFeedback(`${initialStudent.name} profili aktif. Komut bekliyorum.`);
+            setJarvisFeedback(`Aktif Profil: ${initialStudent.name}.`);
         }
 
+        // 🎙️ MİKROFONA BASAR BASMAZ OTOMATİK DİNLEME MODUNDA AÇILMA
+        const autoStartTimer = setTimeout(() => {
+            startListening();
+        }, 400);
+
         return () => { 
+            clearTimeout(autoStartTimer);
             document.body.style.overflow = ''; 
             if (recognitionRef.current) recognitionRef.current.abort();
         };
     }, [initialStudent, classes]);
 
-    // 🧠 100% YEREL (LOCAL) NLP MOTORU (API'siz, Kısıtlamasız, Işık Hızında)
+    // 🧠 Gelişmiş Yerel Kural ve Doğal Dil İşleme Motoru
     const analyzeCommandLocal = (transcript) => {
-        let text = transcript.toLocaleLowerCase('tr-TR');
+        let text = transcript.toLocaleLowerCase('tr-TR').trim();
         setPendingAction(null);
         setPendingSources([]);
+        setPendingStatusSelect(null);
         
-        // 1. SİSTEM KOMUTLARI
-        if (text.includes('kaydet') || text.includes('onayla')) {
-            setJarvisFeedback("Değişiklikler kaydediliyor...");
+        // 1. Kaydet / Kapat Direktifleri
+        if (text.match(/kaydet|onayla|sisteme işle/)) {
             applyChanges();
             return;
         }
         if (text === 'kapat' || text === 'çık') {
-            if (Object.keys(draftGrades).length > 0) {
-                setJarvisFeedback("Kaydedilmemiş notlar var. Lütfen 'Kaydet' butonunu kullanın.");
-            } else {
-                onClose();
-            }
+            onClose();
             return;
         }
 
-        // 2. KELİME VE RAKAM DÜZELTMELERİ
+        // 2. Özel Sözlük Temizliği ve Ortak Kısaltmalar
         text = text.replace(/birinci/g, '1').replace(/ikinci/g, '2').replace(/üçüncü/g, '3')
                    .replace(/\bbir\b/g, '1').replace(/\biki\b/g, '2').replace(/\b[uü]ç\b/g, '3')
                    .replace(/testi/g, 'test').replace(/testini/g, 'test');
-        if (text.includes('vdd')) text += " video ders defteri";
+        
+        if (text.includes('vdd') || text.includes('video ders')) {
+            text += " vdd video ders defteri";
+        }
+        if (text.includes('sb') || text.includes('soru bankası')) {
+            text += " sb soru bankası";
+        }
 
-        // 3. DURUM (STATUS) TESPİTİ
+        // 3. Durum (Status) Haritalaması
         let status = null;
-        if (text.match(/çözmemiş|yapmamış|yapmadı|eksik|boş|yok|çözmüyor|yapılmadı|çözülmedi/)) status = 'missing';
+        if (text.match(/çözmemiş|yapmamış|yapmadı|eksik|boş|yok|çözmüyor|yapılmadı|çözülmedi|hiçbiri/)) status = 'missing';
         else if (text.match(/çözdü|yaptı|tamamladı|bitirdi|full|bitti|çözmüş|yapmış|yapıldı|çözüldü|tamamlandı|yapıyoruz/)) status = 'done';
         else if (text.match(/verdim|verildi|atadım|ödev ver|çözecek|yapacak/)) status = 'assigned';
-        else if (text.match(/muaf|gerek yok|çözmesin/)) status = 'exempt';
+        else if (text.match(/muaf|gerek yok|çözmesin|pas geç/)) status = 'exempt';
 
-        const isAllSources = text.match(/tüm kaynaklar|hepsi|bütün kaynaklar/);
+        // 🌟 "TÜMÜ / TAMAMI / HEPSİ" YAPILARI TESPİTİ
+        const isAllSources = text.match(/tümünü|tamamını|hepsini|bütün kaynaklar|tümü|tamamı|hepsi/);
 
-        // 4. BULANIK ARAMA (FUSE.JS) MOTORU
-        const extractNumbers = (str) => { const m = str.match(/\d+/g); return m ? m : []; };
-        const transcriptNumbers = extractNumbers(text);
-
-        const findBestMatch = (items, key, threshold = 0.4) => {
-            if (!items || items.length === 0) return null;
-            const safeItems = items.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item[key]).toLocaleLowerCase('tr-TR') }));
-            const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: threshold, distance: 100, includeScore: true, ignoreLocation: true });
-            
-            const words = text.replace(/[.,!?]/g, "").split(/\s+/).filter(w => w.length > 2);
-            let bestMatch = null; let bestScore = 1;
-
-            // Önce tüm metni ara (Net isim eşleşmeleri için)
-            const fullResults = fuse.search(text);
-            if (fullResults.length > 0 && fullResults[0].score < 0.2) return fullResults[0].item;
-
-            for (let i=0; i < words.length; i++) {
-                const ngrams = [words[i]];
-                if(i < words.length - 1) ngrams.push(words[i] + " " + words[i+1]);
-                if(i < words.length - 2) ngrams.push(words[i] + " " + words[i+1] + " " + words[i+2]);
-                
-                for (const ngram of ngrams) {
-                    if (ngram.length < 3) continue;
-                    const results = fuse.search(ngram);
-                    for (const res of results) {
-                        const itemNumbers = extractNumbers(res.item._safeSearchKey);
-                        const hasMissingNumber = itemNumbers.some(num => !transcriptNumbers.includes(num));
-                        if (hasMissingNumber) continue; 
-                        if (res.score < bestScore) { bestScore = res.score; bestMatch = res.item; }
-                    }
-                }
-            }
-            return bestMatch;
-        };
-
+        // 4. Fuse.js Akıllı Yerel Eşleştirme Çekirdeği
         const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
         const allStudents = safeClasses.flatMap(cls => 
             Array.isArray(cls.students) ? cls.students.filter(std => std && std.name).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })) : []
         );
 
-        let bestStudent = findBestMatch(allStudents, 'name', 0.4);
+        const fuseStudents = new Fuse(allStudents, { keys: ['name'], threshold: 0.45, ignoreLocation: true });
+        const studentSearch = fuseStudents.search(text);
+        
+        let bestStudent = studentSearch.length > 0 ? studentSearch[0].item : null;
 
-        // ÇOKLU İSİM (Merve / İrem) KONTROLÜ
+        // Çoklu İsim (Merve) Çakışma Yönetimi
         if (bestStudent) {
-            const safeItems = allStudents.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item.name).toLocaleLowerCase('tr-TR') }));
-            const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.35, includeScore: true });
-            
             const firstName = bestStudent.name.split(' ')[0];
-            const results = fuse.search(firstName);
+            const identicalMatches = studentSearch.filter(r => r.item.name.toLowerCase().includes(firstName.toLowerCase())).map(r => r.item);
+            const isExactFullMentioned = identicalMatches.some(m => text.includes(m.name.toLowerCase()));
             
-            if (results.length > 0) {
-                const identicalMatches = results.filter(r => r.score <= results[0].score + 0.1).map(r => r.item);
-                // Eğer cümle içinde spesifik olarak "Merve Eski" denmediyse ve 2 Merve bulunduysa:
-                const isExactNameMentioned = identicalMatches.some(m => text.includes(m.name.toLowerCase()));
-                
-                if (identicalMatches.length > 1 && !isExactNameMentioned) {
-                    setFoundStudents(identicalMatches);
-                    setSelectedStudent(null);
-                    setFoundTopics([]);
-                    setJarvisFeedback(`"${firstName}" isminde ${identicalMatches.length} kişi bulundu. Lütfen listeden seçin.`);
-                    return;
-                } else if (isExactNameMentioned) {
-                    bestStudent = identicalMatches.find(m => text.includes(m.name.toLowerCase())) || identicalMatches[0];
-                }
+            if (identicalMatches.length > 1 && !isExactFullMentioned) {
+                setFoundStudents(identicalMatches);
+                setSelectedStudent(null);
+                setFoundTopics([]);
+                setJarvisFeedback(`"${firstName}" adında birden fazla öğrenci var, lütfen listeden seçin.`);
+                return;
+            } else if (isExactFullMentioned) {
+                bestStudent = identicalMatches.find(m => text.includes(m.name.toLowerCase())) || bestStudent;
             }
         }
 
-        // Eğer cümlede yeni bir isim bulunamadıysa aktif öğrenciye kilitlen
+        // Açık olan sayfadaki öğrenci bağlamını koruma
         if (!bestStudent && selectedStudent) {
             bestStudent = selectedStudent;
         }
 
         if (!bestStudent) {
-            setJarvisFeedback("Öğrenci bulunamadı. Lütfen bir isim söyleyin.");
+            setJarvisFeedback("Öğrenci ismi anlaşılamadı. Lütfen tekrar deneyin.");
             return;
         }
 
@@ -181,47 +155,63 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         const topics = targetClass?.topics || []; 
         setFoundTopics(topics);
 
-        // KONU VE KAYNAK BUL (Sadece aktif öğrencinin müfredatından)
-        const bestTopic = findBestMatch(topics, 'title', 0.45);
-        let bestCol = null;
-        if (bestTopic && !isAllSources) {
-            bestCol = findBestMatch(bestTopic.subColumns || [], 'title', 0.45);
+        // Konu ve Kaynak Eşleştirme
+        const fuseTopics = new Fuse(topics, { keys: ['title'], threshold: 0.5, ignoreLocation: true });
+        const topicSearch = fuseTopics.search(text);
+        const bestTopic = topicSearch.length > 0 ? topicSearch[0].item : null;
+
+        if (!bestTopic) {
+            setJarvisFeedback(`${bestStudent.name} seçildi. Lütfen ödev konusunu belirtin.`);
+            return;
         }
 
-        // AKSİYON İCRA KONTROLÜ
-        if (bestTopic && status) {
-            if (isAllSources) {
-                (bestTopic.subColumns || []).forEach(col => {
-                    handleDraftGradeChange(bestStudent.id, col.id, status);
-                });
-                setJarvisFeedback(`Tüm kaynaklar işaretlendi.`);
-            } else if (bestCol) {
+        // Aksiyon Karar Ağacı
+        if (isAllSources && status) {
+            // "Tüm kaynaklar yapıldı/eksik" senaryosu
+            (bestTopic.subColumns || []).forEach(col => {
+                handleDraftGradeChange(bestStudent.id, col.id, status);
+            });
+            setJarvisFeedback(`İşlem Başarılı: ${bestTopic.title} konusundaki tüm kaynaklar işaretlendi.`);
+        } else if (status) {
+            // Belirli bir kaynak arama senaryosu
+            const fuseCols = new Fuse(bestTopic.subColumns || [], { keys: ['title'], threshold: 0.5, ignoreLocation: true });
+            const colSearch = fuseCols.search(text);
+            const bestCol = colSearch.length > 0 ? colSearch[0].item : null;
+
+            if (bestCol) {
                 handleDraftGradeChange(bestStudent.id, bestCol.id, status);
-                setJarvisFeedback(`Kaynak işaretlendi.`);
+                setJarvisFeedback(`Onaylandı: ${bestTopic.title} -> ${bestCol.title} durum güncellendi.`);
             } else {
-                setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: status });
+                // 🌟 UFAK ALT SORU PANELİ TETİKLEME: Kaynak bulunamadıysa alt kısımda sor
+                setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: status, isAll: false });
                 setPendingSources(bestTopic.subColumns || []);
-                setJarvisFeedback("Kaynak anlaşılamadı. Lütfen listeden seçin.");
+                setJarvisFeedback(`"${bestTopic.title}" konusu anlaşıldı. Lütfen hangi kaynak olduğunu alttan seçin.`);
             }
-        } else if (bestTopic && !status) {
-            setJarvisFeedback(`"${bestTopic.title}" bulundu ama durum (yapıldı/eksik) anlaşılamadı.`);
         } else {
-            setJarvisFeedback(`${bestStudent.name} seçildi. Komut bekliyorum.`);
+            // Kaynak veya konu var ama Yapıldı/Eksik durumu söylenmediyse durum butonlarını altta aç
+            const fuseCols = new Fuse(bestTopic.subColumns || [], { keys: ['title'], threshold: 0.5, ignoreLocation: true });
+            const colSearch = fuseCols.search(text);
+            const bestCol = colSearch.length > 0 ? colSearch[0].item : (bestTopic.subColumns?.[0] || null);
+
+            if (bestCol) {
+                setPendingStatusSelect({ studentId: bestStudent.id, topicId: bestTopic.id, colId: bestCol.id, colTitle: bestCol.title });
+                setJarvisFeedback(`"${bestTopic.title} -> ${bestCol.title}" için uygulanacak durumu alttan seçin.`);
+            } else {
+                setJarvisFeedback(`"${bestTopic.title}" konusu seçildi. Lütfen yapılacak işlemi veya durumu belirtin.`);
+            }
         }
     };
 
     const handleCommand = (transcript) => {
         if (!transcript.trim()) return;
-        setJarvisFeedback("Analiz ediliyor...");
-        setTimeout(() => {
-            analyzeCommandLocal(transcript);
-        }, 100); // 100ms UI rahatlaması için
+        setSpeechTranscript(transcript);
+        analyzeCommandLocal(transcript);
     };
 
-    // 🎙️ SAF DİNLEME MODU (Sadece butona basınca dinler)
+    // 🎙️ PUSH TO TALK DİNLEME MANTIĞI
     const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) { setJarvisFeedback("Tarayıcınız ses modülünü desteklemiyor."); return; }
+        if (!SpeechRecognition) { setJarvisFeedback("Ses modülü tarayıcınızda aktif değil."); return; }
         if (recognitionRef.current) recognitionRef.current.abort();
         
         const recognition = new SpeechRecognition();
@@ -232,10 +222,9 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         recognition.onstart = () => { setIsListening(true); setSpeechTranscript(""); setJarvisFeedback("Dinliyorum..."); };
         recognition.onresult = (event) => { 
             const transcript = event.results[0][0].transcript; 
-            setSpeechTranscript(transcript); 
             handleCommand(transcript); 
         };
-        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Mikrofon kapandı."); };
+        recognition.onerror = () => { setIsListening(false); };
         recognition.onend = () => { setIsListening(false); }; 
         recognition.start();
     };
@@ -246,34 +235,23 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
     const handleManualSubmit = () => {
         if (!textCommand.trim()) return;
-        setSpeechTranscript(textCommand); 
         handleCommand(textCommand);
         setTextCommand(""); 
     };
 
-    const handleManualSourceSelect = (col) => {
-        if (!pendingAction) return;
-        handleDraftGradeChange(pendingAction.studentId, col.id, pendingAction.status);
-        setJarvisFeedback("Kaynak seçimi tamamlandı.");
-        setPendingAction(null);
-        setPendingSources([]);
+    const handleDraftGradeChange = (studentId, colId, statusId) => { 
+        setDraftGrades(prev => ({ ...prev, [studentId]: { ...(prev[studentId] || {}), [colId]: statusId } })); 
     };
 
-    const handleDraftGradeChange = (studentId, colId, statusId) => { setDraftGrades(prev => ({ ...prev, [studentId]: { ...(prev[studentId] || {}), [colId]: statusId } })); };
-
     const applyChanges = () => {
-        if (!selectedStudent) {
-            onClose(); 
-            return;
-        }
+        if (!selectedStudent) { onClose(); return; }
         const safeClasses = Array.isArray(classes) ? classes.filter(Boolean) : [];
         const targetClass = safeClasses.find(c => c.id === selectedStudent.classId); 
         if (!targetClass) return;
         
         const updatedStudents = Array.isArray(targetClass.students) ? targetClass.students.filter(Boolean).map(s => {
             if (s.id === selectedStudent.id) {
-                const newGrades = { ...(s.grades || {}), ...(draftGrades[s.id] || {}) };
-                return { ...s, grades: newGrades };
+                return { ...s, grades: { ...(s.grades || {}), ...(draftGrades[s.id] || {}) } };
             } 
             return s;
         }) : [];
@@ -284,86 +262,111 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }} className="bg-slate-900/95 border border-cyan-500/30 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col max-h-[85vh]">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+            {/* 💎 UYGULAMAYA UYGUN ULTRA FERAH BEYAZ PREMIUM TASARIM */}
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.96, y: 15 }} 
+                animate={{ opacity: 1, scale: 1, y: 0 }} 
+                exit={{ opacity: 0, scale: 0.96, y: 15 }} 
+                className="bg-white border border-slate-200 rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-float flex flex-col max-h-[85vh]"
+            >
                 
-                {/* RADAR PANEL */}
-                <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 p-8 flex flex-col items-center justify-center shrink-0 min-h-[220px]">
-                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute w-56 h-56 border border-cyan-500/10 rounded-full border-t-cyan-400/40 pointer-events-none" />
-                    <motion.div animate={{ rotate: -360 }} transition={{ duration: 30, repeat: Infinity, ease: 'linear' }} className="absolute w-36 h-36 border border-cyan-500/10 rounded-full border-b-cyan-400/40 pointer-events-none" />
+                {/* ÜST BÖLÜM: RADAR VE GİRİŞ ALANI */}
+                <div className="relative overflow-hidden bg-slate-50/70 border-b border-slate-100 p-6 flex flex-col items-center justify-center shrink-0">
+                    <button onClick={onClose} className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors z-30"><X size={20}/></button>
+                    <div className="absolute top-5 left-6 flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-widest z-20"><TerminalSquare size={13}/> AKILLI İŞLEM ASİSTANI</div>
                     
-                    <button onClick={() => { stopListening(); onClose(); }} className="absolute top-4 right-4 text-slate-500 hover:text-cyan-400 transition-colors z-30"><X size={24}/></button>
-                    
-                    {/* MANUEL MİKROFON BUTONU */}
-                    <div onClick={isListening ? stopListening : startListening} className="z-10 bg-slate-900 p-6 rounded-full border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.2)] mb-4 cursor-pointer relative hover:scale-105 transition-transform group mt-2">
-                        {isListening && <span className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping"></span>}
-                        <Mic size={36} className={`text-cyan-400 ${isListening ? 'animate-pulse' : 'group-hover:text-cyan-300'}`} />
+                    {/* BÜYÜK MODERM SES DALGASI BUTONU */}
+                    <div onClick={isListening ? stopListening : startListening} className="z-10 bg-white p-5 rounded-full border border-slate-200 shadow-sm mb-4 cursor-pointer relative hover:scale-102 active:scale-98 transition-all group mt-3">
+                        {isListening && <span className="absolute inset-0 rounded-full bg-brandPurple/10 animate-ping"></span>}
+                        <Mic size={30} className={isListening ? 'text-brandPurple animate-pulse' : 'text-slate-400 group-hover:text-brandPurple transition-colors'} />
                     </div>
 
-                    <div className="w-full max-w-xl z-10 relative flex items-center mb-4">
-                        <div className="absolute left-4 text-cyan-500/50 pointer-events-none"><Keyboard size={18} /></div>
+                    <div className="w-full max-w-xl z-10 relative flex items-center mb-3">
+                        <div className="absolute left-4 text-slate-400 pointer-events-none"><Keyboard size={16} /></div>
                         <input 
-                            ref={inputRef} type="text" placeholder="Manuel komut (Örn: Logaritma tüm kaynaklar eksik)" 
-                            className="w-full bg-slate-900/80 border border-cyan-800/50 text-cyan-100 rounded-xl pl-12 pr-24 py-3 text-sm focus:outline-none focus:border-cyan-400 transition-all font-medium"
+                            ref={inputRef} type="text" placeholder="Komut yazın veya seslendirin (Örn: Logaritma tümü yapıldı)..." 
+                            className="w-full bg-white border border-slate-200 rounded-2xl pl-11 pr-24 py-3.5 text-sm focus:outline-none focus:border-brandPurple focus:ring-2 focus:ring-purple-100 shadow-sm transition-all font-bold text-slate-700 placeholder:text-slate-400"
                             value={textCommand} onChange={(e) => setTextCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} disabled={isListening}
                         />
                         <div className="absolute right-2 flex items-center gap-1">
-                            <button onClick={isListening ? stopListening : startListening} className={`p-2 rounded-lg transition-colors ${isListening ? 'bg-cyan-500/20 text-cyan-400' : 'hover:bg-slate-800 text-slate-400'}`}><Mic size={18} className={isListening ? 'animate-pulse' : ''} /></button>
-                            <button onClick={handleManualSubmit} className="p-2 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-400 rounded-lg transition-colors" disabled={!textCommand.trim() || isListening}><Send size={18} /></button>
+                            <button onClick={isListening ? stopListening : startListening} className={`p-2 rounded-xl transition-all ${isListening ? 'bg-purple-50 text-brandPurple' : 'text-slate-400 hover:bg-slate-100 hover:text-brandPurple'}`}><Mic size={16} /></button>
+                            <button onClick={handleManualSubmit} className="p-2 bg-brandPurple hover:bg-purple-700 text-white rounded-xl transition-all shadow-sm" disabled={!textCommand.trim() || isListening}><Send size={16} /></button>
                         </div>
                     </div>
 
-                    <div className="z-10 text-center w-full px-4">
-                        {speechTranscript && <p className="text-[12px] text-slate-400 italic mb-2">"{speechTranscript}"</p>}
-                        <p className="font-mono text-cyan-300 text-sm flex items-center justify-center tracking-wide">
-                            <span className="text-cyan-600 mr-1.5">&gt;</span> {jarvisFeedback}
-                        </p>
-                    </div>
+                    {/* DİNAMİK FEEDBACK ALANI */}
+                    <div className="z-10 text-center w-full px-4 min-h-[24px] flex flex-col justify-center items-center">
+                        {speechTranscript && <p className="text-[11px] text-slate-400 italic mb-1">"{speechTranscript}"</p>}
+                        <div className="flex items-center gap-1.5 justify-center font-bold text-slate-700 text-sm">
+                            <span className="text-brandPurple font-black">&gt;</span> {jarvisFeedback}
+                        </div>
 
-                    <AnimatePresence>
-                        {(pendingSources || []).length > 0 && (
-                            <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="mt-5 flex flex-wrap justify-center gap-2 z-20 relative max-h-24 overflow-y-auto">
-                                {(pendingSources || []).filter(Boolean).map(col => (
-                                    <button key={col.id} onClick={() => handleManualSourceSelect(col)} className="px-4 py-2 bg-cyan-950 border border-cyan-500/50 hover:bg-cyan-900 hover:border-cyan-300 text-cyan-100 text-xs font-bold rounded-xl transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
-                                        {getSafeText(col?.title)}
-                                    </button>
-                                ))}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                        {/* 🌟 UFAK ALT PANEL: KAYNAK SEÇTİRME KAPSÜLLERİ */}
+                        <AnimatePresence>
+                            {pendingSources.length > 0 && (
+                                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="mt-3 flex flex-wrap justify-center gap-1.5 max-w-full overflow-x-auto p-1 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1 px-2"><HelpCircle size={12}/> Hangi Kaynak:</span>
+                                    {pendingSources.map(col => (
+                                        <button key={col.id} onClick={() => handleManualSourceSelect(col)} className="px-2.5 py-1 bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-bold rounded-lg hover:border-brandPurple hover:bg-purple-50 hover:text-brandPurple transition-all">
+                                            {getSafeText(col?.title)}
+                                        </button>
+                                    ))}
+                                    <button onClick={() => { setPendingAction(null); setPendingSources([]); setJarvisFeedback("İşlem iptal edildi."); }} className="text-[10px] font-bold text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg">İptal</button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* 🌟 UFAK ALT PANEL: DURUM (STATUS) SEÇTİRME KAPSÜLLERİ */}
+                        <AnimatePresence>
+                            {pendingStatusSelect && (
+                                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="mt-3 flex flex-wrap justify-center gap-1.5 max-w-full p-1.5 bg-white border border-slate-100 rounded-2xl shadow-sm items-center">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase px-2">Durum Seçin:</span>
+                                    {STATUS_OPTIONS.map(opt => (
+                                        <button key={opt.id} onClick={() => { handleDraftGradeChange(pendingStatusSelect.studentId, pendingStatusSelect.colId, opt.id); setJarvisFeedback("Durum başarıyla güncellendi."); setPendingStatusSelect(null); }} className="px-3 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1">
+                                            <opt.icon size={12} className={opt.color} /> {opt.label}
+                                        </button>
+                                    ))}
+                                    <button onClick={() => setPendingStatusSelect(null)} className="text-[10px] font-bold text-slate-400 px-2 py-1 hover:bg-slate-50 rounded-lg">İptal</button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
 
-                {/* ÖDEV VE PROFİL LİSTESİ */}
-                <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-4 bg-slate-950/60 min-h-[300px] custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {/* ORTA BÖLÜM: ÖDEV MATRİS TAKİP LİSTESİ */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-slate-50/40 min-h-0 custom-scrollbar">
                     
+                    {/* ÇOKLU MERVE DURUMU TETİKLENİRSE */}
                     {foundStudents.length > 1 && !selectedStudent && (
-                        <div className="space-y-3">
-                            <h4 className="text-cyan-400 font-mono text-xs uppercase tracking-widest px-2 flex items-center gap-2"><User size={14}/> Lütfen Hedefi Seçin</h4>
+                        <div className="space-y-2 animate-scale-in">
+                            <h4 className="text-slate-400 font-bold text-[10px] uppercase tracking-wider ml-1">Eşleşen Öğrenci Kayıtları</h4>
                             {foundStudents.map(student => (
-                                <button key={student.id} onClick={() => { setSelectedStudent(student); setFoundTopics((classes || []).find(c=>c.id===student.classId)?.topics || []); setFoundStudents([student]); setJarvisFeedback(`${student.name} kilitlendi. Komut bekliyorum.`); }} className="w-full text-left p-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all flex items-center gap-4 group">
-                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm ${student.isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/20 text-cyan-400'}`}>{getSafeText(student.name).charAt(0)}</div>
+                                <button key={student.id} onClick={() => { setSelectedStudent(student); setFoundTopics((classes || []).find(c=>c.id===student.classId)?.topics || []); setFoundStudents([student]); setJarvisFeedback(`${student.name} seçildi. Görev bekleniyor.`); }} className="w-full text-left p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-brandPurple hover:bg-purple-50/20 transition-all flex items-center gap-3.5 group shadow-sm">
+                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${student.isVip ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-brandPurple'}`}>{getSafeText(student.name).charAt(0)}</div>
                                     <div className="flex flex-col">
-                                        <span className="font-bold text-slate-200 group-hover:text-cyan-100">{getSafeText(student.name)}</span>
-                                        <span className={`text-[10px] font-mono ${student.isVip ? 'text-amber-500/70' : 'text-slate-500'}`}>{student.isVip ? 'VIP ÖZEL DERS' : getSafeText(student.className)}</span>
+                                        <span className="font-bold text-slate-700 group-hover:text-brandPurple transition-all">{getSafeText(student.name)}</span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">{student.isVip ? 'VIP ÖZEL DERS' : getSafeText(student.className)}</span>
                                     </div>
-                                    <ChevronRight size={16} className="ml-auto text-slate-600 group-hover:text-cyan-400 transition-transform group-hover:translate-x-1" />
+                                    <ChevronRight size={16} className="ml-auto text-slate-300 group-hover:text-brandPurple transition-transform group-hover:translate-x-1" />
                                 </button>
                             ))}
                         </div>
                     )}
 
+                    {/* TEK ÖĞRENCİ SEÇİLİ DURUMDA MATRİS AKIŞI */}
                     {selectedStudent && foundStudents.length === 1 && (
                         <>
-                            <div className="flex items-center gap-4 bg-cyan-900/10 p-4 rounded-2xl border border-cyan-500/20 mb-6">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg ${selectedStudent.isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/20 text-cyan-400'}`}>{getSafeText(selectedStudent?.name).charAt(0)}</div>
-                                <div className="flex flex-col"><span className="text-lg font-bold text-white">{getSafeText(selectedStudent?.name)}</span><span className="text-[11px] font-mono text-cyan-500/70">{selectedStudent.isVip ? 'VIP ÖZEL DERS' : getSafeText(selectedStudent?.className)}</span></div>
+                            <div className="flex items-center gap-3.5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm animate-scale-in">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm border ${selectedStudent.isVip ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-sm' : 'bg-purple-50 text-brandPurple border-purple-200 shadow-sm'}`}>{getSafeText(selectedStudent?.name).charAt(0)}</div>
+                                <div className="flex flex-col"><span className="text-base font-black text-slate-800">{getSafeText(selectedStudent?.name)}</span><span className="text-[10px] font-black uppercase text-slate-400 mt-0.5 tracking-wider">{selectedStudent.isVip ? 'VIP ÖZEL DERS PORTALI' : getSafeText(selectedStudent?.className)}</span></div>
                             </div>
                             
-                            <div className="space-y-4 pb-12">
+                            <div className="space-y-4 pb-6">
                                 {sortedFoundTopics.map(topic => (
-                                    <div key={topic.id} className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 md:p-5">
-                                        <h4 className="font-bold text-slate-200 text-sm mb-4 border-b border-slate-800/80 pb-3 flex items-center gap-2"><div className={`w-1.5 h-4 rounded-full ${selectedStudent.isVip ? 'bg-amber-500' : 'bg-cyan-500'}`}></div>{getSafeText(topic?.title)}</h4>
-                                        <div className="space-y-3">
+                                    <div key={topic.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                                        <h4 className="font-black text-slate-700 text-xs mb-3.5 border-b border-slate-100 pb-2.5 flex items-center gap-2"><div className={`w-1.5 h-3.5 rounded-full ${selectedStudent.isVip ? 'bg-amber-400' : 'bg-brandPurple'}`}></div>{getSafeText(topic?.title)}</h4>
+                                        <div className="space-y-2.5">
                                             {(topic.subColumns || []).filter(Boolean).map(col => {
                                                 const targetClass = (classes || []).find(c => c && c.id === selectedStudent.classId);
                                                 const studentData = targetClass?.students?.find(s => s && s.id === selectedStudent.id);
@@ -371,11 +374,11 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                                 const isChanged = draftGrades[selectedStudent.id]?.[col.id] !== undefined;
 
                                                 return (
-                                                    <div key={col.id} className={`p-3 md:p-4 rounded-xl bg-slate-950/50 border ${isChanged ? 'border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)]' : 'border-slate-800'} flex flex-col md:flex-row md:items-center justify-between gap-3`}>
-                                                        <span className="text-xs md:text-sm font-medium text-slate-300 flex-1">{getSafeText(col?.title)}</span>
-                                                        <div className="flex gap-1.5 shrink-0 overflow-x-auto pb-1 md:pb-0">
+                                                    <div key={col.id} className={`p-3 rounded-xl bg-slate-50/50 border transition-all ${isChanged ? 'border-purple-400 bg-purple-50/10 shadow-sm' : 'border-slate-100'} flex flex-col md:flex-row md:items-center justify-between gap-3`}>
+                                                        <span className="text-xs font-bold text-slate-600 flex-1">{getSafeText(col?.title)}</span>
+                                                        <div className="flex gap-1 overflow-x-auto">
                                                             {STATUS_OPTIONS.map(opt => (
-                                                                <button key={opt.id} onClick={() => handleDraftGradeChange(selectedStudent.id, col.id, opt.id)} className={`px-3 py-2 rounded-lg border text-[10px] font-black uppercase tracking-wide transition-all shrink-0 ${displayGrade === opt.id ? darkStatusStyles[opt.id] : 'bg-slate-900 text-slate-500 border-transparent hover:bg-slate-800'}`}>
+                                                                <button key={opt.id} onClick={() => handleDraftGradeChange(selectedStudent.id, col.id, opt.id)} className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all ${displayGrade === opt.id ? lightStatusStyles[opt.id] : 'bg-white text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-50'}`}>
                                                                     {opt.label}
                                                                 </button>
                                                             ))}
@@ -391,16 +394,16 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     )}
                     
                     {!selectedStudent && foundStudents.length <= 1 && (
-                        <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-slate-600 font-mono py-12"><TerminalSquare size={48} className="mb-4 opacity-20"/><p className="text-xs">Komut veya Ses Bekleniyor...</p></div>
+                        <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-slate-400 font-mono py-12"><TerminalSquare size={40} className="mb-3 opacity-30 animate-pulse"/><p className="text-xs font-bold">Komut Girişi veya Ses Bekleniyor...</p></div>
                     )}
                 </div>
 
-                {/* ALT AKSİYON PANELİ */}
-                <div className="p-4 border-t border-slate-800 bg-slate-950 flex justify-between items-center gap-4 shrink-0">
-                    <span className="text-[11px] font-mono text-slate-500">{Object.keys(draftGrades).length} Bekleyen Kayıt</span>
+                {/* ALT KISIM: KAYIT PANELİ */}
+                <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-between items-center gap-4 shrink-0">
+                    <span className="text-[11px] font-bold text-slate-400 tracking-wide ml-1">{Object.keys(draftGrades).length} Adet Değişiklik Listede Sıralandı</span>
                     <div className="flex gap-2">
-                        <button onClick={() => { stopListening(); onClose(); }} className="px-5 py-2.5 text-xs font-bold text-slate-400 bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors">İptal</button>
-                        <button onClick={applyChanges} disabled={Object.keys(draftGrades).length === 0} className={`px-6 py-2.5 rounded-xl text-xs font-black text-slate-900 transition-all ${Object.keys(draftGrades).length > 0 ? 'bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-slate-800 text-slate-600 cursor-not-allowed'}`}><Save size={16} className="inline mr-1" /> KAYDET</button>
+                        <button onClick={() => { stopListening(); onClose(); }} className="px-5 py-2.5 text-xs font-bold text-slate-500 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors">İptal</button>
+                        <button onClick={applyChanges} disabled={Object.keys(draftGrades).length === 0} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${Object.keys(draftGrades).length > 0 ? 'bg-brandPurple text-white shadow-glow hover:bg-purple-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}><Save size={14} className="inline mr-1" /> DEĞİŞİKLİKLERİ KAYDET</button>
                     </div>
                 </div>
             </motion.div>
