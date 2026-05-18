@@ -3,12 +3,32 @@
 @tailwind utilities;
 
 @layer base {
+    html, body {
+        /* 🔥 GÜNCELLEME: Mobildeki 300ms tıklama gecikmesini ve çift tıklama zoom hatasını sıfırlar */
+        touch-action: manipulation;
+        
+        /* 🔥 GÜNCELLEME: Yanlışlıkla basılı tutunca elemanların/yazıların maviye boyanmasını (seçilmesini) engeller */
+        -webkit-user-select: none;
+        user-select: none;
+        
+        /* 🔥 GÜNCELLEME: Cihazların safe-area (çentik ve ev barı) mesafelerini otomatik hesaplar */
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
     body { 
         font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; 
         background-color: #f8f9fa; 
         color: #0f172a; 
         overflow-x: hidden; 
+        /* Tıklama sırasındaki tarayıcı kaynaklı gri gölgelenmeyi kaldırır */
         -webkit-tap-highlight-color: transparent; 
+    }
+
+    /* 🔥 GÜNCELLEME: Öğrencilerin input alanlarına yazı yazabilmesi için seçimi sadece buralarda aktif bırakıyoruz */
+    input, textarea {
+        -webkit-user-select: text !important;
+        user-select: text !important;
     }
 }
 
@@ -77,6 +97,8 @@
 .lch { color: rgba(255,255,255,0.28); flex-shrink: 0; }
 .lch-v { color: rgba(255,215,0,0.55); }
 
+.ldivline { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
+.ldl { flex: 1; height: 0.5px; background: rgba(255,255,255,0.07); }
 .ldivline { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
 .ldl { flex: 1; height: 0.5px; background: rgba(255,255,255,0.07); }
 .ldt { font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.18); }
