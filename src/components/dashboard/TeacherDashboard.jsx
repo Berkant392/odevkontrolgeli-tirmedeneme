@@ -1,63 +1,156 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Users, Crown, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, FolderPlus, Users, Search, ChevronRight, GraduationCap, Crown } from 'lucide-react';
 
 const TeacherDashboard = ({ regularClasses, vipClasses, onOpenClass, onNewClass, onNewVipClass }) => {
-    return (
-        <motion.div 
-            key="teacher-home"
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }} 
-            exit={{ opacity: 0, y: -20 }}
-            className="flex flex-col gap-10"
-        >
-            {/* STANDART SINIFLAR */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 24 }}>
-                <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
-                    <h2 className="text-lg md:text-xl font-black text-slate-800 flex items-center gap-2"><Users className="text-brandPurple"/> Sınıf Yönetimi</h2>
-                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={onNewClass} className="bg-brandPurple hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-glow flex items-center gap-2"><Plus size={18}/> Yeni Sınıf</motion.button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {regularClasses.map((cls) => ( 
-                        <motion.div 
-                            key={cls.id} 
-                            whileHover={{ scale: 1.02, y: -4 }} 
-                            whileTap={{ scale: 0.97 }} 
-                            onClick={() => onOpenClass(cls)} 
-                            className="cursor-pointer group bg-white rounded-3xl p-8 shadow-float border border-slate-100 flex flex-col items-center justify-center text-center"
-                        >
-                            <div className="w-16 h-16 bg-purple-50 text-brandPurple rounded-2xl flex items-center justify-center mb-5 group-hover:bg-brandPurple group-hover:text-white transition-colors duration-300 shadow-sm"><Users size={32}/></div>
-                            <h2 className="text-2xl font-black text-slate-800 tracking-tight group-hover:text-brandPurple transition-colors">{cls.className}</h2>
-                            <p className="text-xs text-slate-400 mt-3 font-bold uppercase tracking-widest bg-slate-50 px-4 py-1.5 rounded-full">Sınıfa Gir</p>
-                        </motion.div> 
-                    ))}
-                </div>
-            </motion.div>
+    const [searchQuery, setSearchQuery] = useState("");
+    const [showResults, setShowResults] = useState(false);
 
-            {/* ÖZEL DERSLER (VIP) */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 24, delay: 0.1 }}>
-                <div className="flex justify-between items-center bg-gradient-to-r from-yellow-50 to-amber-50 p-5 rounded-2xl shadow-sm border border-yellow-200 mb-6">
-                    <h2 className="text-lg md:text-xl font-black text-amber-900 flex items-center gap-2"><Crown className="text-amber-500"/> Özel Ders Yönetimi</h2>
-                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={onNewVipClass} className="real-gold-bg text-slate-900 px-5 py-2.5 rounded-xl text-sm font-black shadow-vip-glow flex items-center gap-2"><Plus size={18}/> Yeni Özel Ders</motion.button>
+    // Tüm öğrencileri tek havuzda toplama
+    const allStudents = [
+        ...regularClasses.flatMap(c => (c.students || []).map(s => ({ ...s, classId: c.id, className: c.className, isVip: false, classObj: c }))),
+        ...vipClasses.flatMap(c => (c.students || []).map(s => ({ ...s, classId: c.id, className: c.className, isVip: true, classObj: c })))
+    ];
+
+    // İsim arama filtresi
+    const filteredStudents = searchQuery.trim().length > 0
+        ? allStudents.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : [];
+
+    return (
+        <div className="space-y-8 animate-fade-in-up">
+            
+            {/* ÜST BUTON BAR BAR VE MANUEL ARAMA ALANI */}
+            <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between bg-white p-5 rounded-[2rem] shadow-float border border-slate-100">
+                
+                {/* 🔍 HARMANLANMIŞ AKILLI ARAMA PANELİ */}
+                <div className="flex-1 relative max-w-xl">
+                    <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400">
+                        <Search size={18} />
+                    </div>
+                    <input 
+                        type="text" 
+                        placeholder="Öğrenci ismi yazın (Örn: Merve)..." 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold text-slate-700 outline-none focus:border-brandPurple focus:bg-white transition-all shadow-inner"
+                        value={searchQuery}
+                        onChange={(e) => { setSearchQuery(e.target.value); setShowResults(true); }}
+                        onFocus={() => setShowResults(true)}
+                    />
+                    
+                    {/* ARAMA SONUÇ POPUP KUTUSU */}
+                    <AnimatePresence>
+                        {showResults && filteredStudents.length > 0 && (
+                            <motion.div 
+                                initial={{ opacity: 0, y: 10 }} 
+                                animate={{ opacity: 1, y: 0 }} 
+                                exit={{ opacity: 0, y: 10 }}
+                                className="absolute left-0 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-64 overflow-y-auto p-2 space-y-1"
+                            >
+                                {filteredStudents.map(student => (
+                                    <button 
+                                        key={student.id}
+                                        onClick={() => {
+                                            setShowResults(false);
+                                            setSearchQuery("");
+                                            onOpenClass(student.classObj);
+                                        }}
+                                        className="w-full text-left p-2.5 hover:bg-purple-50 rounded-xl transition-all flex items-center justify-between group"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${student.isVip ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-brandPurple'}`}>
+                                                {student.name.charAt(0)}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-slate-700 group-hover:text-brandPurple transition-colors flex items-center gap-1">
+                                                    {student.name} {student.isVip && <Crown size={12} className="text-amber-500"/>}
+                                                </span>
+                                                <span className="text-[10px] font-medium text-slate-400">{student.className}</span>
+                                            </div>
+                                        </div>
+                                        <ChevronRight size={16} className="text-slate-300 group-hover:text-brandPurple transition-transform group-hover:translate-x-1" />
+                                    </button>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {vipClasses.map((cls) => ( 
-                        <motion.div 
-                            key={cls.id} 
-                            whileHover={{ scale: 1.02, y: -4 }} 
-                            whileTap={{ scale: 0.97 }} 
-                            onClick={() => onOpenClass(cls)} 
-                            className="cursor-pointer group bg-white rounded-3xl p-8 shadow-float border border-yellow-200 flex flex-col items-center justify-center text-center relative overflow-hidden"
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-b from-yellow-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-                            <div className="w-16 h-16 bg-yellow-50 text-amber-500 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-amber-500 group-hover:text-white transition-colors duration-300 relative z-10 shadow-sm"><Crown size={32}/></div>
-                            <h2 className="text-2xl font-black text-amber-800 tracking-tight relative z-10">{cls.className}</h2>
-                            <p className="text-xs text-amber-600 mt-3 font-bold uppercase tracking-widest bg-yellow-50 px-4 py-1.5 rounded-full border border-yellow-100 relative z-10">Özel Ders Paneli</p>
-                        </motion.div> 
-                    ))}
+
+                {/* SINIF EKLEME BUTONLARI */}
+                <div className="flex flex-wrap gap-2.5">
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={onNewClass} className="flex-1 md:flex-none bg-purple-50 hover:bg-purple-100 text-brandPurple px-5 py-3.5 rounded-2xl font-black text-xs sm:text-sm tracking-wide shadow-sm flex items-center justify-center gap-2 border border-purple-100 transition-all">
+                        <Plus size={18} strokeWidth={2.5}/> GRUP SINIFI EKLE
+                    </motion.button>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={onNewVipClass} className="flex-1 md:flex-none real-gold-bg hover:opacity-90 text-slate-900 px-5 py-3.5 rounded-2xl font-black text-xs sm:text-sm tracking-wide shadow-vip-glow flex items-center justify-center gap-2 transition-all">
+                        <FolderPlus size={18} strokeWidth={2.5}/> ÖZEL DERS (VIP) EKLE
+                    </motion.button>
                 </div>
-            </motion.div>
-        </motion.div>
+            </div>
+
+            {/* MEVCUT SINIF LİSTELEME KARTLARI GRUBU */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* 🏫 GRUP SINIFLARI KUTUSU */}
+                <div className="space-y-4">
+                    <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 ml-2">
+                        <Users size={18} className="text-brandPurple"/> Grup Sınıfları ({regularClasses.length})
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {regularClasses.map(cls => (
+                            <motion.div key={cls.id} whileHover={{ y: -4, scale: 1.01 }} onClick={() => onOpenClass(cls)} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm hover:shadow-float transition-all cursor-pointer flex flex-col justify-between min-h-[140px] group">
+                                <div className="flex justify-between items-start">
+                                    <div className="p-3 bg-purple-50 text-brandPurple rounded-xl group-hover:bg-brandPurple group-hover:text-white transition-colors">
+                                        <GraduationCap size={20}/>
+                                    </div>
+                                    <span className="text-xs font-black text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                                        {cls.students?.length || 0} Öğrenci
+                                    </span>
+                                </div>
+                                <div className="mt-4">
+                                    <h4 className="font-black text-slate-800 text-lg group-hover:text-brandPurple transition-colors truncate">
+                                        {cls.className}
+                                    </h4>
+                                    <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                                        {cls.topics?.length || 0} Aktif Ödev Sütunu
+                                    </p>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                    {regularClasses.length === 0 && <div className="text-sm font-bold text-slate-400 bg-white p-6 rounded-3xl border border-dashed text-center">Henüz grup sınıfı eklenmemiş.</div>}
+                </div>
+
+                {/* 👑 ÖZEL DERS / VIP KUTUSU */}
+                <div className="space-y-4">
+                    <h3 className="text-sm font-black text-amber-600 uppercase tracking-widest flex items-center gap-2 ml-2">
+                        <Crown size={18} className="text-amber-500"/> Bireysel Özel Dersler ({vipClasses.length})
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {vipClasses.map(cls => (
+                            <motion.div key={cls.id} whileHover={{ y: -4, scale: 1.01 }} onClick={() => onOpenClass(cls)} className="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-md hover:shadow-vip-glow transition-all cursor-pointer flex flex-col justify-between min-h-[140px] group relative overflow-hidden">
+                                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-50 pointer-events-none"></div>
+                                <div className="flex justify-between items-start relative z-10">
+                                    <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl group-hover:real-gold-bg group-hover:text-slate-900 transition-colors">
+                                        <Crown size={20}/>
+                                    </div>
+                                    <span className="text-xs font-black text-amber-400 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+                                        VIP PORTAL
+                                    </span>
+                                </div>
+                                <div className="mt-4 relative z-10">
+                                    <h4 className="font-black text-slate-100 text-lg group-hover:text-vipGold transition-colors truncate">
+                                        {cls.className}
+                                    </h4>
+                                    <p className="text-[11px] font-bold text-slate-500 mt-1 uppercase tracking-wider">
+                                        {cls.topics?.length || 0} Görev Takibi
+                                    </p>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                    {vipClasses.length === 0 && <div className="text-sm font-bold text-slate-500 bg-slate-900/40 p-6 rounded-3xl border border-dashed border-slate-800 text-center">Henüz özel ders öğrencisi eklenmemiş.</div>}
+                </div>
+
+            </div>
+        </div>
     );
 };
 
