@@ -32,7 +32,7 @@ const App = () => {
     const [dbTeacherPin, setDbTeacherPin] = useState(DEFAULT_PIN); 
     const [announcementTitle, setAnnouncementTitle] = useState("Sistem Duyurusu");
     const [systemAnnouncement, setSystemAnnouncement] = useState("Eğitim, dünyayı değiştirmek için en güçlü silahtır.");
-    const [countdownConfig, setCountdownConfig] = useState({ targetDate: '2026-06-20T00:00:00', startDate: '2025-06-20T00:00:00', label: '20 Haziran 2026' });
+    const [countdownConfig, setCountdownConfig] = useState({ targetDate: '2026-06-20T00:00:00', startDate: '2025-06-20T00:00:00', label: '20 Jenkins 2026' });
     const [view, setView] = useState('home'); 
     const [activeTab, setActiveTab] = useState('homework'); 
     const [selectedClass, setSelectedClass] = useState(null);
@@ -82,7 +82,6 @@ const App = () => {
     } = useRegisterSW({
         onRegisteredSW(swUrl, r) {
             if (r) {
-                // Her 15 dakikada bir sunucuda yeni güncelleme paketleri var mı diye kontrol et
                 setInterval(() => {
                     r.update();
                 }, 15 * 60 * 1000);
@@ -90,7 +89,6 @@ const App = () => {
         }
     });
 
-    // İnternet durum takibini sağlayan donanımsal dinleyici (Çevrimdışı çalışmayı engeller)
     useEffect(() => {
         const handleOnline = () => setIsOnline(true);
         const handleOffline = () => setIsOnline(false);
@@ -160,7 +158,18 @@ const App = () => {
         showAlert('warning', 'Emin misiniz?', 'Bu öğe kütüphaneden silinecek.', async () => { await deleteDoc(doc(db, LIBRARY_COLLECTION, id)); }); 
     };
     
-    const addStudent = (classId) => { if(!newStudentName.trim()) return; const cls = classes.find(classId ? c => c.id === classId : c => c.id === selectedClass?.id); const username = newStudentName.toLowerCase().replace(/\s+/g, '.') + Math.floor(Math.random()*1000); const password = Math.random().toString(36).slice(-6); const newStd = { id: generateId('std'), name: newStudentName, username, password, grades: {}, assignmentNotes: {} }; updateClassInDb({ ...cls, students: [...(cls.students || []), newStd] }); setNewStudentName(""); };
+    // 🔥 SÖZDİZİMİ (SYNTAX) OPTİMİZASYONU YAPILDI
+    const addStudent = (classId) => { 
+        if(!newStudentName.trim()) return; 
+        const targetId = classId || selectedClass?.id;
+        const cls = classes.find(c => c.id === targetId); 
+        if (!cls) return;
+        const username = newStudentName.toLowerCase().replace(/\s+/g, '.') + Math.floor(Math.random()*1000); 
+        const password = Math.random().toString(36).slice(-6); 
+        const newStd = { id: generateId('std'), name: newStudentName, username, password, grades: {}, assignmentNotes: {} }; 
+        updateClassInDb({ ...cls, students: [...(cls.students || []), newStd] }); 
+        setNewStudentName(""); 
+    };
     
     const deleteStudent = (e, classId, studentId) => { 
         e.stopPropagation(); 
@@ -530,7 +539,7 @@ const App = () => {
                 )}
             </AnimatePresence>
 
-            {/* 🔴 YENİ: İNTERNETSİZ ÇALIŞMAYI ENGELLEYEN TAM SAYFA KAPLAMA (OVERLAY) */}
+            {/* 🔴 İNTERNETSİZ ÇALIŞMAYI ENGELLEYEN TAM SAYFA KAPLAMA (OVERLAY) */}
             <AnimatePresence>
                 {!isOnline && (
                     <motion.div 
@@ -554,7 +563,7 @@ const App = () => {
                 )}
             </AnimatePresence>
 
-            {/* 🚀 YENİ: KAÇIŞI OLMAYAN ZORUNLU GÜNCELLEME EKRANI (UPDATE PROMPT) */}
+            {/* 🚀 KAÇIŞI OLMAYAN ZORUNLU GÜNCELLEME EKRANI (UPDATE PROMPT) */}
             <AnimatePresence>
                 {needRefresh && (
                     <motion.div 
@@ -567,7 +576,6 @@ const App = () => {
                             animate={{ scale: 1, y: 0 }}
                             className="bg-slate-900 border-2 border-brandPurple/40 p-6 md:p-8 rounded-[2.5rem] w-full max-w-md text-center shadow-[0_0_80px_rgba(147,51,234,0.25)] relative overflow-hidden"
                         >
-                            {/* Parlama efekti */}
                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full bg-brandPurple/10 blur-3xl pointer-events-none"></div>
 
                             <div className="w-16 h-16 bg-purple-500/10 border border-purple-500/30 text-brandPurple rounded-full flex items-center justify-center mx-auto mb-6 shadow-glow">
@@ -586,7 +594,7 @@ const App = () => {
                                 className="w-full mt-8 bg-brandPurple hover:bg-purple-600 text-white font-black py-4 rounded-2xl shadow-glow tracking-widest text-sm transition-colors flex items-center justify-center gap-2"
                             >
                                 <RefreshCw size={16} /> UYGULAMAYI GÜNCELLE
-</motion.button>
+                            </motion.button>
                         </motion.div>
                     </motion.div>
                 )}
