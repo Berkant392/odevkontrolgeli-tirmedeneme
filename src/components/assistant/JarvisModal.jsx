@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, X, TerminalSquare, Keyboard, Mic, Send, User, Activity, Calendar, StickyNote, AlertTriangle, Save, ChevronRight, HelpCircle } from 'lucide-react';
+import { Zap, X, TerminalSquare, Mic, Send, User, Activity, Calendar, HelpCircle, Save, CheckCircle2 } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/helpers';
 import Fuse from 'fuse.js';
@@ -26,10 +26,9 @@ const darkStatusStyles = {
 
 const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     const [isListening, setIsListening] = useState(false);
-    const [isThinking, setIsThinking] = useState(false); // Yapay zeka düşünürken
+    const [isThinking, setIsThinking] = useState(false); 
     const [speechTranscript, setSpeechTranscript] = useState("");
-    const [textCommand, setTextCommand] = useState("");
-    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem devrede. Sesli veya yazılı komut bekliyorum...");
+    const [jarvisFeedback, setJarvisFeedback] = useState("Bağlantı kuruldu. Sizi dinliyorum efendim...");
     
     const [foundStudents, setFoundStudents] = useState([]);
     const [foundTopics, setFoundTopics] = useState([]);
@@ -40,23 +39,32 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
     
     const [draftGrades, setDraftGrades] = useState({});
     const [draftNotes, setDraftNotes] = useState({});
-    const inputRef = useRef(null);
-    const reversedFoundTopics = [...foundTopics].reverse();
+    
+    const recognitionRef = useRef(null);
 
-    // 🔒 SCROLL KİLİDİ
+    // En yeni ödevleri en üstte listelemek için sıralama
+    const sortedFoundTopics = [...foundTopics].reverse();
+
+    // 🔒 ARKA PLAN SCROLL KİLİDİ
     useEffect(() => {
         document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = ''; };
+        // OTOMATİK DİNLEME AKTİVASYONU
+        setTimeout(() => {
+            toggleListening();
+        }, 400);
+        return () => { 
+            document.body.style.overflow = ''; 
+            if (recognitionRef.current) recognitionRef.current.abort();
+        };
     }, []);
 
-    // 🗣️ YENİ: J.A.R.V.I.S KONUŞMA FONKSİYONU (Web Speech API - Tamamen Ücretsiz)
+    // 🗣️ YENİ NESİL SESLİ CEP CEVAP SİSTEMİ
     const speakFeedback = (text) => {
         if (!window.speechSynthesis) return;
-        window.speechSynthesis.cancel(); // Önceki konuşmayı kes
+        window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'tr-TR';
-        utterance.rate = 1.0; // Hız
-        utterance.pitch = 1.0; // Ses tonu
+        utterance.rate = 1.0;
         window.speechSynthesis.speak(utterance);
     };
 
@@ -65,38 +73,45 @@ const AssistantModal = ({ classes, updateClassInDb, onClose }) => {
         speakFeedback(msg);
     };
 
-    // 🧠 YENİ: GROQ API BAĞLANTISI
+    // 🧠 HAFIZALI GROQ NLP YAPISI
     const callGroqAPI = async (transcript) => {
         const apiKey = import.meta.env.VITE_GROQ_API_KEY;
         if (!apiKey) {
-            updateFeedbackAndSpeak("API Anahtarı bulunamadı. Lütfen .env dosyanızı kontrol edin.");
+            updateFeedbackAndSpeak("API Anahtarı Netlify veya ortamda bulunamadı.");
             setIsThinking(false);
             return null;
         }
 
-        // LLM'e göndereceğimiz bağlam (Sınıflar, öğrenciler, konular)
         const contextData = classes.map(c => ({
             className: c.className,
             students: c.students.map(s => s.name),
             topics: c.topics.map(t => t.title)
         }));
 
-        const systemPrompt = `
-Sen bir eğitim asistanısın. Adın J.A.R.V.I.S.
-Sana öğretmenin veya öğrencinin söylediği bir komut verilecek. Bu komutun içinden "Öğrenci Adı", "Konu Adı", "Kaynak (Test/Kitap)", ve "Durum" bilgilerini çıkar.
-Durumlar şunlar olabilir: "done" (çözdü/yaptı/bitirdi), "missing" (yapmadı/eksik/boş), "assigned" (verildi/ödev atandı), "exempt" (muaf/es geçti).
-Eğer bir bilgi cümlede yoksa değerini null yap.
-SADECE GEÇERLİ BİR JSON DÖNDÜR, BAŞKA HİÇBİR AÇIKLAMA YAZMA!
+        // Eğer halihazırda seçili bir öğrenci varsa prompt içerisine enjekte ediyoruz (Context Memory)
+        const currentStudentContext = selectedStudent 
+            ? `Şu an aktif olarak seçili öğrenci ve odaklandığımız kişi: "${selectedStudent.name}". Eğer kullanıcı yeni bir isim belirtmediyse, bu öğrenci üzerinden işlem yapmaya devam et.`
+            : `Şu an seçili bir öğrenci yok. Kullanıcının cümlesinden ismi bulmalısın.`;
 
-Sistemdeki Mevcut Veriler:
+        const systemPrompt = `
+Sen lüks bir eğitim yapay zekasısın. Adın J.A.R.V.I.S.
+Sana öğretmenin veya öğrencinin söylediği bir komut verilecek. Bu komutun içinden "Öğrenci Adı", "Konu Adı", "Kaynak (Test/Kitap)", ve "Durum" bilgilerini çıkar.
+Durumlar: "done" (çözdü/yaptı/bitirdi), "missing" (yapmadı/eksik/boş/unuttu), "assigned" (verildi/ödev atandı), "exempt" (muaf/es geçti).
+
+${currentStudentContext}
+
+Eğer bir bilgi cümlede yoksa değerini null yap.
+SADECE GEÇERLİ BİR JSON DÖNDÜR, BAŞKA METİN YAZMA!
+
+Mevcut Eğitim Veritabanı Yapısı:
 ${JSON.stringify(contextData)}
 
-Örnek Yanıt Formatı:
+Örnek Yanıt:
 {
-  "student": "Ahmet Yılmaz",
-  "topic": "Üslü Sayılar",
-  "source": "Bilgi Sarmalı Test 1",
-  "status": "missing"
+  "student": "Merve Şen",
+  "topic": "Çarpanlara Ayırma",
+  "source": "Video Ders Defteri",
+  "status": "done"
 }`;
 
         try {
@@ -118,21 +133,17 @@ ${JSON.stringify(contextData)}
             });
 
             const data = await response.json();
-            const aiResult = JSON.parse(data.choices[0].message.content);
-            return aiResult;
-
+            return JSON.parse(data.choices[0].message.content);
         } catch (error) {
-            console.error("Groq API Hatası:", error);
-            updateFeedbackAndSpeak("Bağlantı hatası oluştu. Lütfen tekrar deneyin.");
+            console.error("Groq Hatası:", error);
             return null;
         }
     };
 
-    // 🎯 EŞLEŞTİRME (AI'dan gelen veriyi sistemdeki ID'ler ile eşleştirir)
     const findBestMatch = (items, key, textToSearch) => {
         if (!items || items.length === 0 || !textToSearch) return null;
         const safeItems = items.map(item => ({ ...item, _safeSearchKey: getSafeText(item[key]) }));
-        const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.4, includeScore: true });
+        const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.45, includeScore: true });
         const results = fuse.search(textToSearch);
         return results.length > 0 ? results[0].item : null;
     };
@@ -140,13 +151,16 @@ ${JSON.stringify(contextData)}
     const processGroqResult = (aiResult) => {
         if (!aiResult) return;
 
-        // 1. ÖĞRENCİ EŞLEŞTİRME
+        // 1. ÖĞRENCİ BELİRLEME (Hafızadan veya Gelen Veriden)
         const allStudents = classes.flatMap(cls => (cls.students || []).map(std => ({ ...std, classId: cls.id, className: cls.className, isVip: cls.type === 'vip' })));
-        const bestStudent = findBestMatch(allStudents, 'name', aiResult.student);
+        
+        let bestStudent = findBestMatch(allStudents, 'name', aiResult.student);
+        if (!bestStudent && selectedStudent) {
+            bestStudent = selectedStudent; // Hafızadaki öğrenciyi koru
+        }
 
         if (!bestStudent) {
-            setFoundStudents([]); setSelectedStudent(null); setFoundTopics([]);
-            updateFeedbackAndSpeak(`${aiResult.student || 'Bahsedilen'} isminde bir öğrenci sistemde bulunamadı.`);
+            updateFeedbackAndSpeak(`${aiResult.student || 'Belirtilen'} isminde bir öğrenci profili eşleşmedi.`);
             return;
         }
 
@@ -157,61 +171,60 @@ ${JSON.stringify(contextData)}
         const topics = targetClass?.topics || []; 
         setFoundTopics(topics);
 
-        // 2. KONU VE KAYNAK EŞLEŞTİRME
+        // 2. GÖREV VE DURUM İŞLEME
         const bestTopic = findBestMatch(topics, 'title', aiResult.topic);
         let bestCol = null;
         if (bestTopic && aiResult.source) {
             bestCol = findBestMatch(bestTopic.subColumns || [], 'title', aiResult.source);
         }
 
-        // 3. AKSİYON ALMA VE KONUŞMA
         if (bestTopic && bestCol && aiResult.status) {
             handleDraftGradeChange(bestStudent.id, bestCol.id, aiResult.status);
             const statusLabels = { 'done': 'Yapıldı', 'missing': 'Eksik', 'assigned': 'Verildi', 'exempt': 'Muaf' };
-            updateFeedbackAndSpeak(`${getSafeText(bestStudent.name)} için ${getSafeText(bestTopic.title)} konusu ${statusLabels[aiResult.status]} olarak işaretlendi.`);
+            updateFeedbackAndSpeak(`${getSafeText(bestStudent.name)} için ${getSafeText(bestTopic.title)} konusu güncellendi.`);
         } 
         else if (bestTopic && !bestCol && aiResult.status) { 
             setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: aiResult.status });
             setPendingSources(bestTopic.subColumns || []);
-            updateFeedbackAndSpeak(`${getSafeText(bestTopic.title)} konusunu anladım. Lütfen ekrandan ilgili kaynağı seçiniz.`); 
+            updateFeedbackAndSpeak("Ödev konusunu onayladım. Lütfen ekrandan kaynağı seçin."); 
         } 
-        else if (bestTopic && !bestCol) {
-            updateFeedbackAndSpeak(`Konuyu buldum, ancak hangi kaynak veya eylem olduğunu anlayamadım.`); 
-        } 
-        else if (!bestTopic) { 
-            updateFeedbackAndSpeak(`${getSafeText(bestStudent.name)} profili hazır. Lütfen eklenecek konuyu belirtin.`); 
+        else {
+            updateFeedbackAndSpeak(`${getSafeText(bestStudent.name)} profili kilitlendi. Ödev veya kaynak bilgisini söyleyebilirsiniz.`);
         }
     };
 
     const handleCommand = async (transcript) => {
         if (!transcript.trim()) return;
-        setPendingAction(null);
-        setPendingSources([]);
-        
         setIsThinking(true);
-        updateFeedbackAndSpeak("Kayıtlar taranıyor...");
+        setJarvisFeedback("Matris taranıyor...");
         
         const aiResult = await callGroqAPI(transcript);
         setIsThinking(false);
-        
         processGroqResult(aiResult);
-    };
-
-    const handleManualSubmit = () => {
-        if (!textCommand.trim()) return;
-        setSpeechTranscript(textCommand); 
-        handleCommand(textCommand);
-        setTextCommand(""); 
     };
 
     const toggleListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) { updateFeedbackAndSpeak("Tarayıcınız ses modülünü desteklemiyor. Lütfen yazarak devam edin."); return; }
-        if (isListening) { setIsListening(false); return; }
-        const recognition = new SpeechRecognition(); recognition.lang = 'tr-TR'; recognition.continuous = false;
-        recognition.onstart = () => { setIsListening(true); setSpeechTranscript(""); updateFeedbackAndSpeak("Sizi dinliyorum..."); };
-        recognition.onresult = (event) => { const transcript = event.results[0][0].transcript; setSpeechTranscript(transcript); handleCommand(transcript); };
-        recognition.onerror = (event) => { setIsListening(false); updateFeedbackAndSpeak("Sinyal alamadım. Manuel giriş yapabilirsiniz."); };
+        if (!SpeechRecognition) { setJarvisFeedback("Ses modülü desteklenmiyor."); return; }
+        
+        if (isListening) {
+            if (recognitionRef.current) recognitionRef.current.stop();
+            setIsListening(false);
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognitionRef.current = recognition;
+        recognition.lang = 'tr-TR';
+        recognition.continuous = false;
+
+        recognition.onstart = () => { setIsListening(true); setSpeechTranscript(""); setJarvisFeedback("Sizi dinliyorum..."); };
+        recognition.onresult = (event) => { 
+            const transcript = event.results[0][0].transcript; 
+            setSpeechTranscript(transcript); 
+            handleCommand(transcript); 
+        };
+        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Ses algılanamadı."); };
         recognition.onend = () => setIsListening(false); 
         recognition.start();
     };
@@ -219,8 +232,7 @@ ${JSON.stringify(contextData)}
     const handleManualSourceSelect = (col) => {
         if (!pendingAction) return;
         handleDraftGradeChange(pendingAction.studentId, col.id, pendingAction.status);
-        const statusLabels = { 'done': 'Yapıldı', 'missing': 'Eksik', 'assigned': 'Verildi', 'exempt': 'Muaf' };
-        updateFeedbackAndSpeak(`İşlem Tamam. Kaynak ${statusLabels[pendingAction.status]} olarak güncellendi.`);
+        updateFeedbackAndSpeak("Seçilen kaynak başarıyla sisteme işlendi.");
         setPendingAction(null);
         setPendingSources([]);
     };
@@ -239,146 +251,95 @@ ${JSON.stringify(contextData)}
             } return s;
         });
         updateClassInDb({ ...targetClass, students: updatedStudents });
-        setDraftGrades({}); setDraftNotes({}); 
-        updateFeedbackAndSpeak("Tüm güncellemeler ana veritabanına işlendi."); 
-        setTimeout(() => onClose(), 2000);
+        setDraftGrades({}); setDraftNotes({});
+        updateFeedbackAndSpeak("Veriler kaydedildi.");
+        setTimeout(() => onClose(), 1200);
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[100] flex items-center justify-center p-0 md:p-4 font-sans">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-slate-900 md:rounded-[2rem] w-full h-full md:h-auto md:max-h-[90vh] max-w-5xl overflow-hidden flex flex-col border-0 md:border border-cyan-500/20 shadow-[0_0_50px_rgba(34,211,238,0.1)]">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }} className="bg-slate-900/95 border border-cyan-500/30 rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col max-h-[85vh]">
                 
-                {/* 1. HOLOGRAFİK RADAR VE INPUT BÖLÜMÜ */}
-                <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 shrink-0 flex flex-col items-center justify-center pt-8 md:pt-10 pb-4 md:pb-6 px-4">
-                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 15, repeat: Infinity, ease: 'linear' }} className="absolute w-40 h-40 md:w-64 md:h-64 border border-cyan-500/10 rounded-full border-t-cyan-400/30" />
-                    <motion.div animate={{ rotate: -360 }} transition={{ duration: 25, repeat: Infinity, ease: 'linear' }} className="absolute w-24 h-24 md:w-48 md:h-48 border border-cyan-500/10 rounded-full border-b-cyan-400/40" />
+                {/* RADAR PANELDİ ÜST KISIM */}
+                <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 p-6 flex flex-col items-center justify-center shrink-0">
+                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute w-44 h-44 border border-cyan-500/10 rounded-full border-t-cyan-400/40" />
+                    <button onClick={() => { window.speechSynthesis.cancel(); onClose(); }} className="absolute top-4 right-4 text-slate-500 hover:text-cyan-400 transition-colors z-30"><X size={20}/></button>
                     
-                    <button onClick={() => { window.speechSynthesis.cancel(); onClose(); }} className="absolute top-4 right-4 text-cyan-500/50 hover:text-cyan-400 transition-colors z-20"><X size={24}/></button>
-                    <div className="absolute top-4 left-4 flex items-center gap-2 text-cyan-500/40 text-[10px] font-mono tracking-widest z-20"><TerminalSquare size={14}/> GROQ AI CORE ACTIVE</div>
-
-                    <div className="z-10 bg-slate-900 p-3 md:p-4 rounded-full border border-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.2)] mb-4 md:mb-6 hidden md:block">
-                        <Activity size={32} className={`text-cyan-400 ${(isListening || isThinking) ? 'animate-pulse' : ''}`} />
+                    <div onClick={toggleListening} className="z-10 bg-slate-900 p-4 rounded-full border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.2)] mb-3 cursor-pointer relative hover:scale-105 transition-transform">
+                        {isListening && <span className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping"></span>}
+                        <Activity size={24} className={`text-cyan-400 ${(isListening || isThinking) ? 'animate-pulse' : ''}`} />
                     </div>
 
-                    <div className="w-full max-w-2xl z-10 relative flex items-center mb-2 md:mb-4 mt-2 md:mt-0">
-                        <div className="absolute left-4 text-cyan-500/50 pointer-events-none"><Keyboard size={18} /></div>
-                        <input 
-                            ref={inputRef} type="text" placeholder="Örn: Ahmet üslü sayılar bilgi sarmalından eksik..." 
-                            className="w-full bg-slate-900/80 border border-cyan-800/50 text-cyan-100 rounded-xl pl-12 pr-24 py-3 md:py-4 text-sm focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(34,211,238,0.2)] transition-all placeholder:text-slate-600 font-medium"
-                            value={textCommand} onChange={(e) => setTextCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} disabled={isListening || isThinking}
-                        />
-                        <div className="absolute right-2 flex items-center gap-1">
-                            <button onClick={toggleListening} className={`p-2 md:p-2.5 rounded-lg transition-colors ${isListening ? 'bg-cyan-500/20 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.3)]' : 'hover:bg-slate-800 text-slate-400 hover:text-cyan-400'}`} title="Sesli Komut"><Mic size={20} className={isListening ? 'animate-pulse' : ''} /></button>
-                            <button onClick={handleManualSubmit} className="p-2 md:p-2.5 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-400 rounded-lg transition-colors" disabled={!textCommand.trim() || isListening || isThinking}><Send size={20} /></button>
-                        </div>
-                    </div>
-
-                    <div className="z-10 text-center min-h-[40px] flex flex-col items-center justify-center w-full">
-                        {speechTranscript && <p className="text-xs text-slate-500 italic mb-1">"{speechTranscript}"</p>}
-                        <p className="font-mono text-cyan-300 text-[11px] md:text-sm flex items-center justify-center text-center px-2 md:px-4">
-                            {pendingSources.length > 0 && <HelpCircle size={16} className="text-amber-400 mr-2 animate-pulse shrink-0"/>}
-                            {!pendingSources.length && <span className="mr-2 text-cyan-500/50 shrink-0">&gt;</span>} 
-                            <span className="truncate whitespace-normal leading-tight">{jarvisFeedback}</span>
-                            {!pendingSources.length && <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity }} className="ml-1 inline-block w-2 h-4 bg-cyan-400 shrink-0" />}
+                    <div className="z-10 text-center w-full px-2">
+                        {speechTranscript && <p className="text-[11px] text-slate-500 italic mb-1">"{speechTranscript}"</p>}
+                        <p className="font-mono text-cyan-300 text-xs flex items-center justify-center tracking-wide leading-tight">
+                            <span className="text-cyan-600 mr-1.5">&gt;</span> {jarvisFeedback}
                         </p>
-                        
-                        <AnimatePresence>
-                            {pendingSources.length > 0 && (
-                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mt-3 md:mt-4 flex flex-wrap justify-center gap-2 max-w-3xl px-2">
-                                    {pendingSources.map(col => (
-                                        <button key={col.id} onClick={() => handleManualSourceSelect(col)} className="px-3 py-1.5 md:px-4 md:py-2 bg-cyan-950 border border-cyan-500/50 hover:bg-cyan-900 hover:border-cyan-400 text-cyan-100 text-[10px] md:text-xs font-bold rounded-lg transition-all shadow-[0_0_10px_rgba(34,211,238,0.2)]">
-                                            {getSafeText(col.title)}
-                                        </button>
-                                    ))}
-                                    <button onClick={() => { setPendingAction(null); setPendingSources([]); updateFeedbackAndSpeak("İşlem iptal edildi."); }} className="px-3 py-1.5 md:px-4 md:py-2 bg-rose-950 border border-rose-500/50 hover:bg-rose-900 text-rose-200 text-[10px] md:text-xs font-bold rounded-lg transition-all">İptal</button>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
                     </div>
+
+                    {/* KAYNAK SEÇTİRME KAPSÜLLERİ */}
+                    <AnimatePresence>
+                        {pendingSources.length > 0 && (
+                            <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="mt-4 flex flex-wrap justify-center gap-1.5 z-20 relative max-h-24 overflow-y-auto">
+                                {pendingSources.map(col => (
+                                    <button key={col.id} onClick={() => handleManualSourceSelect(col)} className="px-3 py-1.5 bg-cyan-950/90 border border-cyan-500/40 hover:border-cyan-300 text-cyan-200 text-[10px] font-bold rounded-xl transition-all">
+                                        {getSafeText(col.title)}
+                                    </button>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
-                
-                {/* 2. LİSTELER VE İÇERİK BÖLÜMÜ */}
-                <div className="flex-1 overflow-hidden flex flex-col md:flex-row bg-slate-950 min-h-[300px]">
-                    
-                    <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-cyan-900/30 overflow-y-auto p-4 flex flex-row md:flex-col gap-2 h-28 md:h-auto shrink-0 md:shrink custom-scrollbar">
-                        <div className="hidden md:block text-[10px] font-mono text-cyan-600 uppercase tracking-widest mb-2 px-1 sticky top-0 bg-slate-950 z-10 py-1 border-b border-cyan-900/30">Hedef Profil</div>
-                        {foundStudents.map(student => {
-                            const isSelected = selectedStudent?.id === student.id; 
-                            return ( 
-                                <button key={student.id} onClick={() => setSelectedStudent(student)} className={`text-left p-2 md:p-3 min-w-[140px] md:min-w-0 rounded-xl border transition-all flex items-center gap-2 md:gap-3 ${isSelected ? 'bg-cyan-900/20 border-cyan-500/50 shadow-[0_0_15px_rgba(34,211,238,0.1)]' : 'border-transparent hover:bg-slate-900 hover:border-cyan-900/30'}`}>
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${isSelected ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-800 text-slate-500'}`}>{getSafeText(student.name).charAt(0)}</div>
-                                    <div className="flex flex-col overflow-hidden w-full">
-                                        <span className={`font-bold text-[11px] md:text-sm truncate ${isSelected ? 'text-cyan-100' : 'text-slate-400'}`}>{getSafeText(student.name)}</span>
-                                        <span className={`text-[9px] md:text-[10px] font-mono truncate ${isSelected ? 'text-cyan-500/70' : 'text-slate-600'}`}>{getSafeText(student.className)}</span>
-                                    </div>
-                                </button> 
-                            );
-                        })}
-                        {foundStudents.length === 0 && <div className="text-xs text-cyan-800/50 text-center py-4 md:py-8 flex w-full justify-center md:flex-col items-center gap-2 font-mono"><User size={20} className="opacity-50"/> Veri Yok</div>}
-                    </div>
-                    
-                    <div className="w-full md:w-2/3 overflow-y-auto p-3 md:p-6 relative h-full custom-scrollbar pb-24 md:pb-6">
-                        {selectedStudent ? (
-                            <div className="space-y-4 md:space-y-6">
-                                {reversedFoundTopics.map(topic => (
-                                    <div key={topic.id} className="bg-slate-900/50 rounded-2xl border border-cyan-900/30 p-3 md:p-5">
-                                        <h4 className="font-bold text-cyan-100 text-sm md:text-base mb-3 md:mb-4 border-b border-slate-800 pb-2 md:pb-3 flex items-center gap-2 justify-between">
-                                            <div className="flex items-center gap-2"><div className="w-1.5 h-4 bg-cyan-500 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>{getSafeText(topic.title)}</div>
-                                        </h4>
-                                        <div className="space-y-2 md:space-y-3">
-                                            {topic.subColumns.map(col => {
-                                                const targetClass = classes.find(c => c.id === selectedStudent.classId); const studentData = targetClass?.students.find(s => s.id === selectedStudent.id);
-                                                const currentDbGrade = studentData?.grades?.[col.id] || 'assigned'; const currentDbNote = studentData?.assignmentNotes?.[col.id] || '';
-                                                const draftGrade = draftGrades[selectedStudent.id]?.[col.id]; const draftNote = draftNotes[selectedStudent.id]?.[col.id];
-                                                const displayGrade = draftGrade !== undefined ? draftGrade : currentDbGrade; const displayNote = draftNote !== undefined ? draftNote : currentDbNote;
-                                                const isChanged = (draftGrade !== undefined && draftGrade !== currentDbGrade) || (draftNote !== undefined && draftNote !== currentDbNote);
-                                                
+
+                {/* ÖDEV MATRİS LİSTESİ - BURADA OVERFLOW GÜVENLİĞİ VE SCROLL AKIŞI SAĞLANDI */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/40 min-h-0 custom-scrollbar">
+                    {selectedStudent ? (
+                        <>
+                            <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-cyan-900/30">
+                                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center font-bold text-cyan-400 text-sm">{getSafeText(selectedStudent.name).charAt(0)}</div>
+                                <div className="flex flex-col"><span className="text-sm font-bold text-cyan-100">{getSafeText(selectedStudent.name)}</span><span className="text-[10px] font-mono text-slate-500">{getSafeText(selectedStudent.className)}</span></div>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                {sortedFoundTopics.map(topic => (
+                                    <div key={topic.id} className="bg-slate-900/40 rounded-2xl border border-cyan-900/20 p-4">
+                                        <h4 className="font-bold text-cyan-200 text-xs mb-3 border-b border-slate-800/60 pb-2 flex items-center gap-1.5"><div className="w-1 h-3 bg-cyan-500 rounded-full"></div>{getSafeText(topic.title)}</h4>
+                                        <div className="space-y-2.5">
+                                            {topic.subColumns?.map(col => {
+                                                const targetClass = classes.find(c => c.id === selectedStudent.classId);
+                                                const studentData = targetClass?.students?.find(s => s.id === selectedStudent.id);
+                                                const displayGrade = draftGrades[selectedStudent.id]?.[col.id] !== undefined ? draftGrades[selectedStudent.id]?.[col.id] : (studentData?.grades?.[col.id] || 'assigned');
+                                                const isChanged = draftGrades[selectedStudent.id]?.[col.id] !== undefined;
+
                                                 return (
-                                                    <div key={col.id} className={`flex flex-col gap-2 p-3 md:p-4 rounded-xl transition-all duration-500 ${isChanged ? 'bg-cyan-900/10 border border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'bg-slate-900 border border-slate-800'}`}>
-                                                        <div className="text-xs md:text-sm font-medium text-slate-300 flex justify-between items-center">
-                                                            {getSafeText(col.title)}
-                                                            {isChanged && <span className="text-[8px] md:text-[9px] bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded flex items-center gap-1 font-mono uppercase"><Zap size={8}/> Sync</span>}
-                                                        </div>
-                                                        <div className="grid grid-cols-4 gap-1.5 md:gap-2">
-                                                            {STATUS_OPTIONS.map(opt => {
-                                                                const isSelected = displayGrade === opt.id;
-                                                                const activeStyle = darkStatusStyles[opt.id];
-                                                                return ( 
-                                                                    <button key={opt.id} onClick={() => handleDraftGradeChange(selectedStudent.id, col.id, opt.id)} className={`flex flex-col items-center justify-center p-1.5 md:p-2 rounded-lg border transition-all ${isSelected ? `${activeStyle} shadow-md scale-105` : 'bg-slate-950 text-slate-600 border-slate-800 hover:border-slate-600 hover:text-slate-400'}`}>
-                                                                        <opt.icon size={14} className="mb-0.5 md:mb-1" strokeWidth={2.5} />
-                                                                        <span className="text-[8px] md:text-[9px] font-bold uppercase tracking-wider hidden sm:block">{opt.label}</span>
-                                                                    </button> 
-                                                                );
-                                                            })}
+                                                    <div key={col.id} className={`p-3 rounded-xl bg-slate-900/80 border ${isChanged ? 'border-cyan-500/40' : 'border-slate-800'} flex flex-col sm:flex-row sm:items-center justify-between gap-2.5`}>
+                                                        <span className="text-xs font-medium text-slate-300 truncate max-w-[200px]">{getSafeText(col.title)}</span>
+                                                        <div className="flex gap-1 shrink-0">
+                                                            {STATUS_OPTIONS.map(opt => (
+                                                                <button key={opt.id} onClick={() => handleDraftGradeChange(selectedStudent.id, col.id, opt.id)} className={`px-2 py-1 rounded-md border text-[9px] font-black uppercase tracking-wide transition-all ${displayGrade === opt.id ? darkStatusStyles[opt.id] : 'bg-slate-950 text-slate-600 border-transparent'}`}>
+                                                                    {opt.label}
+                                                                </button>
+                                                            ))}
                                                         </div>
                                                     </div>
-                                                )
+                                                );
                                             })}
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        ) : ( 
-                            <div className="flex flex-col h-full items-center justify-center text-cyan-800/50 p-4 md:p-8 font-mono">
-                                <Activity size={32} className={`mb-3 opacity-50 ${isThinking ? 'animate-bounce' : ''}`} />
-                                <p className="text-xs md:text-sm">{isThinking ? 'Neural Network Processing...' : 'Awaiting Target Selection...'}</p>
-                            </div> 
-                        )}
-                    </div>
+                        </>
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-600 font-mono py-12"><TerminalSquare size={36} className="mb-2 opacity-30 animate-pulse"/><p className="text-xs">Komut Girişi veya Ses Bekleniyor...</p></div>
+                    )}
                 </div>
-                
-                {/* 3. ONAY VE KAYIT BÖLÜMÜ */}
-                <div className="p-3 md:p-4 border-t border-cyan-900/50 bg-slate-950 flex flex-row justify-between items-center gap-2 md:gap-4 shrink-0 z-20 absolute md:relative bottom-0 left-0 w-full">
-                    <div className="text-[10px] md:text-xs font-mono hidden md:block w-auto text-left">
-                        {Object.keys(draftGrades).length > 0 || Object.keys(draftNotes).length > 0 ? ( 
-                            <span className="text-cyan-400 flex items-center gap-1.5 animate-pulse"><AlertTriangle size={14}/> Senkronizasyon bekleniyor</span> 
-                        ) : ( <span className="text-slate-600">Değişiklik yok</span> )}
-                    </div>
-                    <div className="flex gap-2 w-full md:w-auto">
-                        <button onClick={() => { window.speechSynthesis.cancel(); onClose(); }} className="px-4 md:px-6 py-2 md:py-2.5 font-bold text-slate-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition-colors text-xs md:text-sm">İptal</button>
-                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} onClick={applyChanges} disabled={Object.keys(draftGrades).length === 0 && Object.keys(draftNotes).length === 0} className={`flex-1 md:flex-none px-4 md:px-8 py-2 md:py-2.5 rounded-xl font-bold text-slate-900 transition-all text-xs md:text-sm flex items-center justify-center gap-2 ${(Object.keys(draftGrades).length > 0 || Object.keys(draftNotes).length > 0) ? 'bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.4)]' : 'bg-slate-700 text-slate-500 cursor-not-allowed'} `}>
-                            <Save size={16} /> <span className="hidden sm:inline">SİSTEME</span> İŞLE
-                        </motion.button>
+
+                {/* ALT AKSİYON PANELİ */}
+                <div className="p-4 border-t border-cyan-900/50 bg-slate-950 flex justify-between items-center gap-4 shrink-0">
+                    <span className="text-[10px] font-mono text-slate-500">{Object.keys(draftGrades).length} Değişiklik Hazır</span>
+                    <div className="flex gap-2">
+                        <button onClick={() => { window.speechSynthesis.cancel(); onClose(); }} className="px-4 py-2 text-xs font-bold text-slate-400 bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors">Kapat</button>
+                        <button onClick={applyChanges} disabled={Object.keys(draftGrades).length === 0} className={`px-5 py-2 rounded-xl text-xs font-black text-slate-900 transition-all ${Object.keys(draftGrades).length > 0 ? 'bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-slate-800 text-slate-600 cursor-not-allowed'}`}>SİSTEME İŞLE</button>
                     </div>
                 </div>
             </motion.div>
