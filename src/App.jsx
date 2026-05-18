@@ -45,6 +45,10 @@ const App = () => {
     const [modalDateVal, setModalDateVal] = useState("");
     const [modalPdfVal, setModalPdfVal] = useState("");
     
+    // 🔥 ÖĞRENCİ DÜZENLEME İÇİN YENİ STATE'LER
+    const [modalEditUsername, setModalEditUsername] = useState("");
+    const [modalEditPassword, setModalEditPassword] = useState("");
+    
     const [activeTopicMenu, setActiveTopicMenu] = useState(null);
     const [activeColMenu, setActiveColMenu] = useState(null);
     const [activeCell, setActiveCell] = useState(null);
@@ -94,8 +98,20 @@ const App = () => {
     const handleStudentLogin = (username, password, isVipLogin = false) => {
         let foundStudent = null, foundClass = null; const classesToSearch = isVipLogin ? vipClasses : regularClasses;
         for (const cls of classesToSearch) { const std = cls.students?.find(s => s.username === username.trim() && s.password === password.trim()); if (std) { foundStudent = std; foundClass = cls; break; } }
-        if (foundStudent) { setCurrentUserRole(isVipLogin ? 'vip-student' : 'student'); setLoggedInStudent(foundStudent); setSelectedClass(foundClass); setSelectedStudentForView(foundStudent); setView('student-detail'); setActiveTab('homework'); const updatedStudents = foundClass.students.map(s => s.id === foundStudent.id ? { ...s, lastLogin: new Date().toISOString() } : s); updateClassInDb({ ...foundClass, students: updatedStudents }); } 
-        else { showAlert('error', 'Giriş Başarısız', 'Kullanıcı adı veya şifre hatalı!'); }
+        
+        if (foundStudent) { 
+            setCurrentUserRole(isVipLogin ? 'vip-student' : 'student'); 
+            setLoggedInStudent(foundStudent); 
+            setSelectedClass(foundClass); 
+            setSelectedStudentForView(foundStudent); 
+            setView('student-detail'); 
+            setActiveTab('homework'); 
+            const updatedStudents = foundClass.students.map(s => s.id === foundStudent.id ? { ...s, lastLogin: new Date().toISOString() } : s); 
+            updateClassInDb({ ...foundClass, students: updatedStudents }); 
+        } else { 
+            // 🔥 Hata fırlatıyoruz ki LoginScreen'deki try/catch bloğu bu hatayı yakalayabilsin.
+            throw new Error("Kullanıcı adı veya şifre hatalı"); 
+        }
     };
     
     const handleLogout = () => { setCurrentUserRole(null); setIsTeacherMode(false); setLoggedInStudent(null); setSelectedClass(null); setSelectedStudentForView(null); setView('home'); };
@@ -122,7 +138,6 @@ const App = () => {
         showAlert('warning', 'Kaynağı Sil', 'Kaynağı silmek istediğinize emin misiniz?', () => { const cls = classes.find(c => c.id === classId); const updatedTopics = cls.topics.map(t => t.id === topicId ? { ...t, subColumns: t.subColumns.filter(c => c.id !== colId) } : t); updateClassInDb({ ...cls, topics: updatedTopics }); }); 
     };
 
-    // 🔥 YENİ: ÖDEV (ANA BAŞLIK) SİLME FONKSİYONU
     const deleteTopic = (classId, topicId) => {
         showAlert('warning', 'Ödevi Sil', 'Bu ödevi ve altındaki TÜM kaynakları silmek istediğinize emin misiniz?', () => {
             const cls = classes.find(c => c.id === classId);
@@ -152,17 +167,63 @@ const App = () => {
     const openCellNoteModal = (classId, studentId, colId, currentNote) => { setCellNoteModal({ classId, studentId, colId, note: currentNote || "" }); };
     
     const handleModalSubmit = async () => {
-        if (modalType === 'system-settings') { await updateDoc(doc(db, SETTINGS_COLLECTION, SETTINGS_DOC), { announcement: modalInputVal, announcementTitle: modalTitleVal, countdown: { targetDate: modalDateVal ? `${modalDateVal}T00:00:00` : countdownConfig.targetDate, startDate: countdownConfig.startDate, label: modalPdfVal || "" } }); setModalType(null); setModalInputVal(""); setModalTitleVal(""); setModalDateVal(""); setModalPdfVal(""); return; }
+        if (modalType === 'system-settings') { 
+            await updateDoc(doc(db, SETTINGS_COLLECTION, SETTINGS_DOC), { announcement: modalInputVal, announcementTitle: modalTitleVal, countdown: { targetDate: modalDateVal ? `${modalDateVal}T00:00:00` : countdownConfig.targetDate, startDate: countdownConfig.startDate, label: modalPdfVal || "" } }); 
+            setModalType(null); setModalInputVal(""); setModalTitleVal(""); setModalDateVal(""); setModalPdfVal(""); 
+            return; 
+        }
+        
         if (!modalInputVal.trim() && modalType !== 'edit-date') return;
-        if (modalType === 'class' || modalType === 'vip') { await addDoc(collection(db, CLASSES_COLLECTION), { className: modalInputVal, type: modalType === 'vip' ? 'vip' : 'regular', students: [], topics: [], curriculum: [] }); } 
-        else if (modalType === 'edit-class') { const cls = classes.find(c => c.id === modalData.classId); updateClassInDb({ ...cls, className: modalInputVal }); } 
-        else if (modalType === 'edit-student') { const cls = classes.find(c => c.id === modalData.classId); const updatedStudents = cls.students.map(s => s.id === modalData.studentId ? { ...s, name: modalInputVal } : s); updateClassInDb({ ...cls, students: updatedStudents }); } 
-        else if (modalType === 'topic') { const cls = classes.find(c => c.id === modalData.classId); const newTopic = { id: generateId('top'), title: modalInputVal, date: modalDateVal, subColumns: [] }; updateClassInDb({ ...cls, topics: [...(cls.topics||[]), newTopic] }); } 
-        else if (modalType === 'edit-topic') { const cls = classes.find(c => c.id === modalData.classId); const updatedTopics = cls.topics.map(t => t.id === modalData.topicId ? { ...t, title: modalInputVal, date: modalDateVal } : t); updateClassInDb({ ...cls, topics: updatedTopics }); } 
-        else if (modalType === 'edit-date') { const cls = classes.find(c => c.id === modalData.classId); const updatedTopics = cls.topics.map(t => t.id === modalData.topicId ? { ...t, date: modalDateVal } : t); updateClassInDb({ ...cls, topics: updatedTopics }); } 
-        else if (modalType === 'source') { const cls = classes.find(c => c.id === modalData.classId); const updatedTopics = cls.topics.map(t => t.id === modalData.topicId ? { ...t, subColumns: [...(t.subColumns||[]), { id: generateId('col'), title: modalInputVal, pdfLink: modalPdfVal }] } : t); updateClassInDb({ ...cls, topics: updatedTopics }); } 
-        else if (modalType === 'edit-source') { const cls = classes.find(c => c.id === modalData.classId); const updatedTopics = cls.topics.map(t => { if (t.id === modalData.topicId) { return { ...t, subColumns: t.subColumns.map(c => c.id === modalData.colId ? { ...c, title: modalInputVal, pdfLink: modalPdfVal } : c) }; } return t; }); updateClassInDb({ ...cls, topics: updatedTopics }); }
-        setModalType(null); setModalInputVal(""); setModalTitleVal(""); setModalDateVal(""); setModalPdfVal("");
+        
+        if (modalType === 'class' || modalType === 'vip') { 
+            await addDoc(collection(db, CLASSES_COLLECTION), { className: modalInputVal, type: modalType === 'vip' ? 'vip' : 'regular', students: [], topics: [], curriculum: [] }); 
+        } 
+        else if (modalType === 'edit-class') { 
+            const cls = classes.find(c => c.id === modalData.classId); 
+            updateClassInDb({ ...cls, className: modalInputVal }); 
+        } 
+        // 🔥 ÖĞRENCİ BİLGİLERİNİ GÜNCELLEME ALANI
+        else if (modalType === 'edit-student') { 
+            const cls = classes.find(c => c.id === modalData.classId); 
+            const updatedStudents = cls.students.map(s => 
+                s.id === modalData.studentId ? { ...s, name: modalInputVal, username: modalEditUsername, password: modalEditPassword } : s
+            ); 
+            updateClassInDb({ ...cls, students: updatedStudents }); 
+        } 
+        else if (modalType === 'topic') { 
+            const cls = classes.find(c => c.id === modalData.classId); 
+            const newTopic = { id: generateId('top'), title: modalInputVal, date: modalDateVal, subColumns: [] }; 
+            updateClassInDb({ ...cls, topics: [...(cls.topics||[]), newTopic] }); 
+        } 
+        else if (modalType === 'edit-topic') { 
+            const cls = classes.find(c => c.id === modalData.classId); 
+            const updatedTopics = cls.topics.map(t => t.id === modalData.topicId ? { ...t, title: modalInputVal, date: modalDateVal } : t); 
+            updateClassInDb({ ...cls, topics: updatedTopics }); 
+        } 
+        else if (modalType === 'edit-date') { 
+            const cls = classes.find(c => c.id === modalData.classId); 
+            const updatedTopics = cls.topics.map(t => t.id === modalData.topicId ? { ...t, date: modalDateVal } : t); 
+            updateClassInDb({ ...cls, topics: updatedTopics }); 
+        } 
+        else if (modalType === 'source') { 
+            const cls = classes.find(c => c.id === modalData.classId); 
+            const updatedTopics = cls.topics.map(t => t.id === modalData.topicId ? { ...t, subColumns: [...(t.subColumns||[]), { id: generateId('col'), title: modalInputVal, pdfLink: modalPdfVal }] } : t); 
+            updateClassInDb({ ...cls, topics: updatedTopics }); 
+        } 
+        else if (modalType === 'edit-source') { 
+            const cls = classes.find(c => c.id === modalData.classId); 
+            const updatedTopics = cls.topics.map(t => { if (t.id === modalData.topicId) { return { ...t, subColumns: t.subColumns.map(c => c.id === modalData.colId ? { ...c, title: modalInputVal, pdfLink: modalPdfVal } : c) }; } return t; }); 
+            updateClassInDb({ ...cls, topics: updatedTopics }); 
+        }
+        
+        // Modal state'lerini temizle
+        setModalType(null); 
+        setModalInputVal(""); 
+        setModalTitleVal(""); 
+        setModalDateVal(""); 
+        setModalPdfVal("");
+        setModalEditUsername(""); 
+        setModalEditPassword("");
     };
 
     if (!currentUserRole) return <LoginScreen onStudentLogin={handleStudentLogin} onTeacherLogin={verifyPin} />;
@@ -204,8 +265,44 @@ const App = () => {
             <main className="max-w-7xl mx-auto px-4 mt-8 no-print relative z-10">
                 <AnimatePresence mode="wait">
                     {isTeacherMode && view === 'home' && <TeacherDashboard regularClasses={regularClasses} vipClasses={vipClasses} onOpenClass={openClass} onNewClass={() => { setModalType('class'); setModalInputVal(''); }} onNewVipClass={() => { setModalType('vip'); setModalInputVal(''); }} />}
-                    {isTeacherMode && view === 'class-detail' && selectedClass && <ClassDetail selectedClass={selectedClass} activeTab={activeTab} setActiveTab={setActiveTab} isMobile={isMobile} newStudentName={newStudentName} setNewStudentName={setNewStudentName} addStudent={addStudent} updateGrade={updateGrade} openCellNoteModal={openCellNoteModal} setModalData={setModalData} setModalInputVal={setModalInputVal} setModalDateVal={setModalDateVal} setModalPdfVal={setModalPdfVal} setModalType={setModalType} deleteStudent={deleteStudent} handlePrintStudentReport={handlePrintStudentReport} openStudent={openStudent} setActiveTopicMenu={setActiveTopicMenu} setActiveColMenu={setActiveColMenu} setActiveCell={setActiveCell} deleteColumn={deleteColumn} updateClassInDb={updateClassInDb} handleOpenRisk={handleOpenRisk} handlePrintPasswords={handlePrintPasswords} deleteClass={deleteClass} libraryItems={libraryItems.filter(i => i.type === LIBRARY_TYPES.CURRICULUM)} saveToLibrary={async (topic) => { if(!topic.title) return; try { await addDoc(collection(db, LIBRARY_COLLECTION), { text: topic.title, type: LIBRARY_TYPES.CURRICULUM, subTopics: topic.subTopics ? topic.subTopics.map(st => ({ title: st.title })) : [] }); showAlert('success', 'Başarılı', 'Ödev başarıyla kütüphaneye kaydedildi!'); } catch (e) { showAlert('error', 'Hata', 'Kütüphane kayıt hatası oluştu!'); } }} />}
+                    
+                    {isTeacherMode && view === 'class-detail' && selectedClass && (
+                        <ClassDetail 
+                            selectedClass={selectedClass} 
+                            activeTab={activeTab} 
+                            setActiveTab={setActiveTab} 
+                            isMobile={isMobile} 
+                            newStudentName={newStudentName} 
+                            setNewStudentName={setNewStudentName} 
+                            addStudent={addStudent} 
+                            updateGrade={updateGrade} 
+                            openCellNoteModal={openCellNoteModal} 
+                            setModalData={setModalData} 
+                            setModalInputVal={setModalInputVal} 
+                            setModalDateVal={setModalDateVal} 
+                            setModalPdfVal={setModalPdfVal} 
+                            setModalType={setModalType} 
+                            deleteStudent={deleteStudent} 
+                            handlePrintStudentReport={handlePrintStudentReport} 
+                            openStudent={openStudent} 
+                            setActiveTopicMenu={setActiveTopicMenu} 
+                            setActiveColMenu={setActiveColMenu} 
+                            setActiveCell={setActiveCell} 
+                            deleteColumn={deleteColumn} 
+                            updateClassInDb={updateClassInDb} 
+                            handleOpenRisk={handleOpenRisk} 
+                            handlePrintPasswords={handlePrintPasswords} 
+                            deleteClass={deleteClass} 
+                            libraryItems={libraryItems.filter(i => i.type === LIBRARY_TYPES.CURRICULUM)} 
+                            saveToLibrary={async (topic) => { if(!topic.title) return; try { await addDoc(collection(db, LIBRARY_COLLECTION), { text: topic.title, type: LIBRARY_TYPES.CURRICULUM, subTopics: topic.subTopics ? topic.subTopics.map(st => ({ title: st.title })) : [] }); showAlert('success', 'Başarılı', 'Ödev başarıyla kütüphaneye kaydedildi!'); } catch (e) { showAlert('error', 'Hata', 'Kütüphane kayıt hatası oluştu!'); } }} 
+                            // 🔥 Yeni eklenen props
+                            setModalEditUsername={setModalEditUsername}
+                            setModalEditPassword={setModalEditPassword}
+                        />
+                    )}
+
                     {!isTeacherMode && view === 'home' && <StudentDashboard classes={classes} currentUserRole={currentUserRole} onOpenClass={openClass} />}
+                    
                     {view === 'student-detail' && selectedClass && selectedStudentForView && <StudentDetail selectedStudentForView={selectedStudentForView} selectedClass={selectedClass} currentUserRole={currentUserRole} activeTab={activeTab} setActiveTab={setActiveTab} isTeacherMode={isTeacherMode} openCellNoteModal={openCellNoteModal} updateGrade={updateGrade} updateClassInDb={updateClassInDb} />}
                 </AnimatePresence>
             </main>
@@ -213,7 +310,8 @@ const App = () => {
             {showLibraryManager && <LibraryModal libraryCategory={libraryCategory} setLibraryCategory={setLibraryCategory} libraryInput={libraryInput} setLibraryInput={setLibraryInput} libraryDate={libraryDate} setLibraryDate={setLibraryDate} libraryItems={libraryItems} addLibraryItem={addLibraryItem} deleteLibraryItem={deleteLibraryItem} onClose={() => setShowLibraryManager(false)} />}
             
            {showAssistant && <JarvisModal classes={classes} updateClassInDb={updateClassInDb} onClose={() => setShowAssistant(false)} initialStudent={selectedStudentForView} />}
-            {/* ESKİ BİLGİ GİRİŞ MODALLARI */}
+            
+            {/* BİLGİ GİRİŞ/DÜZENLEME MODALLARI */}
             {modalType && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
                     <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
@@ -229,9 +327,29 @@ const App = () => {
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Sayaç Hedef Tarihi</label>
                                 <input type="date" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-bold text-sm outline-none focus:border-brandPurple" value={modalDateVal} onChange={e => setModalDateVal(e.target.value)} />
                             </>
+                        ) : modalType === 'edit-student' ? (
+                            // 🔥 YENİ: ÖĞRENCİ DÜZENLEME MODALI ARAYÜZÜ (Kullanıcı adı ve Şifre dahil)
+                            <>
+                                <h3 className="font-bold text-lg mb-4 text-slate-800">Öğrenci Bilgilerini Düzenle</h3>
+                                
+                                <div className="mb-4">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Öğrenci Adı</label>
+                                    <input type="text" autoFocus className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={modalInputVal} onChange={e => setModalInputVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
+                                </div>
+                                
+                                <div className="mb-4">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kullanıcı Adı</label>
+                                    <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={modalEditUsername} onChange={e => setModalEditUsername(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
+                                </div>
+
+                                <div className="mb-4">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Şifre</label>
+                                    <input type="text" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" value={modalEditPassword} onChange={e => setModalEditPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
+                                </div>
+                            </>
                         ) : (
                             <>
-                                <h3 className="font-bold text-lg mb-4 text-slate-800">{modalType === 'class' ? 'Yeni Sınıf Oluştur' : modalType === 'vip' ? 'Yeni Özel Ders Oluştur' : modalType === 'topic' ? 'Yeni Ödev Ekle' : modalType === 'edit-student' ? 'Öğrenci Adını Düzenle' : 'Düzenle'}</h3>
+                                <h3 className="font-bold text-lg mb-4 text-slate-800">{modalType === 'class' ? 'Yeni Sınıf Oluştur' : modalType === 'vip' ? 'Yeni Özel Ders Oluştur' : modalType === 'topic' ? 'Yeni Ödev Ekle' : 'Düzenle'}</h3>
                                 <input type="text" autoFocus className="w-full border-2 border-slate-200 rounded-xl p-3 mb-2 font-bold outline-none focus:border-brandPurple" placeholder="Başlık girin..." value={modalInputVal} onChange={e => setModalInputVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} />
                                 
                                 {modalType === 'topic' && (
@@ -257,7 +375,10 @@ const App = () => {
                                 {(modalType === 'topic' || modalType === 'edit-topic' || modalType === 'edit-date') && ( <input type="date" className="w-full border-2 border-slate-200 rounded-xl p-3 mb-4 font-bold text-sm outline-none focus:border-brandPurple" value={modalDateVal} onChange={e => setModalDateVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleModalSubmit()} /> )}
                             </>
                         )}
-                        <div className="flex gap-2 justify-end mt-2"><button onClick={() => setModalType(null)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button><button onClick={handleModalSubmit} className="px-4 py-2 bg-brandPurple text-white font-bold rounded-xl hover:bg-purple-700 shadow-md">Kaydet</button></div>
+                        <div className="flex gap-2 justify-end mt-2">
+                            <button onClick={() => { setModalType(null); setModalEditUsername(""); setModalEditPassword(""); }} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl">İptal</button>
+                            <button onClick={handleModalSubmit} className="px-4 py-2 bg-brandPurple text-white font-bold rounded-xl hover:bg-purple-700 shadow-md">Kaydet</button>
+                        </div>
                     </motion.div>
                 </div>
             )}
@@ -269,7 +390,6 @@ const App = () => {
             
             {activeTopicMenu && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setActiveTopicMenu(null)}><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white p-2 rounded-2xl shadow-xl flex flex-col gap-1 w-56" onClick={e => e.stopPropagation()}>
                 <button onClick={() => { const cls = classes.find(c => c.id === activeTopicMenu.classId); const top = cls.topics.find(t => t.id === activeTopicMenu.topicId); setModalData({ classId: cls.id, topicId: top.id }); setModalInputVal(top.title); setModalDateVal(top.date || ""); setModalType('edit-topic'); setActiveTopicMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"><Pencil size={16}/> Başlık / Tarih Düzenle</button>
-                {/* 🔥 YENİ EKLENEN ÖDEV SİL BUTONU BURADA */}
                 <button onClick={() => { deleteTopic(activeTopicMenu.classId, activeTopicMenu.topicId); setActiveTopicMenu(null); }} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={16}/> Ödevi Sil</button>
             </motion.div></div>}
             
