@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, UserPlus, Loader2 } from 'lucide-react';
+import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, Loader2 } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import Fuse from 'fuse.js';
 
 // ═══════════════════════════════════════════════════════════════
-// 🛡️ GÜVENLİK KALKANI
+// 🛡️ GÜVENLİK KALKANI & YARDIMCI FONKSİYONLAR
 // ═══════════════════════════════════════════════════════════════
 const getSafeText = (val) => {
     if (!val) return "";
@@ -26,11 +26,7 @@ const lightStatusStyles = {
     'exempt': 'bg-slate-50 border-slate-200 text-slate-500 font-bold shadow-sm'
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 🧠 TÜRKÇE NLP MOTORU - ÇEKİM EKİ NORMALİZASYONU (GELİŞMİŞ)
-// ═══════════════════════════════════════════════════════════════
-
-// Türkçe karakter normalizasyonu (ses benzerliği için)
+// 🧠 TÜRKÇE NLP MOTORU
 const turkishNormalize = (text) => {
     if (!text) return '';
     return text.toLocaleLowerCase('tr-TR')
@@ -41,82 +37,53 @@ const turkishNormalize = (text) => {
         .replace(/İ/g, 'i');
 };
 
-// Kelime köküne indirgeme (stemming)
 const turkishStem = (word) => {
     if (!word || word.length < 3) return word;
     let w = word.toLocaleLowerCase('tr-TR');
 
-    // Fiil çekim ekleri (en uzundan en kısaya)
     const verbSuffixes = [
-        'mıştı', 'mişti', 'muştu', 'müştü',
-        'ıyordu', 'iyordu', 'uyordu', 'üyordu',
-        'acak', 'ecek', 'acağı', 'eceği',
-        'mışım', 'mişim', 'muşum', 'müşüm',
-        'mışsın', 'mişsin', 'muşsun', 'müşsün',
-        'mış', 'miş', 'muş', 'müş',
-        'dı', 'di', 'du', 'dü',
-        'tı', 'ti', 'tu', 'tü',
-        'ar', 'er', 'ır', 'ir', 'ur', 'ür',
-        'mıştır', 'miştir', 'muştur', 'müştür',
-        'ıyor', 'iyor', 'uyor', 'üyor',
-        'madan', 'meden', 'madıkça', 'medikçe',
-        'ınca', 'ince', 'unca', 'ünce',
-        'dığında', 'diğinde', 'duğunda', 'düğünde',
-        'arak', 'erek',
-        'malı', 'meli',
-        'sa', 'se',
-        'dıkça', 'dikçe',
+        'mıştı', 'mişti', 'muştu', 'müştü', 'ıyordu', 'iyordu', 'uyordu', 'üyordu',
+        'acak', 'ecek', 'acağı', 'eceği', 'mışım', 'mişim', 'muşum', 'müşüm',
+        'mışsın', 'mişsin', 'muşsun', 'müşsün', 'mış', 'miş', 'muş', 'müş',
+        'dı', 'di', 'du', 'dü', 'tı', 'ti', 'tu', 'tü',
+        'ar', 'er', 'ır', 'ir', 'ur', 'ür', 'mıştır', 'miştir', 'muştur', 'müştür',
+        'ıyor', 'iyor', 'uyor', 'üyor', 'madan', 'meden', 'madıkça', 'medikçe',
+        'ınca', 'ince', 'unca', 'ünce', 'dığında', 'diğinde', 'duğunda', 'düğünde',
+        'arak', 'erek', 'malı', 'meli', 'sa', 'se', 'dıkça', 'dikçe',
     ];
 
-    // İsim çekim ekleri
     const nounSuffixes = [
-        'ları', 'leri', 'larına', 'lerine',
-        'ların', 'lerin', 'lardan', 'lerden',
-        'la', 'le', 'ta', 'te', 'da', 'de',
-        'tan', 'ten', 'dan', 'den',
-        'ın', 'in', 'un', 'ün',
-        'a', 'e', 'ı', 'i', 'u', 'ü',
-        'larım', 'lerim', 'larımız', 'lerimiz',
-        'taki', 'teki', 'daki', 'deki',
+        'ları', 'leri', 'larına', 'lerine', 'ların', 'lerin', 'lardan', 'lerden',
+        'la', 'le', 'ta', 'te', 'da', 'de', 'tan', 'ten', 'dan', 'den',
+        'ın', 'in', 'un', 'ün', 'a', 'e', 'ı', 'i', 'u', 'ü',
+        'larım', 'lerim', 'larımız', 'lerimiz', 'taki', 'teki', 'daki', 'deki',
     ];
 
-    // Önce fiil eklerini dene
     for (const suffix of verbSuffixes) {
         if (w.endsWith(suffix) && w.length - suffix.length >= 2) {
             w = w.slice(0, -suffix.length);
             break;
         }
     }
-
-    // Sonra isim eklerini dene
     for (const suffix of nounSuffixes) {
         if (w.endsWith(suffix) && w.length - suffix.length >= 2) {
             w = w.slice(0, -suffix.length);
             break;
         }
     }
-
     return w;
 };
 
-// Tüm metni normalize et (kelime kelime)
 const normalizeText = (text) => {
     if (!text) return '';
-    return text.toLocaleLowerCase('tr-TR')
-        .split(/\s+/)
-        .map(turkishStem)
-        .join(' ');
+    return text.toLocaleLowerCase('tr-TR').split(/\s+/).map(turkishStem).join(' ');
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 🎯 DURUM SİNİFİ (Status Detection) - GELİŞMİŞ
-// ═══════════════════════════════════════════════════════════════
 const detectStatus = (text) => {
     if (!text) return null;
     const normalized = normalizeText(text);
     const words = normalized.split(/\s+/).filter(w => w.length > 1);
 
-    // Durum kelime havuzları (kök halleri)
     const statusRoots = {
         done: [
             'yap', 'çöz', 'bit', 'tamamla', 'hallet', 'hazır', 'tamam',
@@ -153,11 +120,9 @@ const detectStatus = (text) => {
     Object.entries(statusRoots).forEach(([status, roots]) => {
         let score = 0;
         roots.forEach(root => {
-            // Tam kelime eşleşmesi (daha yüksek puan)
             if (normalized.includes(root)) {
                 score += root.length * 2;
             }
-            // Kelime bazlı eşleşme
             words.forEach(word => {
                 if (word.includes(root) || root.includes(word)) {
                     score += Math.min(word.length, root.length);
@@ -170,11 +135,9 @@ const detectStatus = (text) => {
         }
     });
 
-    // Eşik değeri: En az 4 puan olmalı
     return bestMatch.score >= 4 ? bestMatch.status : null;
 };
 
-// Levenshtein mesafesi
 const levenshteinDistance = (str1, str2) => {
     const track = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
     for (let i = 0; i <= str1.length; i++) track[0][i] = i;
@@ -188,7 +151,6 @@ const levenshteinDistance = (str1, str2) => {
     return track[str2.length][str1.length];
 };
 
-// Ses benzerliği skoru (0-1)
 const phoneticSimilarity = (str1, str2) => {
     const n1 = turkishNormalize(str1);
     const n2 = turkishNormalize(str2);
@@ -197,19 +159,20 @@ const phoneticSimilarity = (str1, str2) => {
     return 1 - levenshteinDistance(n1, n2) / maxLen;
 };
 
+
 // ═══════════════════════════════════════════════════════════════
 // 🎯 ANA BİLEŞEN
 // ═══════════════════════════════════════════════════════════════
 const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) => {
-    // ════════ STATE (En üstte!) ════════
+    // ════════ STATE ════════
     const [isListening, setIsListening] = useState(false);
     const [speechTranscript, setSpeechTranscript] = useState("");
     const [jarvisFeedback, setJarvisFeedback] = useState("Sistem aktif. Öğrenci adını söyleyin.");
     const [foundStudents, setFoundStudents] = useState(initialStudent ? [initialStudent] : []);
     const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
     const [foundTopics, setFoundTopics] = useState([]);
-    const [pendingAction, setPendingAction] = useState(null); 
-    const [pendingSources, setPendingSources] = useState([]); 
+    const [pendingAction, setPendingAction] = useState(null);
+    const [pendingSources, setPendingSources] = useState([]);
     const [pendingStatusSelect, setPendingStatusSelect] = useState(null);
     const [draftGrades, setDraftGrades] = useState({});
     const [commandMode, setCommandMode] = useState(initialStudent ? 'homework' : 'student');
@@ -222,18 +185,18 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
     const handleDraftGradeChangeRef = useRef(null);
     const applyChangesRef = useRef(null);
 
-    // ════════ USEMEMO (State'lerden hemen sonra!) ════════
+    // ════════ USEMEMO ════════
     const allStudents = useMemo(() => {
         const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
-        return safeClasses.flatMap(cls => 
-            Array.isArray(cls.students) 
-                ? cls.students.filter(std => std && std.name).map(std => ({ 
-                    ...std, 
-                    classId: cls.id, 
-                    className: cls.className, 
+        return safeClasses.flatMap(cls =>
+            Array.isArray(cls.students)
+                ? cls.students.filter(std => std && std.name).map(std => ({
+                    ...std,
+                    classId: cls.id,
+                    className: cls.className,
                     isVip: cls.type === 'vip',
                     classType: cls.type || 'normal'
-                })) 
+                }))
                 : []
         );
     }, [classes]);
@@ -263,9 +226,9 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 600);
         }
 
-        return () => { 
+        return () => {
             clearTimeout(autoListenTimerRef.current);
-            document.body.style.overflow = ''; 
+            document.body.style.overflow = '';
             if (recognitionRef.current) recognitionRef.current.abort();
         };
     }, [initialStudent, classes]);
@@ -291,7 +254,6 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
         let text = inputText.toLocaleLowerCase('tr-TR').trim();
         const textNormalized = turkishNormalize(text);
-        const textStemmed = normalizeText(text);
 
         // AŞAMA 1: Tam Ad Soyad (===)
         const exactMatches = allStudents.filter(s => {
@@ -299,12 +261,8 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             return nameLower === text || turkishNormalize(nameLower) === textNormalized;
         });
 
-        if (exactMatches.length === 1) {
-            return { students: exactMatches, exactMatch: true, isSingle: true, reason: 'exact_single' };
-        }
-        if (exactMatches.length > 1) {
-            return { students: exactMatches, exactMatch: true, isSingle: false, reason: 'exact_multiple' };
-        }
+        if (exactMatches.length === 1) return { students: exactMatches, exactMatch: true, isSingle: true, reason: 'exact_single' };
+        if (exactMatches.length > 1) return { students: exactMatches, exactMatch: true, isSingle: false, reason: 'exact_multiple' };
 
         // AŞAMA 2: İçerme (includes)
         const includeMatches = allStudents.filter(s => {
@@ -312,9 +270,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             return nameLower.includes(text) || text.includes(nameLower);
         });
 
-        if (includeMatches.length === 1) {
-            return { students: includeMatches, exactMatch: false, isSingle: true, reason: 'include_single' };
-        }
+        if (includeMatches.length === 1) return { students: includeMatches, exactMatch: false, isSingle: true, reason: 'include_single' };
 
         // AŞAMA 3: Kelime Sırası Bağımsız
         const inputWords = text.split(/\s+/).filter(w => w.length > 2);
@@ -323,31 +279,18 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             return inputWords.every(iw => nameWords.some(nw => nw.includes(iw) || iw.includes(nw)));
         });
 
-        if (wordOrderMatches.length === 1) {
-            return { students: wordOrderMatches, exactMatch: false, isSingle: true, reason: 'wordorder_single' };
-        }
+        if (wordOrderMatches.length === 1) return { students: wordOrderMatches, exactMatch: false, isSingle: true, reason: 'wordorder_single' };
 
         // AŞAMA 4: Ses Benzerliği (Metafonik)
         const phoneticMatches = allStudents.filter(s => {
             const similarity = phoneticSimilarity(turkishNormalize(s.name), textNormalized);
             return similarity > 0.75;
-        }).sort((a, b) => {
-            return phoneticSimilarity(turkishNormalize(b.name), textNormalized) - 
-                   phoneticSimilarity(turkishNormalize(a.name), textNormalized);
-        });
+        }).sort((a, b) => phoneticSimilarity(turkishNormalize(b.name), textNormalized) - phoneticSimilarity(turkishNormalize(a.name), textNormalized));
 
-        if (phoneticMatches.length === 1) {
-            return { students: phoneticMatches, exactMatch: false, isSingle: true, reason: 'phonetic_single' };
-        }
+        if (phoneticMatches.length === 1) return { students: phoneticMatches, exactMatch: false, isSingle: true, reason: 'phonetic_single' };
 
         // AŞAMA 5: Fuse.js Fuzzy (daha sıkı)
-        const fuse = new Fuse(allStudents, { 
-            keys: ['name'], 
-            threshold: 0.3,
-            includeScore: true, 
-            ignoreLocation: true,
-            minMatchCharLength: 2
-        });
+        const fuse = new Fuse(allStudents, { keys: ['name'], threshold: 0.3, includeScore: true, ignoreLocation: true, minMatchCharLength: 2 });
         const fuseResults = fuse.search(text);
 
         if (fuseResults.length === 0) {
@@ -357,22 +300,14 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 distance: levenshteinDistance(turkishNormalize(s.name), textNormalized)
             })).filter(m => m.distance <= 3).sort((a, b) => a.distance - b.distance);
 
-            if (levMatches.length === 1) {
-                return { students: [levMatches[0].student], exactMatch: false, isSingle: true, reason: 'levenshtein_single' };
-            }
-            if (levMatches.length > 1) {
-                return { students: levMatches.slice(0, 5).map(m => m.student), exactMatch: false, isSingle: false, reason: 'levenshtein_multiple' };
-            }
-
+            if (levMatches.length === 1) return { students: [levMatches[0].student], exactMatch: false, isSingle: true, reason: 'levenshtein_single' };
+            if (levMatches.length > 1) return { students: levMatches.slice(0, 5).map(m => m.student), exactMatch: false, isSingle: false, reason: 'levenshtein_multiple' };
             return { students: [], exactMatch: false, reason: 'no_match' };
         }
 
         const bestScore = fuseResults[0].score;
         const scoreThreshold = bestScore + 0.15;
-
-        let matchedStudents = fuseResults
-            .filter(r => r.score <= scoreThreshold)
-            .map(r => r.item);
+        let matchedStudents = fuseResults.filter(r => r.score <= scoreThreshold).map(r => r.item);
 
         // AŞAMA 7: Aynı isimdeki öğrencileri grupla
         const nameGroups = {};
@@ -383,65 +318,72 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         });
 
         const groupKeys = Object.keys(nameGroups);
-        if (groupKeys.length === 1 && nameGroups[groupKeys[0]].length === 1) {
-            return { students: [nameGroups[groupKeys[0]][0]], exactMatch: false, isSingle: true, reason: 'fuse_single' };
-        }
-
+        if (groupKeys.length === 1 && nameGroups[groupKeys[0]].length === 1) return { students: [nameGroups[groupKeys[0]][0]], exactMatch: false, isSingle: true, reason: 'fuse_single' };
         if (groupKeys.length === 1 && nameGroups[groupKeys[0]].length > 1) {
-            return { 
-                students: nameGroups[groupKeys[0]], 
-                exactMatch: false, 
-                isSingle: false, 
-                reason: 'same_name_multiple',
-                nameGroup: groupKeys[0]
-            };
+            return { students: nameGroups[groupKeys[0]], exactMatch: false, isSingle: false, reason: 'same_name_multiple', nameGroup: groupKeys[0] };
         }
 
-        return { 
-            students: matchedStudents.slice(0, 5), 
-            exactMatch: false, 
-            isSingle: matchedStudents.length === 1,
-            reason: 'fuse_multiple'
-        };
+        return { students: matchedStudents.slice(0, 5), exactMatch: false, isSingle: matchedStudents.length === 1, reason: 'fuse_multiple' };
     }, [allStudents]);
 
-    // 📚 KONU/KAYNAK BULMA (Gelişmiş)
-    const findBestComponentLocal = useCallback((items, targetProperty, inputTranscript) => {
+
+    // 📚 YENİ VE GELİŞMİŞ KONU/KAYNAK BULMA (STRATEJİ 1 ve 2 UYGULAMASI)
+    const findTopicOrSource = useCallback((items, inputTranscript, type = 'topic') => {
         if (!items || items.length === 0 || !inputTranscript) return null;
 
         const text = inputTranscript.toLocaleLowerCase('tr-TR');
         const textNorm = turkishNormalize(text);
-        const textStemmed = normalizeText(text);
+        
+        let bestMatch = null;
+        let maxLength = -1; // En uzun eşleşmeyi takip etmek için
+        let maxMatchedWords = -1; // Kelime bazlı arama için
 
-        let bestItem = null;
-        let highestScore = 0;
-
+        // 1. TAM EŞLEŞME - EN UZUN EŞLEŞMEYİ BUL (STRATEJİ 1)
         items.forEach(item => {
-            const targetText = getSafeText(item[targetProperty]).toLocaleLowerCase('tr-TR');
-            const targetNorm = turkishNormalize(targetText);
-            const targetStemmed = normalizeText(targetText);
+            const itemTitle = getSafeText(item.title).toLocaleLowerCase('tr-TR');
+            const itemNorm = turkishNormalize(itemTitle);
 
-            // 1. Tam eşleşme (100 puan)
-            if (text.includes(targetText) || targetText.includes(text)) {
-                highestScore = 100;
-                bestItem = item;
-                return;
+            // Metin içinde konu başlığı geçiyor mu?
+            if (text.includes(itemTitle) || textNorm.includes(itemNorm)) {
+                if (itemTitle.length > maxLength) {
+                    maxLength = itemTitle.length;
+                    bestMatch = item;
+                }
             }
+        });
 
-            // 2. Normalize tam eşleşme (95 puan)
-            if (textNorm.includes(targetNorm) || targetNorm.includes(textNorm)) {
-                if (95 > highestScore) { highestScore = 95; bestItem = item; }
-                return;
+        if (bestMatch) return bestMatch; 
+
+        // 2. KELİME BAZLI ARAMA (STRATEJİ 2)
+        const inputWords = textNorm.split(/\s+/).filter(w => w.length > 2);
+        
+        items.forEach(item => {
+            const itemTitle = getSafeText(item.title).toLocaleLowerCase('tr-TR');
+            const itemNorm = turkishNormalize(itemTitle);
+            const itemWords = itemNorm.split(/\s+/).filter(w => w.length > 2);
+            
+            let matchedWords = 0;
+            inputWords.forEach(iw => {
+                if(itemWords.some(tw => tw.includes(iw) || iw.includes(tw))) {
+                   matchedWords++; 
+                }
+            });
+
+            if (matchedWords > 0) {
+                // Eşleşen kelime sayısı daha fazlaysa YADA eşitse uzun olanı al
+                if (matchedWords > maxMatchedWords || (matchedWords === maxMatchedWords && itemTitle.length > maxLength)) {
+                    maxMatchedWords = matchedWords;
+                    maxLength = itemTitle.length;
+                    bestMatch = item;
+                }
             }
+        });
 
-            // 3. Stem eşleşme (90 puan)
-            if (textStemmed.includes(targetStemmed) || targetStemmed.includes(textStemmed)) {
-                if (90 > highestScore) { highestScore = 90; bestItem = item; }
-                return;
-            }
+        if (bestMatch) return bestMatch;
 
-            // 4. Kısaltma eşleşmeleri (98 puan)
-            const shortcuts = {
+        // 3. KISALTMALAR VE ÖZEL DURUMLAR (Sadece Kaynaklar için)
+        if (type === 'source') {
+             const shortcuts = {
                 'video ders defteri': ['vdd', 'video ders', 've de', 've d', 'bide', 'video defter', 'ders defteri', 'ders defter'],
                 'soru bankası': ['sb', 'soru banka', 'se be', 'soru b', 'banka', 'soru bank'],
                 'konu anlatımı': ['ka', 'konu anlat', 'konu anl', 'anlatım', 'konu anlatım'],
@@ -454,70 +396,43 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 'konu testi': ['kt', 'konu test', 'konu t', 'test konu']
             };
 
-            Object.entries(shortcuts).forEach(([full, shorts]) => {
-                if (targetText.includes(full)) {
-                    shorts.forEach(s => {
-                        if (text.includes(s) && 98 > highestScore) {
-                            highestScore = 98;
-                            bestItem = item;
-                        }
-                    });
-                }
-            });
+            let highestShortcutScore = 0;
+            let shortcutMatch = null;
 
-            // 5. Token bazlı eşleşme
-            const targetTokens = targetText.split(/\s+/).filter(t => t.length > 2);
-            const inputTokens = text.split(/\s+/).filter(t => t.length > 2);
-
-            let matchedTokens = 0;
-            let totalSimilarity = 0;
-
-            targetTokens.forEach(tt => {
-                const ttNorm = turkishNormalize(tt);
-                const ttStem = turkishStem(tt);
-
-                inputTokens.forEach(it => {
-                    const itNorm = turkishNormalize(it);
-                    const itStem = turkishStem(it);
-
-                    if (it.includes(tt) || tt.includes(it) || itNorm === ttNorm || itStem === ttStem) {
-                        matchedTokens++;
-                        totalSimilarity += 1;
-                    } else if (phoneticSimilarity(itNorm, ttNorm) > 0.85) {
-                        matchedTokens += 0.8;
-                        totalSimilarity += phoneticSimilarity(itNorm, ttNorm);
+            items.forEach(item => {
+                 const itemTitle = getSafeText(item.title).toLocaleLowerCase('tr-TR');
+                 Object.entries(shortcuts).forEach(([full, shorts]) => {
+                    if (itemTitle.includes(full)) {
+                        shorts.forEach(s => {
+                            if (text.includes(s) && 98 > highestShortcutScore) {
+                                highestShortcutScore = 98;
+                                shortcutMatch = item;
+                            }
+                        });
                     }
                 });
             });
-
-            const tokenScore = targetTokens.length > 0 
-                ? (matchedTokens / targetTokens.length) * 85 
-                : 0;
-
-            if (tokenScore > highestScore && tokenScore >= 35) {
-                highestScore = tokenScore;
-                bestItem = item;
-            }
-        });
-
-        // Fuse fallback
-        if (highestScore < 50) {
-            const fuse = new Fuse(items, { 
-                keys: [targetProperty], 
-                threshold: 0.45, 
-                ignoreLocation: true,
-                minMatchCharLength: 2
-            });
-            const results = fuse.search(text);
-            if (results.length > 0) bestItem = results[0].item;
+            if(shortcutMatch) return shortcutMatch;
         }
 
-        return bestItem;
+        // 4. FUSE.JS (Son çare, hafif esnek arama)
+        const fuse = new Fuse(items, {
+            keys: ['title'],
+            threshold: 0.4, 
+            ignoreLocation: true,
+            minMatchCharLength: 3
+        });
+        const results = fuse.search(text);
+        if (results.length > 0) return results[0].item;
+
+        return null;
     }, []);
 
-    // 🔬 AKILLI KOMUT ANALİZİ (MÜKEMMEL VERSİYON)
+
+    // 🔬 AKILLI KOMUT ANALİZİ (YENİLENMİŞ VERSİYON)
     const analyzeCommandLocal = useCallback((transcript, isFinalFallback = true) => {
         let text = transcript.toLocaleLowerCase('tr-TR').trim();
+        let originalText = text; // Orjinal metni sakla
 
         if (isFinalFallback) {
             setPendingAction(null);
@@ -526,20 +441,20 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         }
 
         // GLOBAL KOMUTLAR
-        if (text.match(/kaydet|onayla|sisteme işle|kaydet ve kapat/)) { 
-            applyChangesRef.current?.(); 
-            return true; 
+        if (text.match(/kaydet|onayla|sisteme işle|kaydet ve kapat/)) {
+            applyChangesRef.current?.();
+            return true;
         }
-        if (text === 'kapat' || text === 'çık' || text === 'iptal') { 
-            onClose(); 
-            return true; 
+        if (text === 'kapat' || text === 'çık' || text === 'iptal') {
+            onClose();
+            return true;
         }
-        if (text.match(/öğrenci değiştir|yeni öğrenci|öğrenci ara|başka öğrenci|değiştir/)) { 
-            handleResetStudent(); 
-            return true; 
+        if (text.match(/öğrenci değiştir|yeni öğrenci|öğrenci ara|başka öğrenci|değiştir/)) {
+            handleResetStudent();
+            return true;
         }
 
-        // Sayı dönüşümleri (Türkçe + Arapça)
+        // Sayı dönüşümleri
         const numberMap = {
             'birinci': '1', 'ikinci': '2', 'üçüncü': '3', 'dördüncü': '4', 'beşinci': '5',
             'altıncı': '6', 'yedinci': '7', 'sekizinci': '8', 'dokuzuncu': '9', 'onuncu': '10',
@@ -548,12 +463,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         };
 
         Object.entries(numberMap).forEach(([word, num]) => {
-            text = text.replace(new RegExp(`\b${word}\b`, 'g'), num);
+            text = text.replace(new RegExp(`\\b${word}\\b`, 'g'), num);
         });
 
-        // ═══════════════════════════════════════════════════════════════
         // 🎓 ÖĞRENCİ MODU
-        // ═══════════════════════════════════════════════════════════════
         if (commandMode === 'student' || !selectedStudent) {
             const searchResult = findStudentsAdvanced(text);
 
@@ -594,86 +507,101 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
         // 📝 ÖDEV MODU
-        // ═══════════════════════════════════════════════════════════════
         if (!selectedStudent) return false;
 
-        // Durum tespiti (Gelişmiş NLP)
         const status = detectStatus(text);
-
-        // Toplu işlem anahtar kelimeleri
-        const isAllSources = text.match(/tümünü|tamamını|hepsini|bütün kaynaklar|tüm kaynaklar|tümü|tamamı|hepsi|hepsine|tümüne|tüm kaynağı|bütünü|hepsin|tamamın/);
-        const isNoneSources = text.match(/hiçbiri|hiçbirini|hiçbirine|hiç biri|hiç|sıfır|boş hepsi|hiçbir|hiçbiri/);
-        const isAllTopics = text.match(/tüm konular|bütün konular|her konu|tüm konu|bütünü|hepsini|tüm dersler|bütün dersler|tümü|tamamı/);
-
         const targetClass = (classes || []).find(c => c.id === selectedStudent.classId);
         const topics = targetClass?.topics || [];
-
-        // TÜM KONULARDA TOPLU İŞLEM
-        if (isAllTopics && status) {
-            if (isFinalFallback) {
-                let count = 0;
-                topics.forEach(topic => {
-                    (topic.subColumns || []).forEach(col => {
-                        handleDraftGradeChangeRef.current?.(selectedStudent.id, col.id, status);
-                        count++;
-                    });
-                });
-                setJarvisFeedback(`🎯 ${count} kaynak "${status}" olarak işaretlendi.`);
-                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
-            }
-            return true;
-        }
-
-        // KONU ARAMA (Sıra no + İsim)
+        
         let targetTopic = null;
 
-        // "3. konu" veya "üçüncü konu" gibi
-        const topicOrderMatch = text.match(/(\d+)\.\s*(konu|ünite|ders|bölüm|konular|üniteler|topic)/);
+        // 1. ÖNCE KONUYU BUL (STRATEJİ 3 - Ön Koşul)
+        const topicOrderMatch = text.match(/(\d+)\.\s*(konu|ünite|ders|bölüm|konular|üniteler|topic)/) || text.match(/(?:konu|ünite|ders)\s+(\d+)/);
         if (topicOrderMatch) {
             const topicIndex = parseInt(topicOrderMatch[1]) - 1;
             if (topics[topicIndex]) targetTopic = topics[topicIndex];
         }
 
-        // "konu 3" formatı
-        const topicOrderMatch2 = text.match(/(?:konu|ünite|ders)\s+(\d+)/);
-        if (!targetTopic && topicOrderMatch2) {
-            const topicIndex = parseInt(topicOrderMatch2[1]) - 1;
-            if (topics[topicIndex]) targetTopic = topics[topicIndex];
-        }
-
-        // İsimle arama
+        // İsimle Arama
         if (!targetTopic) {
-            targetTopic = findBestComponentLocal(topics, 'title', text);
+            targetTopic = findTopicOrSource(topics, originalText, 'topic');
         }
 
+        // Konu Bulunamadıysa
         if (!targetTopic) {
             if (isFinalFallback) {
-                setJarvisFeedback("📚 Konu anlaşılmadı. Konu adını veya numarasını söyleyin.");
+                setJarvisFeedback("📚 Konu anlaşılmadı. Lütfen önce konunun adını veya numarasını söyleyin.");
                 autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
             }
             return false;
         }
 
+        // 2. KONU BULUNDU, ŞİMDİ HEDEFLERİ BELİRLE
         const subColumns = targetTopic.subColumns || [];
         const subColumnsCount = subColumns.length;
 
-        // KONUNUN TÜM KAYNAKLARINA TOPLU İŞLEM
-        if ((isAllSources || isNoneSources) && status) {
+        // 3. "TÜMÜ" KONTROLÜ (STRATEJİ 3 - Sadece bulunan konuda)
+        const topicTitleNorm = turkishNormalize(getSafeText(targetTopic.title));
+        // Orijinal metinden konunun adını normalize edilmiş halini çıkararak sadece kaynağı/işlemi bıraktırıyoruz
+        const textWithoutTopic = turkishNormalize(originalText).replace(topicTitleNorm, "").trim();
+        
+        const isAllSources = textWithoutTopic.match(/tümünü|tamamını|hepsini|bütün kaynaklar|tüm kaynaklar|tümü|tamamı|hepsi|hepsine|tümüne|tüm kaynağı|bütünü|hepsin|tamamın/);
+        const isNoneSources = textWithoutTopic.match(/hiçbiri|hiçbirini|hiçbirine|hiç biri|hiç|sıfır|boş hepsi|hiçbir|hiçbiri/);
+
+
+        // DURUM BELİRTİLMEMİŞSE
+        if (!status) {
+            if (subColumnsCount === 1 && isFinalFallback) {
+                const onlyCol = subColumns[0];
+                setPendingStatusSelect({
+                    studentId: selectedStudent.id,
+                    topicId: targetTopic.id,
+                    colId: onlyCol.id,
+                    colTitle: onlyCol.title,
+                    topicTitle: targetTopic.title
+                });
+                setJarvisFeedback(`"${targetTopic.title} → ${onlyCol.title}" için durum seçin.`);
+                return true;
+            }
+
+            // Birden fazla kaynak varsa ve "tümü" DEMEMİŞSE
+            const targetCol = findTopicOrSource(subColumns, textWithoutTopic, 'source');
+            if (targetCol && isFinalFallback) {
+                 setPendingStatusSelect({
+                    studentId: selectedStudent.id,
+                    topicId: targetTopic.id,
+                    colId: targetCol.id,
+                    colTitle: targetCol.title,
+                    topicTitle: targetTopic.title
+                });
+                setJarvisFeedback(`"${targetTopic.title} → ${targetCol.title}" için durum seçin.`);
+                return true;
+            } else if (isFinalFallback) {
+                 setPendingSources(subColumns);
+                 setJarvisFeedback(`"${targetTopic.title}" anlaşıldı. Lütfen kaynak ve durum belirtin.`);
+                 return true;
+            }
+            return false;
+        }
+
+        // DURUM BELİRTİLMİŞSE
+        
+        // A) "Tümü" veya "Hiçbiri" denmişse, o konudaki tüm kaynakları işaretle
+        if ((isAllSources || isNoneSources)) {
             const targetStatus = isNoneSources ? 'missing' : status;
             if (isFinalFallback) {
                 subColumns.forEach(col => {
                     handleDraftGradeChangeRef.current?.(selectedStudent.id, col.id, targetStatus);
                 });
-                setJarvisFeedback(`✅ ${targetTopic.title}: ${subColumnsCount} kaynak "${targetStatus}" olarak güncellendi.`);
+                setJarvisFeedback(`✅ ${targetTopic.title} altındaki tüm kaynaklar "${targetStatus}" olarak güncellendi.`);
                 autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
             }
             return true;
         }
 
-        // 🆕 TEK KAYNAK VARSA DİREKT İŞARETLE (Sorma!)
-        if (subColumnsCount === 1 && status) {
+        // B) Sadece 1 kaynak varsa direkt işaretle
+        if (subColumnsCount === 1) {
             const onlyCol = subColumns[0];
             if (isFinalFallback) {
                 handleDraftGradeChangeRef.current?.(selectedStudent.id, onlyCol.id, status);
@@ -683,70 +611,32 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             return true;
         }
 
-        // TEK KAYNAK VARSA DURUM BELİRTİLMEMİŞ
-        if (subColumnsCount === 1 && !status) {
-            const onlyCol = subColumns[0];
+        // C) Birden fazla kaynak varsa, belirtilen kaynağı bul
+        const targetCol = findTopicOrSource(subColumns, textWithoutTopic, 'source');
+        
+        if (targetCol) {
             if (isFinalFallback) {
-                setPendingStatusSelect({ 
-                    studentId: selectedStudent.id, 
-                    topicId: targetTopic.id, 
-                    colId: onlyCol.id, 
-                    colTitle: onlyCol.title,
+                handleDraftGradeChangeRef.current?.(selectedStudent.id, targetCol.id, status);
+                setJarvisFeedback(`✅ ${targetTopic.title} → ${targetCol.title}: "${status}" kaydedildi.`);
+                autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
+            }
+            return true;
+        } else {
+            // Kaynak bulunamadı, kullanıcıdan seçmesini iste
+            if (isFinalFallback) {
+                setPendingAction({
+                    studentId: selectedStudent.id,
+                    topicId: targetTopic.id,
+                    status: status,
                     topicTitle: targetTopic.title
                 });
-                setJarvisFeedback(`"${targetTopic.title} → ${onlyCol.title}" için durum seçin.`);
+                setPendingSources(subColumns);
+                setJarvisFeedback(`"${targetTopic.title}" anlaşıldı. Hangi kaynak "${status}" işaretlenecek?`);
             }
-            return true;
+            return false;
         }
 
-        // ÇOKLU KAYNAK + DURUM VAR → KAYNAK BUL
-        if (status) {
-            const targetCol = findBestComponentLocal(subColumns, 'title', text);
-
-            if (targetCol) {
-                if (isFinalFallback) {
-                    handleDraftGradeChangeRef.current?.(selectedStudent.id, targetCol.id, status);
-                    setJarvisFeedback(`✅ ${targetTopic.title} → ${targetCol.title}: "${status}" kaydedildi.`);
-                    autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1200);
-                }
-                return true;
-            } else {
-                // Kaynak bulunamadı, kullanıcıdan seçmesini iste
-                if (isFinalFallback) {
-                    setPendingAction({ 
-                        studentId: selectedStudent.id, 
-                        topicId: targetTopic.id, 
-                        status: status,
-                        topicTitle: targetTopic.title
-                    });
-                    setPendingSources(subColumns);
-                    setJarvisFeedback(`"${targetTopic.title}" anlaşıldı. Hangi kaynak?`);
-                }
-                return false;
-            }
-        }
-
-        // DURUM BELİRTİLMEMİŞ → KAYNAK BUL, DURUM BEKLE
-        const targetCol = findBestComponentLocal(subColumns, 'title', text);
-        if (targetCol && isFinalFallback) {
-            setPendingStatusSelect({ 
-                studentId: selectedStudent.id, 
-                topicId: targetTopic.id, 
-                colId: targetCol.id, 
-                colTitle: targetCol.title,
-                topicTitle: targetTopic.title
-            });
-            setJarvisFeedback(`"${targetTopic.title} → ${targetCol.title}" için durum seçin.`);
-            return true;
-        }
-
-        // Hiçbir şey bulunamadı
-        if (isFinalFallback) {
-            setJarvisFeedback(`"${targetTopic.title}" anlaşıldı ama kaynak bulunamadı. Tekrar söyleyin.`);
-            autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
-        }
-        return false;
-    }, [commandMode, selectedStudent, classes, findStudentsAdvanced, findBestComponentLocal, handleResetStudent]);
+    }, [commandMode, selectedStudent, classes, findStudentsAdvanced, findTopicOrSource, handleResetStudent]);
 
     const handleCommandAlternatives = useCallback((alternatives) => {
         setIsProcessing(true);
@@ -770,9 +660,9 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         if (autoListenTimerRef.current) clearTimeout(autoListenTimerRef.current);
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) { 
-            setJarvisFeedback("❌ Ses modülü aktif değil."); 
-            return; 
+        if (!SpeechRecognition) {
+            setJarvisFeedback("❌ Ses modülü aktif değil.");
+            return;
         }
         if (recognitionRef.current) recognitionRef.current.abort();
 
@@ -783,18 +673,18 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         recognition.maxAlternatives = 5;
         recognition.interimResults = false;
 
-        recognition.onstart = () => { 
-            setIsListening(true); 
-            setSpeechTranscript(""); 
+        recognition.onstart = () => {
+            setIsListening(true);
+            setSpeechTranscript("");
             setIsProcessing(false);
         };
 
-        recognition.onresult = (event) => { 
+        recognition.onresult = (event) => {
             const alternatives = Array.from(event.results[0]).map(r => r.transcript);
             handleCommandAlternatives(alternatives);
         };
 
-        recognition.onerror = (e) => { 
+        recognition.onerror = (e) => {
             setIsListening(false);
             if (e.error === 'no-speech') {
                 setJarvisFeedback("🔇 Ses algılanmadı. Tekrar deneyin.");
@@ -806,7 +696,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             }
         };
 
-        recognition.onend = () => { setIsListening(false); }; 
+        recognition.onend = () => { setIsListening(false); };
         recognition.start();
     }, [handleCommandAlternatives]);
 
@@ -814,9 +704,9 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
     const stopListening = useCallback(() => {
         if (autoListenTimerRef.current) clearTimeout(autoListenTimerRef.current);
-        if (recognitionRef.current) { 
-            recognitionRef.current.abort(); 
-            setIsListening(false); 
+        if (recognitionRef.current) {
+            recognitionRef.current.abort();
+            setIsListening(false);
         }
     }, []);
 
@@ -829,32 +719,32 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 800);
     }, [pendingAction]);
 
-    const handleDraftGradeChange = useCallback((studentId, colId, statusId) => { 
-        setDraftGrades(prev => ({ 
-            ...prev, 
-            [studentId]: { ...(prev[studentId] || {}), [colId]: statusId } 
-        })); 
+    const handleDraftGradeChange = useCallback((studentId, colId, statusId) => {
+        setDraftGrades(prev => ({
+            ...prev,
+            [studentId]: { ...(prev[studentId] || {}), [colId]: statusId }
+        }));
     }, []);
 
     handleDraftGradeChangeRef.current = handleDraftGradeChange;
 
     const applyChanges = useCallback(() => {
         if (!selectedStudent) { onClose(); return; }
-        const targetClass = (classes || []).find(c => c.id === selectedStudent.classId); 
+        const targetClass = (classes || []).find(c => c.id === selectedStudent.classId);
         if (!targetClass) return;
 
-        const updatedStudents = Array.isArray(targetClass.students) 
+        const updatedStudents = Array.isArray(targetClass.students)
             ? targetClass.students.filter(Boolean).map(s => {
                 if (s.id === selectedStudent.id) {
                     return { ...s, grades: { ...(s.grades || {}), ...(draftGrades[s.id] || {}) } };
-                } 
+                }
                 return s;
-            }) 
+            })
             : [];
 
         updateClassInDb({ ...targetClass, students: updatedStudents });
-        setDraftGrades({}); 
-        onClose(); 
+        setDraftGrades({});
+        onClose();
     }, [selectedStudent, classes, draftGrades, updateClassInDb, onClose]);
 
     applyChangesRef.current = applyChanges;
@@ -874,10 +764,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
     // ═══════════════════════════════════════════════════════════════
     return (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-            <motion.div 
-                initial={{ opacity: 0, scale: 0.97, y: 12 }} 
-                animate={{ opacity: 1, scale: 1, y: 0 }} 
-                exit={{ opacity: 0, scale: 0.97, y: 12 }} 
+            <motion.div
+                initial={{ opacity: 0, scale: 0.97, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.97, y: 12 }}
                 className="bg-white border border-slate-200 rounded-[2.2rem] w-full max-w-2xl overflow-hidden shadow-float flex flex-col max-h-[85vh]"
             >
                 {/* ÜST RADAR */}
@@ -892,8 +782,8 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     </div>
 
                     {/* MIC RADAR */}
-                    <div 
-                        onClick={isListening ? stopListening : startListening} 
+                    <div
+                        onClick={isListening ? stopListening : startListening}
                         className="z-10 bg-white p-5 rounded-full border border-slate-200 shadow-sm mb-4 cursor-pointer relative hover:scale-105 active:scale-95 transition-all group mt-3"
                     >
                         {isListening && (
@@ -928,7 +818,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                             </div>
 
                             {selectedStudent && (
-                                <button 
+                                <button
                                     onClick={handleResetStudent}
                                     className="flex items-center gap-1.5 text-[11px] font-black bg-purple-50 text-brandPurple border border-purple-200 px-4 py-2.5 rounded-xl hover:bg-brandPurple hover:text-white transition-all shadow-sm hover:shadow-md active:scale-95"
                                 >
@@ -954,27 +844,27 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
                         {/* BEKLEYEN KAYNAK PANELİ */}
                         <AnimatePresence>
-                            {pendingSources.length > 0 && (
-                                <motion.div 
-                                    initial={{ opacity: 0, y: 4, scale: 0.95 }} 
-                                    animate={{ opacity: 1, y: 0, scale: 1 }} 
-                                    exit={{ opacity: 0, y: -4, scale: 0.95 }} 
+                            {pendingSources.length > 0 && !pendingStatusSelect && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
                                     className="mt-3 flex flex-wrap justify-center gap-1.5 max-w-full overflow-x-auto p-2.5 bg-white border border-slate-100 rounded-2xl shadow-sm"
                                 >
                                     <span className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1 px-2">
                                         <HelpCircle size={12}/> Kaynak Seçin:
                                     </span>
                                     {pendingSources.map(col => (
-                                        <button 
-                                            key={col.id} 
-                                            onClick={() => handleManualSourceSelect(col)} 
+                                        <button
+                                            key={col.id}
+                                            onClick={() => handleManualSourceSelect(col)}
                                             className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-bold rounded-lg hover:border-brandPurple hover:bg-purple-50 hover:text-brandPurple transition-all active:scale-95"
                                         >
                                             {getSafeText(col?.title)}
                                         </button>
                                     ))}
-                                    <button 
-                                        onClick={() => { setPendingAction(null); setPendingSources([]); setJarvisFeedback("İptal edildi."); autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 500); }} 
+                                    <button
+                                        onClick={() => { setPendingAction(null); setPendingSources([]); setJarvisFeedback("İptal edildi."); autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 500); }}
                                         className="text-[10px] font-black text-rose-500 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors"
                                     >
                                         İptal
@@ -986,29 +876,29 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         {/* BEKLEYEN DURUM PANELİ */}
                         <AnimatePresence>
                             {pendingStatusSelect && (
-                                <motion.div 
-                                    initial={{ opacity: 0, y: 4, scale: 0.95 }} 
-                                    animate={{ opacity: 1, y: 0, scale: 1 }} 
-                                    exit={{ opacity: 0, y: -4, scale: 0.95 }} 
+                                <motion.div
+                                    initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
                                     className="mt-3 flex flex-wrap justify-center gap-1.5 max-w-full p-2.5 bg-white border border-slate-100 rounded-2xl shadow-sm items-center"
                                 >
                                     <span className="text-[10px] font-black text-slate-400 uppercase px-2">Durum:</span>
                                     {STATUS_OPTIONS.map(opt => (
-                                        <button 
-                                            key={opt.id} 
-                                            onClick={() => { 
-                                                handleDraftGradeChangeRef.current?.(pendingStatusSelect.studentId, pendingStatusSelect.colId, opt.id); 
-                                                setJarvisFeedback(`✅ ${pendingStatusSelect.topicTitle} → ${pendingStatusSelect.colTitle}: "${opt.label}" kaydedildi.`); 
+                                        <button
+                                            key={opt.id}
+                                            onClick={() => {
+                                                handleDraftGradeChangeRef.current?.(pendingStatusSelect.studentId, pendingStatusSelect.colId, opt.id);
+                                                setJarvisFeedback(`✅ ${pendingStatusSelect.topicTitle} → ${pendingStatusSelect.colTitle}: "${opt.label}" kaydedildi.`);
                                                 setPendingStatusSelect(null);
                                                 autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 800);
-                                            }} 
+                                            }}
                                             className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1 transition-all active:scale-95"
                                         >
                                             <opt.icon size={12} className={opt.color} /> {opt.label}
                                         </button>
                                     ))}
-                                    <button 
-                                        onClick={() => { setPendingStatusSelect(null); autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 500); }} 
+                                    <button
+                                        onClick={() => { setPendingStatusSelect(null); autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 500); }}
                                         className="text-[10px] font-bold text-slate-400 px-3 py-1.5 hover:bg-slate-50 rounded-lg transition-colors"
                                     >
                                         İptal
@@ -1029,11 +919,11 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                 <Search size={12}/> Eşleşen Öğrenciler — Lütfen Seçin
                             </h4>
                             {foundStudents.map(student => (
-                                <motion.button 
-                                    key={`${student.id}-${student.classId}`} 
+                                <motion.button
+                                    key={`${student.id}-${student.classId}`}
                                     initial={{ opacity: 0, x: -20 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    onClick={() => handleSelectStudentFromList(student)} 
+                                    onClick={() => handleSelectStudentFromList(student)}
                                     className="w-full text-left p-4 rounded-2xl border border-slate-200 bg-white hover:border-brandPurple hover:bg-purple-50/20 transition-all flex items-center gap-3.5 group shadow-sm active:scale-[0.98]"
                                 >
                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${student.isVip ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-brandPurple'}`}>
@@ -1075,8 +965,8 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                             </div>
 
                             {sortedFoundTopics.map((topic, topicIndex) => (
-                                <motion.div 
-                                    key={topic.id} 
+                                <motion.div
+                                    key={topic.id}
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: topicIndex * 0.05 }}
@@ -1092,22 +982,22 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                             const studentData = (classes || [])
                                                 .find(c => c && c.id === selectedStudent.classId)
                                                 ?.students?.find(s => s && s.id === selectedStudent.id);
-                                            const displayGrade = draftGrades[selectedStudent.id]?.[col.id] !== undefined 
-                                                ? draftGrades[selectedStudent.id]?.[col.id] 
+                                            const displayGrade = draftGrades[selectedStudent.id]?.[col.id] !== undefined
+                                                ? draftGrades[selectedStudent.id]?.[col.id]
                                                 : (studentData?.grades?.[col.id] || 'assigned');
                                             const isChanged = draftGrades[selectedStudent.id]?.[col.id] !== undefined;
 
                                             return (
-                                                <div 
-                                                    key={col.id} 
+                                                <div
+                                                    key={col.id}
                                                     className={`p-3 rounded-xl bg-slate-50/50 border transition-all ${isChanged ? 'border-purple-400 bg-purple-50/10 shadow-sm' : 'border-slate-100'} flex flex-col md:flex-row md:items-center justify-between gap-3`}
                                                 >
                                                     <span className="text-xs font-bold text-slate-600 flex-1">{getSafeText(col?.title)}</span>
                                                     <div className="flex gap-1 overflow-x-auto">
                                                         {STATUS_OPTIONS.map(opt => (
-                                                            <button 
-                                                                key={opt.id} 
-                                                                onClick={() => handleDraftGradeChangeRef.current?.(selectedStudent.id, col.id, opt.id)} 
+                                                            <button
+                                                                key={opt.id}
+                                                                onClick={() => handleDraftGradeChangeRef.current?.(selectedStudent.id, col.id, opt.id)}
                                                                 className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${displayGrade === opt.id ? lightStatusStyles[opt.id] : 'bg-white text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-50'}`}
                                                             >
                                                                 {opt.label}
@@ -1147,15 +1037,15 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         {selectedStudent && <span className="text-[10px] text-slate-300 ml-1">{selectedStudent.name} için bekliyor</span>}
                     </div>
                     <div className="flex gap-2">
-                        <button 
-                            onClick={() => { stopListening(); onClose(); }} 
+                        <button
+                            onClick={() => { stopListening(); onClose(); }}
                             className="px-5 py-2.5 text-xs font-bold text-slate-500 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors active:scale-95"
                         >
                             İptal
                         </button>
-                        <button 
-                            onClick={applyChanges} 
-                            disabled={changeCount === 0} 
+                        <button
+                            onClick={applyChanges}
+                            disabled={changeCount === 0}
                             className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 active:scale-95 ${changeCount > 0 ? 'bg-brandPurple text-white hover:bg-purple-700 shadow-lg shadow-purple-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                         >
                             <Save size={14} /> KAYDET VE KAPAT
