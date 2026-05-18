@@ -83,22 +83,20 @@ const normalizeText = (text) => {
 const detectStatus = (text) => {
     if (!text) return null;
     
-    // Normalize edilmiş metin üzerinden işlem yapıyoruz
     const normalizedText = turkishNormalize(text);
     const words = normalizedText.split(/\s+/);
 
-    // Öncelikli olarak kesin ifadeleri arayalım (Kelime kökünden ziyade direkt kelime eşleşmesi)
+    // 1. Aşama: Tam Kelime/Öbek Eşleşmesi (En Güvenilir)
+    // Bu kısmı biraz daha katılaştırıyoruz
     const exactPhrases = {
-        done: ['yapildi', 'yapildi', 'tamam', 'tamamlandi', 'bitirildi', 'cozuldu', 'cozmus', 'yapti', 'bitti'],
-        missing: ['yapilmadi', 'eksik', 'bos', 'yapamadi', 'cozemedi', 'bitmedi', 'yarim'],
+        done: ['yapildi', 'tamam', 'tamamlandi', 'bitirildi', 'cozuldu', 'yapti', 'bitti', 'yap', 'coz', 'bitir'],
+        missing: ['yapilmadi', 'eksik', 'bos', 'yapamadi', 'cozemedi', 'bitmedi', 'yarim', 'yapma', 'cozme', 'bitirme'],
         exempt: ['muaf', 'pas', 'es gec', 'gerek yok'],
-        assigned: ['verildi', 'atandi', 'odev verildi', 'yuklendi']
+        assigned: ['verildi', 'atandi', 'odev verildi', 'yuklendi', 'ver']
     };
 
-    // 1. Aşama: Tam Kelime/Öbek Eşleşmesi (En Güvenilir)
     for (const [status, phrases] of Object.entries(exactPhrases)) {
         for (const phrase of phrases) {
-            // Kelime sınırlarıyla ara (örn: "yapıldı" ararken "yapılmadı"yı bulmamak için)
             const regex = new RegExp(`\\b${phrase}\\b`);
             if (regex.test(normalizedText)) {
                 return status;
@@ -106,39 +104,38 @@ const detectStatus = (text) => {
         }
     }
 
-    // 2. Aşama: Kelime Kökü Eşleşmesi (Eğer tam eşleşme bulunamazsa)
-    const stemmedText = normalizeText(text);
-    const stemmedWords = stemmedText.split(/\s+/).filter(w => w.length > 1);
+    // 2. Aşama: Fuse.js ile Bulanık Arama (Daha Esnek)
+    const statusItems = [
+        { status: 'done', keywords: exactPhrases.done },
+        { status: 'missing', keywords: exactPhrases.missing },
+        { status: 'exempt', keywords: exactPhrases.exempt },
+        { status: 'assigned', keywords: exactPhrases.assigned }
+    ];
 
-    const statusRoots = {
-        done: ['yap', 'coz', 'bit', 'tamamla', 'hallet', 'hazir', 'full', 'ful', 'basar'],
-        missing: ['yapma', 'cozme', 'bitme', 'eksik', 'bos', 'yok', 'hic', 'sifir', 'yarim', 'kald', 'birak'],
-        exempt: ['muaf', 'pas'],
-        assigned: ['ver', 'ata', 'odevlendir', 'gorev']
-    };
+    let bestFuzzyMatch = { status: null, score: 1 }; // Score 0 en iyi, 1 en kötü
 
-    let bestMatch = { status: null, score: 0 };
-
-    Object.entries(statusRoots).forEach(([status, roots]) => {
-        let score = 0;
-        roots.forEach(root => {
-            // Kök metin içinde geçiyorsa puan ver, ama negatiflere dikkat et
-            if (stemmedText.includes(root)) {
-                 // Eğer "yap" kelimesi aranıyorsa ve metinde "yapma" varsa "done" olarak sayma.
-                 if(status === 'done' && (stemmedText.includes('yapma') || stemmedText.includes('cozme') || stemmedText.includes('bitme'))) {
-                    // Puan ekleme
-                 } else {
-                     score += root.length * 2;
-                 }
-            }
+    statusItems.forEach(item => {
+        const fuse = new Fuse(item.keywords, {
+            includeScore: true,
+            threshold: 0.3, // Benzerlik eşiği (0.3 iyi bir denge)
+            ignoreLocation: true,
+            minMatchCharLength: 3
         });
 
-        if (score > bestMatch.score) {
-            bestMatch = { status, score };
-        }
+        words.forEach(word => {
+             const results = fuse.search(word);
+             if (results.length > 0 && results[0].score < bestFuzzyMatch.score) {
+                 bestFuzzyMatch = { status: item.status, score: results[0].score };
+             }
+        });
     });
 
-    return bestMatch.score >= 4 ? bestMatch.status : null;
+    // Eğer yeterince iyi bir eşleşme bulduysak döndür
+    if (bestFuzzyMatch.score <= 0.3) {
+        return bestFuzzyMatch.status;
+    }
+
+    return null;
 };
 
 const levenshteinDistance = (str1, str2) => {
@@ -251,13 +248,14 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         setTimeout(() => startListeningRef.current?.(), 500);
     }, []);
 
-    // 🧠 GELİŞMİŞ ÖĞRENCİ ARAMA (Aynı kalıyor)
+    // 🧠 GELİŞMİŞ ÖĞRENCİ ARAMA (7 AŞAMA)
     const findStudentsAdvanced = useCallback((inputText) => {
         if (!inputText || allStudents.length === 0) return { students: [], exactMatch: false, reason: 'empty' };
 
         let text = inputText.toLocaleLowerCase('tr-TR').trim();
         const textNormalized = turkishNormalize(text);
 
+        // AŞAMA 1: Tam Ad Soyad (===)
         const exactMatches = allStudents.filter(s => {
             const nameLower = s.name.toLocaleLowerCase('tr-TR');
             return nameLower === text || turkishNormalize(nameLower) === textNormalized;
@@ -266,6 +264,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         if (exactMatches.length === 1) return { students: exactMatches, exactMatch: true, isSingle: true, reason: 'exact_single' };
         if (exactMatches.length > 1) return { students: exactMatches, exactMatch: true, isSingle: false, reason: 'exact_multiple' };
 
+        // AŞAMA 2: İçerme (includes)
         const includeMatches = allStudents.filter(s => {
             const nameLower = s.name.toLocaleLowerCase('tr-TR');
             return nameLower.includes(text) || text.includes(nameLower);
@@ -273,6 +272,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
         if (includeMatches.length === 1) return { students: includeMatches, exactMatch: false, isSingle: true, reason: 'include_single' };
 
+        // AŞAMA 3: Kelime Sırası Bağımsız
         const inputWords = text.split(/\s+/).filter(w => w.length > 2);
         const wordOrderMatches = allStudents.filter(s => {
             const nameWords = s.name.toLocaleLowerCase('tr-TR').split(/\s+/);
@@ -281,6 +281,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
         if (wordOrderMatches.length === 1) return { students: wordOrderMatches, exactMatch: false, isSingle: true, reason: 'wordorder_single' };
 
+        // AŞAMA 4: Ses Benzerliği (Metafonik)
         const phoneticMatches = allStudents.filter(s => {
             const similarity = phoneticSimilarity(turkishNormalize(s.name), textNormalized);
             return similarity > 0.75;
@@ -288,10 +289,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
         if (phoneticMatches.length === 1) return { students: phoneticMatches, exactMatch: false, isSingle: true, reason: 'phonetic_single' };
 
+        // AŞAMA 5: Fuse.js Fuzzy (daha sıkı)
         const fuse = new Fuse(allStudents, { keys: ['name'], threshold: 0.3, includeScore: true, ignoreLocation: true, minMatchCharLength: 2 });
         const fuseResults = fuse.search(text);
 
         if (fuseResults.length === 0) {
+            // AŞAMA 6: Levenshtein (son çare)
             const levMatches = allStudents.map(s => ({
                 student: s,
                 distance: levenshteinDistance(turkishNormalize(s.name), textNormalized)
@@ -306,6 +309,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         const scoreThreshold = bestScore + 0.15;
         let matchedStudents = fuseResults.filter(r => r.score <= scoreThreshold).map(r => r.item);
 
+        // AŞAMA 7: Aynı isimdeki öğrencileri grupla
         const nameGroups = {};
         matchedStudents.forEach(s => {
             const baseName = s.name.toLocaleLowerCase('tr-TR');
