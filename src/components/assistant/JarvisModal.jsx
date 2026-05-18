@@ -31,8 +31,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
     const [speechTranscript, setSpeechTranscript] = useState("");
     const [textCommand, setTextCommand] = useState("");
     
-    // Asistan artık konuşmuyor, sadece bu yazıyı ekranda güncelliyor
-    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem aktif. Hedef öğrenciyi veya işlemi belirtin.");
+    const [jarvisFeedback, setJarvisFeedback] = useState("Sistem aktif. Komutunuzu bekliyorum.");
     
     const [foundStudents, setFoundStudents] = useState(initialStudent ? [initialStudent] : []);
     const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
@@ -57,7 +56,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             const safeClasses = Array.isArray(classes) ? classes.filter(Boolean) : [];
             const targetClass = safeClasses.find(c => c.id === initialStudent.classId);
             setFoundTopics(targetClass?.topics || []);
-            setJarvisFeedback(`${initialStudent.name} profili aktif. Komutunuzu bekliyorum.`);
+            setJarvisFeedback(`${initialStudent.name} profili kilitli.`);
         }
 
         return () => { 
@@ -66,71 +65,32 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         };
     }, [initialStudent, classes]);
 
-    // 🧠 SAF GÖREV İCRASI İÇİN OPTİMİZE EDİLMİŞ GROQ API
+    // 🧠 SAF NİYET OKUYUCU (Veritabanı API'ye gönderilmez, Token israfı %99 engellendi)
     const callGroqAPI = async (transcript) => {
         const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-        if (!apiKey) { setJarvisFeedback("API Anahtarı bulunamadı."); setIsThinking(false); return null; }
-
-        const safeClasses = Array.isArray(classes) ? classes.filter(c => c && typeof c === 'object') : [];
-        let dynamicContextData;
-        let currentStudentContext = "";
-
-        // API'yi yormamak için sadece isimleri ve başlıkları gönderiyoruz, NOTLARI göndermiyoruz.
-        if (selectedStudent) {
-            const targetClass = safeClasses.find(c => c.id === selectedStudent.classId);
-            dynamicContextData = {
-                odakMode: "AKTIF_OGRENCI",
-                ogrenciAdi: selectedStudent?.name || "",
-                mevcutOdevler: Array.isArray(targetClass?.topics) ? targetClass.topics.filter(Boolean).map(t => ({
-                    baslik: t.title || "",
-                    kaynaklar: Array.isArray(t.subColumns) ? t.subColumns.filter(Boolean).map(col => col.title || "") : []
-                })) : []
-            };
-            currentStudentContext = `[AKTİF ÖĞRENCİ]: "${selectedStudent?.name}". Kullanıcı cümlede BAŞKA BİR İSİM SÖYLEMEDİYSE, "student" değerini null bırak. İşlem mevcut öğrenciye uygulanacaktır.`;
-        } else {
-            dynamicContextData = {
-                odakMode: "GENEL_ARAMA",
-                siniflar: safeClasses.map(c => ({
-                    sinifAdi: c.className || "",
-                    ogrenciIsimleri: Array.isArray(c.students) ? c.students.filter(s => s && s.name).map(s => s.name) : [],
-                    odevBasliklari: Array.isArray(c.topics) ? c.topics.filter(t => t && t.title).map(t => ({
-                        baslik: t.title,
-                        kaynaklar: Array.isArray(t.subColumns) ? t.subColumns.filter(col => col && col.title).map(col => col.title) : []
-                    })) : []
-                }))
-            };
-            currentStudentContext = `Şu an kimse seçili değil. Komuttan öğrenci ismini bulmalısın.`;
-        }
+        if (!apiKey) { return { error: "API Anahtarı bulunamadı." }; }
 
         const systemPrompt = `
-Sen profesyonel bir veri giriş asistanısın. Görevin komutu analiz edip SADECE JSON formatına çevirmek. Asla yorum yazma.
+Sen bir veri çıkarım asistanısın. Görevin, kullanıcının cümlesini SADECE JSON formatına çevirmektir. Asla yorum yazma.
 
-VERİTABANI:
-${JSON.stringify(dynamicContextData)}
+Kullanıcı cümlesinden şu değerleri çıkar:
+1. "student": Öğrenci adı. Yoksa null bırak.
+2. "topic": Konu başlığı (Örn: Logaritma, Silindir, Fonksiyonlar). Yoksa null bırak.
+3. "source": Kaynak adı (Örn: VDD, Soru Bankası). Kullanıcı "tüm kaynaklar" veya "hepsi" diyorsa 'all' yaz. Yoksa null bırak.
+4. "status": İşlem durumu. Şunlardan birini seç: 
+   - "done" (yaptı, çözdü, bitti, yapıldı, full, yapıyoruz)
+   - "missing" (eksik, yapmadı, boş, yok, unuttu)
+   - "assigned" (verildi, atandı)
+   - "exempt" (muaf, es geç)
+   Yoksa null bırak.
+5. "action": Niyet. 
+   - "select_student": Sadece öğrenci adı söylendiyse (Örn: "Ahmet", "Merve eski").
+   - "update": Not veya durum giriliyorsa (Örn: "Üslü sayılar VDD bitti").
+   - "save_and_close": "Kaydet kapat", "Onayla" deniyorsa.
+   - "close_request": Sadece "Kapat", "Çık" deniyorsa.
+6. "feedback": Ekrana yazılacak kısa, net Türkçe onay mesajı (Örn: "Öğrenci seçildi", "Tüm kaynaklar işaretlendi").
 
-${currentStudentContext}
-
-KULLANICI NİYETLERİ (action):
-1. "select_student": Sadece öğrenci adı söylendiyse (Örn: "Merve'ye geç").
-2. "update": Not giriliyorsa (Örn: "Üslü sayıları çözmüş", "Tüm kaynaklar eksik").
-3. "save_and_close": "Kaydet kapat", "Onayla çık" deniyorsa.
-4. "close_request": Sadece "Kapat", "Çık" deniyorsa.
-
-DURUM (status) EŞLEŞTİRMELERİ:
-- "done": yaptı, çözdü, bitirdi, yapıldı, full, yapıyoruz.
-- "missing": yapmadı, eksik, boş, yok, unuttu.
-- "assigned": verildi, ödev atandı.
-- "exempt": muaf, es geç, yapmasın.
-
-JSON FORMATI:
-{
-  "action": "select_student" | "update" | "save_and_close" | "close_request",
-  "student": "Öğrenci adı (Eğer cümlede isim yoksa null bırak)",
-  "topic": "Konu adı veya null",
-  "source": "Kaynak adı, veya tüm kaynaklar kastediliyorsa 'all', veya null",
-  "status": "done" | "missing" | "assigned" | "exempt" | null,
-  "feedback": "Ekrana yazılacak tek cümlelik kısa ve net bilgi mesajı."
-}
+ÖNEMLİ: SADECE GEÇERLİ JSON DÖNDÜR.
 `;
 
         try {
@@ -141,20 +101,31 @@ JSON FORMATI:
                     model: 'llama-3.3-70b-versatile',
                     messages: [ { role: 'system', content: systemPrompt }, { role: 'user', content: transcript } ],
                     response_format: { type: 'json_object' },
-                    temperature: 0.1 // Daha net ve mekanik cevap vermesi için
+                    temperature: 0.1
                 })
             });
+            
+            if (!response.ok) {
+                // Eğer kotan dolduysa veya API patlarsa anında ekranda göreceksin
+                return { error: `Groq API Hatası (${response.status}): Sinyal kesildi.` };
+            }
+
             const data = await response.json();
             return JSON.parse(data.choices[0].message.content);
         } catch (error) {
-            console.error("Groq Hatası:", error);
-            return null;
+            return { error: `Sistem Hatası: ${error.message}` };
         }
     };
 
     const processGroqResult = (aiResult) => {
         if (!aiResult) {
             setJarvisFeedback("Sinyal anlaşılamadı. Lütfen tekrar edin.");
+            return;
+        }
+
+        // HATA YAKALAYICI EKRAN
+        if (aiResult.error) {
+            setJarvisFeedback(aiResult.error);
             return;
         }
 
@@ -168,7 +139,7 @@ JSON FORMATI:
         // 2. SADECE KAPAT
         if (aiResult.action === 'close_request') {
             if (Object.keys(draftGrades).length > 0) {
-                setJarvisFeedback("Kaydedilmemiş notlar var. Önce 'Kaydet' demelisiniz.");
+                setJarvisFeedback("Kaydedilmemiş notlar var. Lütfen önce 'Kaydet' deyin.");
                 return;
             } else {
                 onClose();
@@ -183,7 +154,7 @@ JSON FORMATI:
         
         let bestStudent = null;
 
-        // 🧠 ÖĞRENCİ ARAMA VE ÇOKLU EŞLEŞME
+        // 🧠 ÖĞRENCİ ARAMA (Yerel Cihazda Yapılır, Çok Hızlıdır)
         if (aiResult.student) {
             const safeItems = allStudents.filter(Boolean).map(item => ({ ...item, _safeSearchKey: getSafeText(item.name).toLocaleLowerCase('tr-TR') }));
             const fuse = new Fuse(safeItems, { keys: ['_safeSearchKey'], threshold: 0.35, includeScore: true });
@@ -197,7 +168,7 @@ JSON FORMATI:
                     setFoundStudents(identicalMatches);
                     setSelectedStudent(null);
                     setFoundTopics([]);
-                    setJarvisFeedback(`${aiResult.student} isminde ${identicalMatches.length} kişi bulundu. Lütfen aşağıdan seçin.`);
+                    setJarvisFeedback(`${aiResult.student} isminde ${identicalMatches.length} kişi bulundu. Listeden seçin.`);
                     return;
                 } else {
                     bestStudent = identicalMatches[0];
@@ -211,7 +182,7 @@ JSON FORMATI:
         }
 
         if (!bestStudent) {
-            setJarvisFeedback("Öğrenci bulunamadı. Lütfen önce bir isim söyleyin.");
+            setJarvisFeedback("Öğrenci bulunamadı. Lütfen bir isim söyleyin.");
             return;
         }
 
@@ -232,7 +203,7 @@ JSON FORMATI:
 
         // 🎯 AKSİYONLARI UYGULAMA
         if (aiResult.action === 'select_student') {
-            setJarvisFeedback(aiResult.feedback || `${bestStudent.name} seçildi. İşlem bekleniyor.`);
+            setJarvisFeedback(aiResult.feedback || `${bestStudent.name} seçildi. İşlem bekliyor.`);
             return;
         }
 
@@ -245,16 +216,16 @@ JSON FORMATI:
             }
 
             if (!aiResult.status) {
-                setJarvisFeedback(`İşlem durumu (Yapıldı/Eksik vb.) algılanamadı.`);
+                setJarvisFeedback(`İşlem durumu (Yapıldı/Eksik vb.) anlaşılamadı.`);
                 return;
             }
 
-            // 🔥 YENİ: "TÜM KAYNAKLAR" KOMUTU
+            // 🔥 "TÜM KAYNAKLAR" KOMUTU
             if (aiResult.source === 'all') {
                 (bestTopic.subColumns || []).forEach(col => {
                     handleDraftGradeChange(bestStudent.id, col.id, aiResult.status);
                 });
-                setJarvisFeedback(aiResult.feedback || `Tüm kaynaklar işaretlendi.`);
+                setJarvisFeedback(aiResult.feedback || `Tüm kaynaklar '${aiResult.status}' yapıldı.`);
                 return;
             }
 
@@ -263,11 +234,11 @@ JSON FORMATI:
                 const bestCol = findTopicCol(bestTopic.subColumns || [], 'title', aiResult.source);
                 if (bestCol) {
                     handleDraftGradeChange(bestStudent.id, bestCol.id, aiResult.status);
-                    setJarvisFeedback(aiResult.feedback || `Kaynak işaretlendi.`);
+                    setJarvisFeedback(aiResult.feedback || `Kaynak güncellendi.`);
                 } else {
                     setPendingAction({ studentId: bestStudent.id, topicId: bestTopic.id, status: aiResult.status });
                     setPendingSources(bestTopic.subColumns || []);
-                    setJarvisFeedback(`"${aiResult.source}" kaynağı bulunamadı. Lütfen listeden seçin.`);
+                    setJarvisFeedback(`"${aiResult.source}" kaynağı listede bulunamadı. Lütfen seçin.`);
                 }
                 return;
             }
@@ -279,7 +250,7 @@ JSON FORMATI:
             return;
         }
 
-        setJarvisFeedback(aiResult.feedback || "Komut eksik algılandı. Lütfen tekrar edin.");
+        setJarvisFeedback("Komutta eksik bilgi var (Konu veya işlem). Tekrar edin.");
     };
 
     const handleCommand = async (transcript) => {
@@ -288,7 +259,7 @@ JSON FORMATI:
         setPendingSources([]);
         
         setIsThinking(true);
-        setJarvisFeedback("İşleniyor...");
+        setJarvisFeedback("Analiz ediliyor...");
         
         const aiResult = await callGroqAPI(transcript);
         setIsThinking(false);
@@ -296,24 +267,24 @@ JSON FORMATI:
         processGroqResult(aiResult);
     };
 
-    // 🎙️ SAF DİNLEME MODU (Sadece butona basınca dinler)
+    // 🎙️ SAF DİNLEME MODU (Sadece sen butona basınca dinler, susunca kendi kapanır)
     const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return;
+        if (!SpeechRecognition) { setJarvisFeedback("Tarayıcınız ses modülünü desteklemiyor."); return; }
         if (recognitionRef.current) recognitionRef.current.abort();
         
         const recognition = new SpeechRecognition();
         recognitionRef.current = recognition;
         recognition.lang = 'tr-TR';
-        recognition.continuous = false; // Tek cümle alır ve durur
+        recognition.continuous = false;
 
-        recognition.onstart = () => { setIsListening(true); setSpeechTranscript(""); setJarvisFeedback("Sizi dinliyorum..."); };
+        recognition.onstart = () => { setIsListening(true); setSpeechTranscript(""); setJarvisFeedback("Dinliyorum..."); };
         recognition.onresult = (event) => { 
             const transcript = event.results[0][0].transcript; 
             setSpeechTranscript(transcript); 
             handleCommand(transcript); 
         };
-        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Mikrofon kapandı."); };
+        recognition.onerror = () => { setIsListening(false); setJarvisFeedback("Mikrofon kapatıldı."); };
         recognition.onend = () => { setIsListening(false); }; 
         recognition.start();
     };
@@ -332,7 +303,7 @@ JSON FORMATI:
     const handleManualSourceSelect = (col) => {
         if (!pendingAction) return;
         handleDraftGradeChange(pendingAction.studentId, col.id, pendingAction.status);
-        setJarvisFeedback("Kaynak seçimi tamamlandı.");
+        setJarvisFeedback("Kaynak manuel olarak işaretlendi.");
         setPendingAction(null);
         setPendingSources([]);
     };
@@ -351,14 +322,13 @@ JSON FORMATI:
         const updatedStudents = Array.isArray(targetClass.students) ? targetClass.students.filter(Boolean).map(s => {
             if (s.id === selectedStudent.id) {
                 const newGrades = { ...(s.grades || {}), ...(draftGrades[s.id] || {}) };
-                const newNotes = { ...(s.assignmentNotes || {}), ...(draftNotes[s.id] || {}) };
-                return { ...s, grades: newGrades, assignmentNotes: newNotes };
+                return { ...s, grades: newGrades };
             } 
             return s;
         }) : [];
         
         updateClassInDb({ ...targetClass, students: updatedStudents });
-        setDraftGrades({}); setDraftNotes({});
+        setDraftGrades({}); 
         onClose(); 
     };
 
@@ -366,14 +336,13 @@ JSON FORMATI:
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }} className="bg-slate-900/95 border border-cyan-500/30 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col max-h-[85vh]">
                 
-                {/* RADAR PANEL */}
-                <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 p-8 flex flex-col items-center justify-center shrink-0 min-h-[220px]">
+                {/* RADAR PANEL (Sadeleştirilmiş) */}
+                <div className="relative overflow-hidden bg-slate-950 border-b border-cyan-900/50 p-8 flex flex-col items-center justify-center shrink-0 min-h-[200px]">
                     <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute w-56 h-56 border border-cyan-500/10 rounded-full border-t-cyan-400/40 pointer-events-none" />
-                    <motion.div animate={{ rotate: -360 }} transition={{ duration: 30, repeat: Infinity, ease: 'linear' }} className="absolute w-36 h-36 border border-cyan-500/10 rounded-full border-b-cyan-400/40 pointer-events-none" />
                     
                     <button onClick={() => { stopListening(); onClose(); }} className="absolute top-4 right-4 text-slate-500 hover:text-cyan-400 transition-colors z-30"><X size={24}/></button>
                     
-                    {/* BAS-KONUŞ BUTONU */}
+                    {/* MANUEL MİKROFON BUTONU */}
                     <div onClick={isListening ? stopListening : startListening} className="z-10 bg-slate-900 p-6 rounded-full border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.2)] mb-4 cursor-pointer relative hover:scale-105 transition-transform group mt-2">
                         {isListening && <span className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping"></span>}
                         <Mic size={36} className={`text-cyan-400 ${(isListening || isThinking) ? 'animate-pulse' : 'group-hover:text-cyan-300'}`} />
@@ -382,19 +351,19 @@ JSON FORMATI:
                     <div className="w-full max-w-xl z-10 relative flex items-center mb-4">
                         <div className="absolute left-4 text-cyan-500/50 pointer-events-none"><Keyboard size={18} /></div>
                         <input 
-                            ref={inputRef} type="text" placeholder="Manuel komut (Örn: Logaritma tüm kaynaklar eksik)" 
-                            className="w-full bg-slate-900/80 border border-cyan-800/50 text-cyan-100 rounded-xl pl-12 pr-24 py-3 text-sm focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(34,211,238,0.2)] transition-all font-medium"
+                            ref={inputRef} type="text" placeholder="Manuel komut girin..." 
+                            className="w-full bg-slate-900/80 border border-cyan-800/50 text-cyan-100 rounded-xl pl-12 pr-24 py-3 text-sm focus:outline-none focus:border-cyan-400 transition-all font-medium"
                             value={textCommand} onChange={(e) => setTextCommand(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()} disabled={isListening || isThinking}
                         />
                         <div className="absolute right-2 flex items-center gap-1">
-                            <button onClick={isListening ? stopListening : startListening} className={`p-2 rounded-lg transition-colors ${isListening ? 'bg-cyan-500/20 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.3)]' : 'hover:bg-slate-800 text-slate-400 hover:text-cyan-400'}`}><Mic size={18} className={isListening ? 'animate-pulse' : ''} /></button>
+                            <button onClick={isListening ? stopListening : startListening} className={`p-2 rounded-lg transition-colors ${isListening ? 'bg-cyan-500/20 text-cyan-400' : 'hover:bg-slate-800 text-slate-400'}`}><Mic size={18} className={isListening ? 'animate-pulse' : ''} /></button>
                             <button onClick={handleManualSubmit} className="p-2 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-400 rounded-lg transition-colors" disabled={!textCommand.trim() || isListening || isThinking}><Send size={18} /></button>
                         </div>
                     </div>
 
                     <div className="z-10 text-center w-full px-4">
                         {speechTranscript && <p className="text-[12px] text-slate-400 italic mb-2">"{speechTranscript}"</p>}
-                        <p className="font-mono text-cyan-300 text-sm flex items-center justify-center tracking-wide leading-relaxed">
+                        <p className="font-mono text-cyan-300 text-sm flex items-center justify-center tracking-wide">
                             <span className="text-cyan-600 mr-1.5">&gt;</span> {jarvisFeedback}
                         </p>
                     </div>
@@ -413,9 +382,8 @@ JSON FORMATI:
                 </div>
 
                 {/* ÖDEV VE PROFİL LİSTESİ */}
-                <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-4 bg-slate-950/60 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+                <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-4 bg-slate-950/60 min-h-[300px] custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
                     
-                    {/* ÇOKLU EŞLEŞME DURUMU */}
                     {foundStudents.length > 1 && !selectedStudent && (
                         <div className="space-y-3">
                             <h4 className="text-cyan-400 font-mono text-xs uppercase tracking-widest px-2 flex items-center gap-2"><User size={14}/> Lütfen Hedefi Seçin</h4>
@@ -432,18 +400,17 @@ JSON FORMATI:
                         </div>
                     )}
 
-                    {/* TEK ÖĞRENCİ SEÇİLİYSE */}
                     {selectedStudent && foundStudents.length === 1 && (
                         <>
                             <div className="flex items-center gap-4 bg-cyan-900/10 p-4 rounded-2xl border border-cyan-500/20 mb-6">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg ${selectedStudent.isVip ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'}`}>{getSafeText(selectedStudent?.name).charAt(0)}</div>
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg ${selectedStudent.isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/20 text-cyan-400'}`}>{getSafeText(selectedStudent?.name).charAt(0)}</div>
                                 <div className="flex flex-col"><span className="text-lg font-bold text-white">{getSafeText(selectedStudent?.name)}</span><span className="text-[11px] font-mono text-cyan-500/70">{selectedStudent.isVip ? 'VIP ÖZEL DERS' : getSafeText(selectedStudent?.className)}</span></div>
                             </div>
                             
                             <div className="space-y-4 pb-12">
                                 {sortedFoundTopics.map(topic => (
                                     <div key={topic.id} className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 md:p-5">
-                                        <h4 className="font-bold text-slate-200 text-sm mb-4 border-b border-slate-800/80 pb-3 flex items-center gap-2"><div className={`w-1.5 h-4 rounded-full ${selectedStudent.isVip ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.5)]'}`}></div>{getSafeText(topic?.title)}</h4>
+                                        <h4 className="font-bold text-slate-200 text-sm mb-4 border-b border-slate-800/80 pb-3 flex items-center gap-2"><div className={`w-1.5 h-4 rounded-full ${selectedStudent.isVip ? 'bg-amber-500' : 'bg-cyan-500'}`}></div>{getSafeText(topic?.title)}</h4>
                                         <div className="space-y-3">
                                             {(topic.subColumns || []).filter(Boolean).map(col => {
                                                 const targetClass = (classes || []).find(c => c && c.id === selectedStudent.classId);
@@ -472,7 +439,7 @@ JSON FORMATI:
                     )}
                     
                     {!selectedStudent && foundStudents.length <= 1 && (
-                        <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-slate-600 font-mono py-12"><TerminalSquare size={48} className="mb-4 opacity-20"/><p className="text-xs">Bekleniyor...</p></div>
+                        <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-slate-600 font-mono py-12"><TerminalSquare size={48} className="mb-4 opacity-20"/><p className="text-xs">Komut veya Ses Bekleniyor...</p></div>
                     )}
                 </div>
 
