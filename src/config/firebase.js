@@ -1,16 +1,37 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 
+// Buradaki config değerleri projenizin çalışması için kritiktir.
 const firebaseConfig = {
-    apiKey: "AIzaSyDNfK49NR1dfbN0TSb35FI85huw8YJfcyQ",
-    authDomain: "odevtakip-145f5.firebaseapp.com",
-    projectId: "odevtakip-145f5",
-    storageBucket: "odevtakip-145f5.firebasestorage.app",
-    messagingSenderId: "1083778395806",
-    appId: "1:1083778395806:web:c67f99e34a11e5a330958f"
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+/**
+ * Net Takip Verisini Firestore'a Yazma Servisi
+ * @param {string} classId - Sınıf ID'si
+ * @param {string} studentId - Öğrenci ID'si
+ * @param {object} netData - { tarih, dersler: { turkce: { net: 10 }, ... } }
+ */
+export const addNetDataToStudent = async (classId, studentId, netData) => {
+    try {
+        const classRef = doc(db, 'classes', classId);
+        
+        // Firestore'da öğrenciyi bulup güncelleyecek mantık için hazırlık
+        // Bu fonksiyon, UI tarafından tetiklendiğinde kullanılacaktır.
+        return await updateDoc(classRef, {
+            // Firestore yapınıza göre öğrenci dizisindeki netTakip alanını günceller
+            [`students.${studentId}.netTakip`]: arrayUnion(netData)
+        });
+    } catch (error) {
+        console.error("Firebase Net Kayıt Hatası:", error);
+        throw error;
+    }
+};
