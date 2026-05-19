@@ -2,6 +2,17 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, FolderPlus, Users, Search, ChevronRight, GraduationCap, Crown } from 'lucide-react';
 
+// 🔥 YENİ: %100 TÜRKÇE KARAKTER VE BÜYÜK/KÜÇÜK HARF UYUMU SAĞLAYAN MOTOR
+const turkishNormalize = (text) => {
+    if (!text) return '';
+    return text.toLocaleLowerCase('tr-TR')
+        .trim()
+        .replace(/â/g, 'a').replace(/ê/g, 'e').replace(/î/g, 'i')
+        .replace(/ô/g, 'o').replace(/û/g, 'u')
+        .replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ı/g, 'i');
+};
+
 const TeacherDashboard = ({ regularClasses, vipClasses, onOpenClass, onNewClass, onNewVipClass }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [showResults, setShowResults] = useState(false);
@@ -12,9 +23,13 @@ const TeacherDashboard = ({ regularClasses, vipClasses, onOpenClass, onNewClass,
         ...vipClasses.flatMap(c => (c.students || []).map(s => ({ ...s, classId: c.id, className: c.className, isVip: true, classObj: c })))
     ];
 
-    // İsim arama filtresi
+    // 🔥 GÜNCELLEME: Geliştirilmiş akıllı Türkçe arama filtresi
     const filteredStudents = searchQuery.trim().length > 0
-        ? allStudents.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        ? allStudents.filter(s => {
+            const studentNameNorm = turkishNormalize(s.name);
+            const queryNorm = turkishNormalize(searchQuery);
+            return studentNameNorm.includes(queryNorm);
+          })
         : [];
 
     return (
