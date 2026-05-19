@@ -4,8 +4,24 @@ export const CLASSES_COLLECTION = 'berkant_hoca_classes_secure';
 export const LIBRARY_COLLECTION = 'berkant_hoca_library';
 export const SETTINGS_COLLECTION = 'berkant_hoca_system_config_v2';
 export const SETTINGS_DOC = 'main_config';
-export const DEFAULT_PIN = "1234"; 
-export const LIBRARY_TYPES = { EXCUSE: 'excuse', TOPIC: 'topic', SOURCE: 'source', CURRICULUM: 'curriculum' };
+export const DEFAULT_PIN = "1234";
+
+export const LIBRARY_TYPES = { 
+    EXCUSE: 'excuse', 
+    TOPIC: 'topic', 
+    SOURCE: 'source', 
+    CURRICULUM: 'curriculum' 
+};
+
+// 🔥 YENİ: Net Takip Sistemi için Ders Branşları
+export const DERSLER = [
+    { id: 'turkce', label: 'Türkçe' },
+    { id: 'matematik', label: 'Matematik' },
+    { id: 'fen', label: 'Fen Bilimleri' },
+    { id: 'sosyal', label: 'Sosyal Bilgiler' },
+    { id: 'ingilizce', label: 'İngilizce' },
+    { id: 'din', label: 'Din Kültürü' }
+];
 
 export const MOTIVATIONAL_QUOTES = [
     { text: "Başarı, her gün tekrarlanan küçük çabaların toplamıdır.", author: "Robert Collier" },
