@@ -98,11 +98,10 @@ const StudentDetail = ({ selectedStudentForView, selectedClass, currentUserRole,
                                                         <div className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border ${currentUserRole === 'vip-student' ? 'bg-slate-700 border-slate-600 text-vipGold' : `${statusData.bg} ${statusData.border} ${statusData.color}`}`}><StatusIcon className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.5} /><span className="text-xs font-black uppercase tracking-widest">{statusData.label}</span></div> 
                                                     )}
                                                     
-                                                    {/* 🔥 GÜNCELLEME: Uzun metinlerin ekran dışına taşmasını engelleyen "break-words" koruması */}
                                                     {note && ( 
-                                                        <div className="bg-yellow-50/80 p-2 rounded-xl border border-yellow-200 flex gap-1.5 items-start text-[11px] text-yellow-900 shadow-inner w-full overflow-hidden">
-                                                            <Info size={14} className="mt-0.5 shrink-0 text-yellow-500"/> 
-                                                            <span className="font-medium leading-relaxed flex-1 min-w-0 break-words whitespace-pre-wrap text-justify">{note}</span>
+                                                        <div className="bg-yellow-50/80 p-3 rounded-xl border border-yellow-200 flex gap-2 items-start text-xs text-yellow-900 shadow-inner w-full">
+                                                            <Info size={16} className="shrink-0 mt-0.5 text-yellow-500"/> 
+                                                            <span className="flex-1 min-w-0 break-words whitespace-pre-wrap text-justify leading-relaxed">{note}</span>
                                                         </div> 
                                                     )}
                                                     
@@ -120,7 +119,7 @@ const StudentDetail = ({ selectedStudentForView, selectedClass, currentUserRole,
                 </motion.div>
             )}
 
-            {activeTab === 'curriculum' && ( <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}><CurriculumTracker cls={selectedClass} updateClassInDb={updateClassInDb} isTeacherMode={false} /></motion.div> )}
+            {activeTab === 'curriculum' && ( <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}><CurriculumTracker cls={selectedClass} updateClassInDb={updateClassInDb} isTeacherMode={isTeacherMode} libraryItems={libraryItems} /></motion.div> )}
         </motion.div>
     );
 };
