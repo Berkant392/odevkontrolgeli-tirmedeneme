@@ -1,5 +1,3 @@
-// src/utils/helpers.js
-
 export const generateId = (prefix) => {
     return `${prefix}_${Math.random().toString(36).substring(2, 9)}`;
 };
@@ -80,4 +78,15 @@ export const formatDriveLink = (url) => {
     } catch (e) {
         return url;
     }
+};
+
+// 🔥 YENİ: Net Takip Sistemi İçin Matematiksel Fonksiyonlar
+export const calculateNet = (dogru, yanlis) => {
+    const net = dogru - (yanlis / 4);
+    return net > 0 ? parseFloat(net.toFixed(2)) : 0;
+};
+
+// 🔥 YENİ: Net Takip Tarih Formatlayıcı
+export const formatNetDate = (date) => {
+    return new Date(date).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 };
