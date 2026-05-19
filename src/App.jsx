@@ -236,7 +236,7 @@ const App = () => {
     
     const handlePrintPasswords = (cls) => { const printWindow = window.open('', '_blank'); if (!printWindow) { showAlert('error', 'Pop-up Engellendi', 'Lütfen tarayıcınızın Pop-up engelleyicisini kapatın!'); return; } let html = `<html><head><title>${cls.className} - Şifre Listesi</title><style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;margin-top:20px;}th,td{border:1px solid #ddd;padding:12px;text-align:left;}th{background-color:#f4f4f4;} h2{color:#4f46e5;}</style></head><body><h2>${cls.className} Sınıfı - Öğrenci Giriş Bilgileri</h2><table><tr><th>Öğrenci Adı</th><th>Kullanıcı Adı</th><th>Şifre</th></tr>`; cls.students.forEach(s => { html += `<tr><td><strong>${s.name}</strong></td><td>${s.username}</td><td style="letter-spacing: 2px;"><b>${s.password}</b></td></tr>`; }); html += `</table><script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }; window.onafterprint = function() { window.close(); };</script></body></html>`; printWindow.document.write(html); printWindow.document.close(); };
     
-    // 🔥 GÜNCELLEME: ULTRA-PREMIUM KURUMSAL LOGOLU RAPORLAMA VE PDF ÇIKTI MOTORU
+    // 🔥 GÜNCELLEME: ULTRA-PREMIUM KURUMSAL LOGOLU VE METİN KAYMASI ENGELLENMİŞ PDF ÇIKTI MOTORU
     const handlePrintStudentReport = (cls, student) => { 
         const printWindow = window.open('', '_blank'); 
         if (!printWindow) { 
@@ -355,9 +355,11 @@ const App = () => {
                     border-radius: 10px;
                     width: ${percentage}%;
                 }
+                /* 🔥 GÜNCELLEME: PDF Tablosu taşımları engelleyen akıllı hücre sınırlandırması eklendi */
                 table {
                     width: 100%;
                     border-collapse: collapse;
+                    table-layout: fixed; /* Taşımları %100 durdurur */
                     margin-top: 10px;
                 }
                 th {
@@ -376,6 +378,8 @@ const App = () => {
                     font-size: 13px;
                     border-bottom: 1px solid #e2e8f0;
                     color: #334155;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
                 }
                 tr:nth-child(even) {
                     background-color: #f8fafc;
@@ -395,10 +399,13 @@ const App = () => {
                 .badge-missing { background: #fee2e2 !important; color: #b91c1c !important; border: 1px solid #fca5a5; }
                 .badge-assigned { background: #fef3c7 !important; color: #b45309 !important; border: 1px solid #fde68a; }
                 .badge-exempt { background: #f1f5f9 !important; color: #475569 !important; border: 1px solid #cbd5e1; }
+                /* 🔥 GÜNCELLEME: Öğretmen notlarının taşkınlığını (overflow) engelleyen CSS */
                 .note-text {
                     font-style: italic;
                     color: #475569;
                     font-weight: 500;
+                    word-break: break-word;
+                    white-space: pre-wrap;
                 }
                 .empty-note {
                     color: #cbd5e1;
@@ -441,9 +448,9 @@ const App = () => {
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 45%;">Konu ve Kaynak Detayı</th>
-                        <th style="width: 20%;">Durum</th>
-                        <th style="width: 35%;">Öğretmen Notu</th>
+                        <th style="width: 35%;">Konu ve Kaynak Detayı</th>
+                        <th style="width: 15%;">Durum</th>
+                        <th style="width: 50%;">Öğretmen Notu</th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -459,7 +466,7 @@ const App = () => {
                 else if (statusId === 'exempt') { badgeClass = 'badge-exempt'; statusLabel = 'Muaf'; }
 
                 const note = student.assignmentNotes?.[col.id] || '';
-                const noteContent = note ? `<span class="note-text">${note}</span>` : `<span class="empty-note">-</span>`;
+                const noteContent = note ? `<div class="note-text">${note}</div>` : `<span class="empty-note">-</span>`;
 
                 html += `
                     <tr>
