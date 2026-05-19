@@ -1,4 +1,3 @@
-// vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -12,7 +11,6 @@ export default defineConfig({
       
       workbox: {
         cleanupOutdatedCaches: true,
-        // 🔥 GÜNCELLEME: .jpg ve .jpeg uzantıları da derleme takibine eklendi
         globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,svg,webmanifest}'],
         
         runtimeCaching: [
@@ -63,5 +61,14 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  // 🔥 BUILD HATALARINI ÇÖZEN KISIM (BURASI EKLENDİ)
+  optimizeDeps: {
+    include: ['jspdf', 'jspdf-autotable']
+  },
+  build: {
+    commonjsOptions: {
+      include: [/jspdf/, /node_modules/]
+    }
+  }
 });
