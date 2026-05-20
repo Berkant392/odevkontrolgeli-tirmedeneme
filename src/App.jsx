@@ -551,7 +551,8 @@ const App = () => {
                                 <h3 className="text-white text-lg font-black">Bildirimleri Açın</h3>
                                 <p className="text-white/80 text-xs mt-1">Sadece 3 adımda tamamlayın</p>
                             </div>
-                            <div className="p-5 space-y-4">
+                            <div className="p-5 space-y-3">
+                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">📌 Yol 1: Ayarlardan Açın</p>
                                 {isIOS ? (
                                     <>
                                         <div className="flex gap-3 items-start">
@@ -571,21 +572,31 @@ const App = () => {
                                     <>
                                         <div className="flex gap-3 items-start">
                                             <div className="w-7 h-7 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">1</div>
-                                            <p className="text-sm text-slate-700">Tarayıcınızı açın (Chrome) ve <strong>adres çubuğundaki kilit 🔒 simgesine</strong> dokunun</p>
+                                            <p className="text-sm text-slate-700">Ana ekrandaki <strong>uygulama simgesine basılı tutun</strong> 👆</p>
                                         </div>
                                         <div className="flex gap-3 items-start">
                                             <div className="w-7 h-7 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">2</div>
-                                            <p className="text-sm text-slate-700"><strong>Site ayarları</strong> veya <strong>İzinler</strong> bölümüne gidin</p>
+                                            <p className="text-sm text-slate-700">Açılan menüden <strong>Site ayarları</strong> seçeneğine dokunun</p>
                                         </div>
                                         <div className="flex gap-3 items-start">
                                             <div className="w-7 h-7 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">3</div>
-                                            <p className="text-sm text-slate-700"><strong>Bildirimler</strong> seçeneğini <strong className="text-green-600">İzin Ver</strong> olarak değiştirin</p>
+                                            <p className="text-sm text-slate-700"><strong>Bildirimler</strong> kısmını bulun ve <strong className="text-green-600">Bildirimleri göster</strong> seçeneğini açın</p>
                                         </div>
                                     </>
                                 )}
-                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-3">
+
+                                {/* PLAN B — Her iki platform için ortak */}
+                                <div className="border-t border-slate-200 pt-3 mt-3">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">🔄 Yol 2: Uygulamayı Yeniden Kurun</p>
+                                    <p className="text-sm text-slate-600 leading-relaxed">
+                                        Yukarıdaki adımlar işe yaramazsa, uygulamayı ana ekrandan kaldırıp <strong>en baştan yeniden kurun</strong>. 
+                                        Bu sefer bildirim izni sorulduğunda <strong className="text-green-600">"İzin Ver"</strong> demeyi unutmayın 😊
+                                    </p>
+                                </div>
+
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-2">
                                     <p className="text-xs text-amber-800 text-center font-medium">
-                                        💡 Ayarları değiştirdikten sonra bu uygulamaya geri dönün. Banner otomatik olarak kaybolacaktır.
+                                        💡 Ayarları değiştirdikten sonra uygulamaya geri dönün. Bu uyarı otomatik olarak kaybolacaktır.
                                     </p>
                                 </div>
                             </div>
@@ -594,7 +605,7 @@ const App = () => {
                                     onClick={() => setShowPermissionGuide(false)}
                                     className="w-full py-3 bg-gradient-to-r from-rose-500 to-orange-500 text-white rounded-xl font-bold text-sm active:scale-[0.98] transition-all shadow-lg"
                                 >
-                                    Anlaşıldı, Ayarlara Gidiyorum
+                                    Anlaşıldı 👍
                                 </button>
                             </div>
                         </motion.div>
