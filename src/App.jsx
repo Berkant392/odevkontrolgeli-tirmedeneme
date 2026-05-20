@@ -74,37 +74,37 @@ const App = () => {
                 // OneSignal yüklendiğinde mevcut izni kontrol et
                 const currentPerm = window.Notification?.permission;
                 setNotificationPermission(currentPerm || 'default');
+
+                // İzin değişikliklerini anlık dinle (izin verilince banner hemen kaybolsun)
+                OneSignal.Notifications.addEventListener('permissionChange', (granted) => {
+                    setNotificationPermission(granted ? 'granted' : 'denied');
+                });
             });
         }
     }, []);
 
-    const handleRequestPushPermission = () => {
+    const handleRequestPushPermission = async () => {
+        // Eğer daha önce engellediyse, ayarlara yönlendir
         if (notificationPermission === 'denied') {
-            showAlert('warning', 'Bildirimler Engellenmiş', 'Tarayıcınız veya telefon ayarlarınızdan bildirimleri engellemişsiniz. Lütfen tarayıcı/cihaz ayarlarınıza gidip bu site için bildirimlere izin verin.');
+            showAlert('warning', 'Bildirimler Engellenmiş', 'Bildirimleri daha önce engellemişsiniz. Telefonunuzun Ayarlar bölümünden bu uygulama için bildirimlere izin verin.');
             return;
         }
 
-        // Native (Tarayıcının orijinal) izin isteme penceresini kullan (Slidedown değil)
-        if (window.OneSignalDeferred) {
-            window.OneSignalDeferred.push(async function(OneSignal) {
-                try {
-                    await OneSignal.Notifications.requestPermission();
-                    const permission = window.Notification?.permission;
-                    setNotificationPermission(permission);
-                } catch (err) {
-                    console.error("Push permission error:", err);
-                    // Fallback
-                    if (window.Notification) {
-                        window.Notification.requestPermission().then(perm => {
-                            setNotificationPermission(perm);
-                        });
-                    }
+        // ÖNCELİKLE: Doğrudan tarayıcının native popup'ını tetikle (user gesture korunmalı!)
+        if (window.Notification) {
+            try {
+                const permission = await window.Notification.requestPermission();
+                setNotificationPermission(permission);
+                
+                // İzin verildiyse OneSignal'e de kayıt ol
+                if (permission === 'granted' && window.OneSignalDeferred) {
+                    window.OneSignalDeferred.push(async function(OneSignal) {
+                        try { await OneSignal.Notifications.requestPermission(); } catch(e) {}
+                    });
                 }
-            });
-        } else if (window.Notification) {
-             window.Notification.requestPermission().then(perm => {
-                 setNotificationPermission(perm);
-             });
+            } catch (err) {
+                console.error("Permission request error:", err);
+            }
         }
     };
 
@@ -497,21 +497,21 @@ const App = () => {
         <div className={`min-h-screen pb-24 md:pb-32 relative transition-colors duration-1000 ${currentUserRole === 'vip-student' ? 'bg-slate-900' : 'bg-lightBg'}`}>
             {currentUserRole === 'vip-student' && (<div className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"><div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full mix-blend-screen opacity-10" style={{ background: 'radial-gradient(circle, rgba(255,215,0,0.4) 0%, transparent 70%)' }}></div><div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] rounded-full mix-blend-screen opacity-[0.05]" style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.5) 0%, transparent 70%)' }}></div></div>)}
 
-            {/* BİLDİRİM İZNİ BANNER'I */}
-            {currentUserRole && notificationPermission !== 'granted' && (
-                <div className="bg-rose-500 text-white px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3 shadow-md z-[60] relative">
+            {/* BİLDİRİM İZNİ BANNER'I — Sadece Mobil PWA'da göster */}
+            {currentUserRole && isMobile && isStandalone && notificationPermission !== 'granted' && (
+                <div className="bg-rose-500 text-white px-4 py-3 flex items-center justify-between gap-3 shadow-md z-[60] relative">
                     <div className="flex items-center gap-2 text-sm font-medium">
-                        <AlertTriangle size={18} className="shrink-0" />
+                        <Bell size={18} className="shrink-0 animate-bounce" />
                         <span className="leading-tight">
                             {notificationPermission === 'denied' 
-                                ? "Bildirimleriniz kapalı! Önemli duyuruları kaçırabilirsiniz. (Ayarlardan açın)" 
-                                : "Önemli ödev ve duyurulardan anında haberdar olmak için bildirimleri açın."}
+                                ? "Bildirimler kapalı! Ayarlardan açın." 
+                                : "Bildirimleri açarak ödev hatırlatmalarını kaçırmayın!"}
                         </span>
                     </div>
                     {notificationPermission !== 'denied' && (
                         <button 
                             onClick={handleRequestPushPermission}
-                            className="shrink-0 bg-white text-rose-600 px-4 py-1.5 rounded-full text-xs font-black tracking-wide shadow-sm hover:scale-105 active:scale-95 transition-all uppercase"
+                            className="shrink-0 bg-white text-rose-600 px-4 py-1.5 rounded-full text-xs font-black tracking-wide shadow-sm active:scale-95 transition-all uppercase"
                         >
                             İzin Ver
                         </button>
