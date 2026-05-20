@@ -221,8 +221,17 @@ const App = () => {
     }, [classes]);
 
     // KALICI OTURUM KONTROLÜ
+    // 🔒 Tarayıcıda açıldığında oturum GERİ YÜKLENMEZakılda (her seferinde giriş ekranı gösterilir).
+    // 📱 Sadece PWA olarak kurulmuş cihazlarda oturum kalıcı kalır (çıkış yapana kadar).
+    // Bu strateji öğrencileri uygulamayı ana ekrana eklemeye teşvik eder.
     useEffect(() => {
         if (classes.length > 0 && dbTeacherPin && !currentUserRole) {
+            // Tarayıcıda (standalone olmayan) açıldığında oturumu geri yükleme
+            if (!isStandalone) {
+                localStorage.removeItem('bh_session');
+                return;
+            }
+
             const savedVersion = localStorage.getItem('bh_version');
             if (savedVersion !== APP_VERSION) {
                 localStorage.removeItem('bh_session');
@@ -265,7 +274,7 @@ const App = () => {
                 console.error("Oturum okuma hatası", e);
             }
         }
-    }, [classes, dbTeacherPin, currentUserRole]);
+    }, [classes, dbTeacherPin, currentUserRole, isStandalone]);
 
     const verifyPin = (inputPin) => {
         if (String(inputPin).trim() === String(dbTeacherPin).trim()) {
