@@ -1,0 +1,325 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    html, body {
+        /* 🔥 GÜNCELLEME: Mobildeki 300ms tıklama gecikmesini ve çift tıklama zoom hatasını sıfırlar */
+        touch-action: manipulation;
+        
+        /* 🔥 GÜNCELLEME: Yanlışlıkla basılı tutunca elemanların/yazıların maviye boyanmasını (seçilmesini) engeller */
+        -webkit-user-select: none;
+        user-select: none;
+        
+        /* 🔥 GÜNCELLEME: Cihazların safe-area (çentik ve ev barı) mesafelerini otomatik hesaplar */
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    body { 
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; 
+        background-color: #f8f9fa; 
+        color: #0f172a; 
+        overflow-x: hidden; 
+        /* Tıklama sırasındaki tarayıcı kaynaklı gri gölgelenmeyi kaldırır */
+        -webkit-tap-highlight-color: transparent; 
+    }
+
+    /* 🔥 GÜNCELLEME: Öğrencilerin input alanlarına yazı yazabilmesi için seçimi sadece buralarda aktif bırakıyoruz */
+    input, textarea {
+        -webkit-user-select: text !important;
+        user-select: text !important;
+    }
+}
+
+/* Scrollbar Zarifleştirme */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.5); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.8); }
+
+
+/* =========================================================
+   👑 V4 ULTRA-PREMIUM BİLEŞENLER VE ANİMASYONLAR
+   ========================================================= */
+
+/* 1. Fiziksel Tıklama Hissi (Framer Motion öncesi elemanlar için yedek) */
+.hover-lift { 
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1); 
+    will-change: transform; 
+}
+.hover-lift:hover { transform: translateY(-3px); }
+.hover-lift:active { transform: scale(0.96); }
+
+/* 2. Cam Efekti (Glassmorphism) */
+.glass-panel { 
+    background: rgba(19, 15, 37, 0.55); 
+    backdrop-filter: blur(20px); 
+    -webkit-backdrop-filter: blur(20px); 
+    border: 1px solid rgba(255, 255, 255, 0.06); 
+}
+
+/* 3. Giriş Ekranı Uzay Sahnesi & iOS Safari Kaydırma Kilidi */
+.login-locked {
+    position: fixed !important;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100vw !important; height: 100dvh !important;
+    overflow: hidden !important;
+    padding: 0 !important; margin: 0 !important;
+    overscroll-behavior: none !important;
+    touch-action: none !important;
+}
+
+.login-scene { 
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center; 
+    padding: 16px; 
+    padding-top: calc(16px + env(safe-area-inset-top)); 
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    background: #0a0812; 
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+}
+.login-orb { position: absolute; border-radius: 50%; pointer-events: none; z-index: 0; }
+.login-o1 { width: 380px; height: 380px; background: radial-gradient(circle, rgba(109,40,217,0.18) 0%, transparent 70%); top: -100px; left: -120px; }
+.login-o2 { width: 300px; height: 300px; background: radial-gradient(circle, rgba(180,130,0,0.12) 0%, transparent 70%); bottom: 0; right: -80px; }
+.login-o3 { width: 220px; height: 220px; background: radial-gradient(circle, rgba(79,70,229,0.14) 0%, transparent 70%); bottom: 80px; left: 20px; }
+.login-card { width: 100%; max-width: 360px; position: relative; z-index: 2; display: flex; flex-direction: column; justify-content: center; }
+
+/* Kısa ekranlı telefonlarda veya tarayıcılarda içeriğin sığması için otomatik küçülme (Scale) */
+@media (max-height: 750px) {
+    .login-card { transform: scale(0.95); }
+}
+@media (max-height: 650px) {
+    .login-card { transform: scale(0.85); }
+}
+@media (max-height: 550px) {
+    .login-card { transform: scale(0.75); }
+}
+
+/* 4. Logolar ve Giriş Butonları */
+.logo-area { display: flex; flex-direction: column; align-items: center; margin-bottom: 36px; }
+.logo-glow-wrapper {
+    width: 90px; height: 90px;
+    position: relative;
+    border-radius: 26px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    box-shadow: 0 0 25px rgba(147, 51, 234, 0.5), inset 0 0 10px rgba(0,0,0,0.5);
+    background: #0a0812;
+    z-index: 10;
+}
+
+.logo-border-spin {
+    position: absolute;
+    width: 250%; height: 250%;
+    background: conic-gradient(from 0deg, transparent 70%, rgba(168, 85, 247, 0.4) 80%, #d8b4fe 100%);
+    animation: neonRotate 3s linear infinite;
+    z-index: 1;
+}
+
+.logo-inner {
+    position: absolute;
+    inset: 3px;
+    background: #0a0812;
+    border-radius: 23px;
+    z-index: 2;
+    display: flex; align-items: center; justify-content: center;
+}
+
+@keyframes neonRotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.logo-brand { font-size: 21px; font-weight: 900; letter-spacing: 0.09em; color: #fff; margin-top: 15px; }
+.logo-sub { font-size: 11px; font-weight: 900; letter-spacing: 0.35em; color: rgba(255,255,255,0.7); margin-top: 5px; text-shadow: 0 2px 10px rgba(255,255,255,0.2); }
+
+.login-btns { display: flex; flex-direction: column; gap: 11px; width: 100%; }
+.lbtn { 
+    display: flex; align-items: center; gap: 16px; padding: 16px 20px; 
+    border-radius: 20px; cursor: pointer; text-align: left; position: relative; overflow: hidden; outline: none; 
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lbtn-s { background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
+.lbtn-s:hover { background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.5); box-shadow: 0 10px 40px rgba(139, 92, 246, 0.25), inset 0 0 20px rgba(139, 92, 246, 0.1); transform: translateY(-2px); }
+
+.lbtn-v { background: rgba(212, 175, 55, 0.05); border: 1px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
+.lbtn-v:hover { background: rgba(212, 175, 55, 0.15); border-color: rgba(255, 215, 0, 0.6); box-shadow: 0 10px 40px rgba(212, 175, 55, 0.25), inset 0 0 20px rgba(212, 175, 55, 0.15); transform: translateY(-2px); }
+
+.lbtn-a { background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
+.lbtn-a:hover { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 10px 40px rgba(56, 189, 248, 0.25), inset 0 0 20px rgba(56, 189, 248, 0.1); transform: translateY(-2px); }
+
+.liw { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 20px; transition: transform 0.4s ease; }
+.lbtn:hover .liw { transform: scale(1.1) rotate(5deg); }
+
+.liw-s { background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(139,92,246,0.05)); border: 1px solid rgba(139,92,246,0.3); }
+.liw-a { background: linear-gradient(135deg, rgba(56,189,248,0.2), rgba(56,189,248,0.05)); border: 1px solid rgba(56,189,248,0.3); }
+.liw-v { background: linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,215,0,0.05)); border: 1px solid rgba(255,215,0,0.4); }
+
+.lbl { flex: 1; display: flex; flex-direction: column; }
+.lts { font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.88); }
+.lss { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.32); margin-top: 2px; }
+.ltv { font-size: 15px; font-weight: 800; background: linear-gradient(90deg, #9a6e00, #ffd700, #e8b800, #ffd700, #9a6e00); background-size: 280% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: gs 3s linear infinite; letter-spacing: 0.01em; }
+@keyframes gs { 0% { background-position: 280% 0; } 100% { background-position: -280% 0; } }
+.lsv { font-size: 11px; font-weight: 600; color: rgba(255,200,60,0.45); margin-top: 2px; }
+.lch { color: rgba(255,255,255,0.28); flex-shrink: 0; }
+.lch-v { color: rgba(255,215,0,0.55); }
+
+.ldivline { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
+.ldl { flex: 1; height: 0.5px; background: rgba(255,255,255,0.07); }
+.ldivline { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
+.ldl { flex: 1; height: 0.5px; background: rgba(255,255,255,0.07); }
+.ldt { font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.18); }
+
+.lquote { margin-top: 26px; text-align: center; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.18); line-height: 1.7; }
+.lqm { color: rgba(218,165,32,0.45); font-size: 13px; font-weight: bold; }
+
+.quote-gradient-anim {
+    background: linear-gradient(90deg, #b8860b, #ffd700, #fffae6, #ffd700, #b8860b);
+    background-size: 200% auto;
+    color: #fff;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shine 4s linear infinite;
+    text-shadow: 0 0 15px rgba(255,215,0,0.2);
+}
+@keyframes shine {
+    to { background-position: 200% center; }
+}
+
+/* Glassmorphic Form Cards */
+.form-glass-card {
+    background: rgba(15, 23, 42, 0.5) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.02) !important;
+}
+.form-vip-card {
+    background: rgba(20, 15, 5, 0.6) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(212, 175, 55, 0.3) !important;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.7), inset 0 0 20px rgba(255,215,0,0.05), 0 0 30px rgba(212, 175, 55, 0.1) !important;
+}
+
+/* PWA Download Button */
+.pwa-download-btn {
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 14px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+.pwa-download-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.shiny-sweep {
+    position: absolute;
+    top: 0; left: -100%;
+    width: 50%; height: 100%;
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.2), transparent);
+    transform: skewX(-20deg);
+    animation: sweep 4s infinite;
+}
+@keyframes sweep {
+    0% { left: -100%; }
+    20% { left: 200%; }
+    100% { left: 200%; }
+}
+
+/* 5. Giriş (Input) Elemanları */
+.login-input { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; padding: 14px 16px; color: #fff; font-size: 14px; font-weight: 600; outline: none; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: inset 0 4px 6px rgba(0,0,0,0.3); }
+.login-input:focus { border-color: #8b5cf6; background: rgba(0,0,0,0.6); box-shadow: inset 0 4px 6px rgba(0,0,0,0.3), 0 0 20px rgba(139,92,246,0.3), 0 0 0 2px rgba(139,92,246,0.2); transform: translateY(-2px); }
+.login-input.vip-input:focus { border-color: #ffd700; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2), 0 0 0 2px rgba(255,215,0,0.2); }
+.login-label { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; color: rgba(255,255,255,0.5); margin-bottom: 8px; margin-left: 6px; }
+
+
+/* =========================================================
+   🏆 V4 GERÇEK METALİK ALTIN VE KONTRAST EFEKTLERİ
+   ========================================================= */
+.real-gold-text {
+    background: linear-gradient(to right, #d4af37, #fff2cd, #e6c27a, #ffd700, #c59b27);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0px 2px 15px rgba(255, 215, 0, 0.2);
+}
+.real-gold-bg {
+    background: linear-gradient(135deg, #d4af37, #ffd700, #ffeb99, #c59b27);
+    box-shadow: 0 4px 20px rgba(212, 175, 55, 0.4);
+    color: #111111 !important; /* VIP Buton yazısı okunaklılık için siyah */
+}
+.real-gold-border {
+    position: relative;
+}
+.real-gold-border::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px;
+    background: linear-gradient(135deg, #d4af37, #ffd700, #e6c875, #c59b27);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+}
+.vip-input {
+    color: #ffd700 !important; 
+    background: rgba(10, 8, 20, 0.6) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 215, 0, 0.4) !important;
+    box-shadow: inset 0 4px 15px rgba(0,0,0,0.8), 0 0 20px rgba(212, 175, 55, 0.1) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.05em !important;
+}
+.vip-input::placeholder { color: rgba(255, 215, 0, 0.3) !important; font-weight: 500; }
+.vip-input:focus {
+    background: rgba(15, 12, 30, 0.8) !important;
+    border-color: #ffd700 !important;
+    box-shadow: inset 0 4px 15px rgba(0,0,0,0.8), 0 0 25px rgba(255, 215, 0, 0.5), 0 0 0 2px rgba(255, 215, 0, 0.2) !important;
+    transform: translateY(-2px);
+}
+
+/* =========================================================
+   📊 TABLO, MODAL VE YARDIMCI ELEMANLAR
+   ========================================================= */
+.table-container { overflow-x: auto; overflow-y: visible; position: relative; border: 1px solid #e2e8f0; border-radius: 16px; background-color: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding-bottom: 20px; }
+th, td { white-space: nowrap; padding: 12px 16px; vertical-align: top; }
+.sticky-corner { position: sticky; left: 0; top: 0; z-index: 50 !important; background-color: white; border-right: 2px solid #f8f9fa; border-bottom: 2px solid #f8f9fa; }
+.sticky-header-top { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid rgba(0,0,0,0.08); height: 60px; }
+.sticky-header-sub { position: sticky; top: 60px; z-index: 40; border-bottom: 2px solid rgba(0,0,0,0.08); height: 50px; } 
+.sticky-col-left { position: sticky; left: 0; z-index: 30; background-color: white; border-right: 2px solid #f8f9fa; box-shadow: 4px 0 6px -2px rgba(0,0,0,0.02); }
+tbody tr { transition: background-color 0.2s ease; border-bottom: 1px solid #f8f9fa; }
+tbody tr:hover { background-color: #f1f5f9; }
+.z-menu { z-index: 9999 !important; }
+
+/* Modallar için Animasyon (Ana menüler framer ile, yedek modallar css ile) */
+.modal-anim { animation: scaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes scaleIn { 0% { opacity: 0; transform: scale(0.95); } 100% { opacity: 1; transform: scale(1); } }
+
+/* Mikrofon Asistan Butonu */
+.fab-button { position: fixed; bottom: 30px; right: 30px; z-index: 90; width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(109, 40, 217, 0.5); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease; cursor: pointer; }
+.fab-button:hover { transform: scale(1.05) translateY(-5px); box-shadow: 0 15px 35px rgba(109, 40, 217, 0.6); }
+.fab-pulse { position: absolute; width: 100%; height: 100%; border-radius: 50%; background-color: rgba(109, 40, 217, 0.4); z-index: -1; animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite; }
+@keyframes ping { 75%, 100% { transform: scale(1.5); opacity: 0; } }
+
+/* Yazdırma ve Mobil */
+@media print { body { background-color: white !important; margin: 0; padding: 0; } .no-print { display: none !important; } .print-only { display: block !important; } @page { margin: 1cm; } }
+.print-only { display: none; }
+@media (max-width: 768px) { .fab-button { bottom: 20px; right: 20px; width: 60px; height: 60px; } }
