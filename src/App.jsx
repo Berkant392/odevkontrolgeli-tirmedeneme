@@ -60,9 +60,16 @@ const App = () => {
         if (import.meta.env.VITE_ONESIGNAL_APP_ID) {
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             window.OneSignalDeferred.push(async function(OneSignal) {
-                await OneSignal.init({
-                    appId: import.meta.env.VITE_ONESIGNAL_APP_ID,
-                });
+                try {
+                    await OneSignal.init({
+                        appId: import.meta.env.VITE_ONESIGNAL_APP_ID,
+                        serviceWorkerPath: '/OneSignalSDKWorker.js',
+                        serviceWorkerParam: { scope: '/' },
+                        allowLocalhostAsSecureOrigin: true,
+                    });
+                } catch (e) {
+                    console.warn('OneSignal init hatası (bildirimler devre dışı):', e.message);
+                }
                 
                 // OneSignal yüklendiğinde mevcut izni kontrol et
                 const currentPerm = window.Notification?.permission;
