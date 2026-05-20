@@ -55,6 +55,20 @@ const App = () => {
 
     // ONE SIGNAL INITIALIZATION (Arka plan bildirimleri için)
     const [notificationPermission, setNotificationPermission] = useState(window.Notification?.permission || 'default');
+    const [showPermissionGuide, setShowPermissionGuide] = useState(false);
+
+    // Her uygulama açılışında izin durumunu yeniden kontrol et
+    useEffect(() => {
+        const checkPerm = () => {
+            if (window.Notification) {
+                setNotificationPermission(window.Notification.permission);
+            }
+        };
+        checkPerm();
+        // Uygulama tekrar görünür olduğunda (arka plandan dönüş) izni yeniden kontrol et
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) checkPerm(); });
+        return () => document.removeEventListener('visibilitychange', checkPerm);
+    }, []);
 
     useEffect(() => {
         if (import.meta.env.VITE_ONESIGNAL_APP_ID) {
@@ -71,11 +85,9 @@ const App = () => {
                     console.warn('OneSignal init hatası (bildirimler devre dışı):', e.message);
                 }
                 
-                // OneSignal yüklendiğinde mevcut izni kontrol et
                 const currentPerm = window.Notification?.permission;
                 setNotificationPermission(currentPerm || 'default');
 
-                // İzin değişikliklerini anlık dinle (izin verilince banner hemen kaybolsun)
                 OneSignal.Notifications.addEventListener('permissionChange', (granted) => {
                     setNotificationPermission(granted ? 'granted' : 'denied');
                 });
@@ -83,20 +95,22 @@ const App = () => {
         }
     }, []);
 
+    // Cihaz tespiti (rehber modal için)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
     const handleRequestPushPermission = async () => {
-        // Eğer daha önce engellediyse, ayarlara yönlendir
+        // Eğer daha önce engellediyse, rehber modalı göster
         if (notificationPermission === 'denied') {
-            showAlert('warning', 'Bildirimler Engellenmiş', 'Bildirimleri daha önce engellemişsiniz. Telefonunuzun Ayarlar bölümünden bu uygulama için bildirimlere izin verin.');
+            setShowPermissionGuide(true);
             return;
         }
 
-        // ÖNCELİKLE: Doğrudan tarayıcının native popup'ını tetikle (user gesture korunmalı!)
+        // Doğrudan tarayıcının native popup'ını tetikle (user gesture korunmalı!)
         if (window.Notification) {
             try {
                 const permission = await window.Notification.requestPermission();
                 setNotificationPermission(permission);
                 
-                // İzin verildiyse OneSignal'e de kayıt ol
                 if (permission === 'granted' && window.OneSignalDeferred) {
                     window.OneSignalDeferred.push(async function(OneSignal) {
                         try { await OneSignal.Notifications.requestPermission(); } catch(e) {}
@@ -504,20 +518,89 @@ const App = () => {
                         <Bell size={18} className="shrink-0 animate-bounce" />
                         <span className="leading-tight">
                             {notificationPermission === 'denied' 
-                                ? "Bildirimler kapalı! Ayarlardan açın." 
+                                ? "Bildirimler kapalı! Açmak için dokunun →" 
                                 : "Bildirimleri açarak ödev hatırlatmalarını kaçırmayın!"}
                         </span>
                     </div>
-                    {notificationPermission !== 'denied' && (
-                        <button 
-                            onClick={handleRequestPushPermission}
-                            className="shrink-0 bg-white text-rose-600 px-4 py-1.5 rounded-full text-xs font-black tracking-wide shadow-sm active:scale-95 transition-all uppercase"
-                        >
-                            İzin Ver
-                        </button>
-                    )}
+                    <button 
+                        onClick={handleRequestPushPermission}
+                        className="shrink-0 bg-white text-rose-600 px-4 py-1.5 rounded-full text-xs font-black tracking-wide shadow-sm active:scale-95 transition-all uppercase"
+                    >
+                        {notificationPermission === 'denied' ? 'Nasıl Açılır?' : 'İzin Ver'}
+                    </button>
                 </div>
             )}
+
+            {/* BİLDİRİM AYAR REHBERİ MODALI */}
+            <AnimatePresence>
+                {showPermissionGuide && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                        onClick={() => setShowPermissionGuide(false)}
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+                            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="bg-gradient-to-r from-rose-500 to-orange-500 p-5 text-center">
+                                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <Bell size={32} className="text-white" />
+                                </div>
+                                <h3 className="text-white text-lg font-black">Bildirimleri Açın</h3>
+                                <p className="text-white/80 text-xs mt-1">Sadece 3 adımda tamamlayın</p>
+                            </div>
+                            <div className="p-5 space-y-4">
+                                {isIOS ? (
+                                    <>
+                                        <div className="flex gap-3 items-start">
+                                            <div className="w-7 h-7 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">1</div>
+                                            <p className="text-sm text-slate-700">Telefonunuzdan <strong>Ayarlar</strong> uygulamasını açın</p>
+                                        </div>
+                                        <div className="flex gap-3 items-start">
+                                            <div className="w-7 h-7 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">2</div>
+                                            <p className="text-sm text-slate-700"><strong>Bildirimler</strong> bölümüne gidin ve <strong>Berkant Hoca</strong> uygulamasını bulun</p>
+                                        </div>
+                                        <div className="flex gap-3 items-start">
+                                            <div className="w-7 h-7 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">3</div>
+                                            <p className="text-sm text-slate-700"><strong>Bildirimlere İzin Ver</strong> seçeneğini <strong className="text-green-600">açık</strong> konuma getirin</p>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="flex gap-3 items-start">
+                                            <div className="w-7 h-7 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">1</div>
+                                            <p className="text-sm text-slate-700">Tarayıcınızı açın (Chrome) ve <strong>adres çubuğundaki kilit 🔒 simgesine</strong> dokunun</p>
+                                        </div>
+                                        <div className="flex gap-3 items-start">
+                                            <div className="w-7 h-7 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">2</div>
+                                            <p className="text-sm text-slate-700"><strong>Site ayarları</strong> veya <strong>İzinler</strong> bölümüne gidin</p>
+                                        </div>
+                                        <div className="flex gap-3 items-start">
+                                            <div className="w-7 h-7 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-sm font-black shrink-0">3</div>
+                                            <p className="text-sm text-slate-700"><strong>Bildirimler</strong> seçeneğini <strong className="text-green-600">İzin Ver</strong> olarak değiştirin</p>
+                                        </div>
+                                    </>
+                                )}
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-3">
+                                    <p className="text-xs text-amber-800 text-center font-medium">
+                                        💡 Ayarları değiştirdikten sonra bu uygulamaya geri dönün. Banner otomatik olarak kaybolacaktır.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="px-5 pb-5">
+                                <button 
+                                    onClick={() => setShowPermissionGuide(false)}
+                                    className="w-full py-3 bg-gradient-to-r from-rose-500 to-orange-500 text-white rounded-xl font-bold text-sm active:scale-[0.98] transition-all shadow-lg"
+                                >
+                                    Anlaşıldı, Ayarlara Gidiyorum
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <header className={`no-print relative z-20 transition-all duration-500 ${currentUserRole === 'vip-student' ? 'bg-slate-800/90 border-b border-slate-700 shadow-md' : 'bg-white border-b border-slate-200 shadow-sm'}`}>
                 <div className="max-w-7xl mx-auto px-3 py-2.5 md:py-4 flex flex-col items-center gap-2">
