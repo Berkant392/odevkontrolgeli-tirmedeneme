@@ -77,15 +77,21 @@ const App = () => {
             return;
         }
 
+        // Native (Tarayıcının orijinal) izin isteme penceresini kullan (Slidedown değil)
         if (window.OneSignalDeferred) {
             window.OneSignalDeferred.push(async function(OneSignal) {
                 try {
-                    await OneSignal.Slidedown.promptPush();
-                    // Veya direkt native prompt: await OneSignal.Notifications.requestPermission();
+                    await OneSignal.Notifications.requestPermission();
                     const permission = window.Notification?.permission;
                     setNotificationPermission(permission);
                 } catch (err) {
                     console.error("Push permission error:", err);
+                    // Fallback
+                    if (window.Notification) {
+                        window.Notification.requestPermission().then(perm => {
+                            setNotificationPermission(perm);
+                        });
+                    }
                 }
             });
         } else if (window.Notification) {
