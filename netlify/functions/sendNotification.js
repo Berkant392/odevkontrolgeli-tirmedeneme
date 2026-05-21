@@ -45,6 +45,12 @@ exports.handler = async (event, context) => {
             app_id: appId,
             headings: { "en": title, "tr": title },
             contents: { "en": text, "tr": text },
+            // Bildirimlerin kilit ekranda veya uyku modunda uyanmasını garantilemek için
+            priority: 10,
+            android_sound: "notification", // Android varsayılan bildirim sesi
+            ios_sound: "default", // iOS varsayılan bildirim sesi
+            android_visibility: 1, // Kilit ekranında tam içerik göster
+            ttl: 2419200 // 4 hafta (cihaz kapalıysa bile açıldığında alması için Time-To-Live)
         };
 
         if (isGlobal) {

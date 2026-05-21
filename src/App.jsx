@@ -38,6 +38,14 @@ const App = () => {
     const [currentUserRole, setCurrentUserRole] = useState(null);
     const [isTeacherMode, setIsTeacherMode] = useState(false);
     const [loggedInStudent, setLoggedInStudent] = useState(null);
+
+    // Oturum geri yüklenirken login ekranının saniyelik görünmesini engellemek için
+    const [isSessionRestoring, setIsSessionRestoring] = useState(() => {
+        // Sadece PWA modunda ise ve yerel depolamada session varsa yükleniyor modunda başlat
+        const isStandaloneEnv = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        const hasSession = !!localStorage.getItem('bh_session');
+        return isStandaloneEnv && hasSession;
+    });
     const [view, setView] = useState('home');
     const [activeTab, setActiveTab] = useState('homework');
     const [selectedClass, setSelectedClass] = useState(null);
@@ -229,6 +237,7 @@ const App = () => {
             // Tarayıcıda (standalone olmayan) açıldığında oturumu geri yükleme
             if (!isStandalone) {
                 localStorage.removeItem('bh_session');
+                setIsSessionRestoring(false);
                 return;
             }
 
@@ -236,6 +245,7 @@ const App = () => {
             if (savedVersion !== APP_VERSION) {
                 localStorage.removeItem('bh_session');
                 localStorage.setItem('bh_version', APP_VERSION);
+                setIsSessionRestoring(false);
                 return;
             }
             try {
@@ -272,8 +282,13 @@ const App = () => {
                 }
             } catch (e) {
                 console.error("Oturum okuma hatası", e);
+            } finally {
+                setIsSessionRestoring(false);
             }
+        } else if (classes.length > 0 && dbTeacherPin && currentUserRole) {
+             setIsSessionRestoring(false);
         }
+        // Eğer classes veya dbTeacherPin henüz yüklenmediyse isSessionRestoring true olarak kalır, loader döner.
     }, [classes, dbTeacherPin, currentUserRole, isStandalone]);
 
     const verifyPin = (inputPin) => {
@@ -507,6 +522,27 @@ const App = () => {
         );
     }
 
+    if (isSessionRestoring) {
+        return (
+            <div className="fixed inset-0 bg-slate-900 z-[99999] flex flex-col items-center justify-center">
+                <motion.div
+                    animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                    className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-brandPurple to-blue-600 flex items-center justify-center shadow-[0_0_40px_rgba(79,70,229,0.4)] mb-8"
+                >
+                    <img src="/pwa-192x192.png" alt="Logo" className="w-16 h-16 object-contain pointer-events-none" />
+                </motion.div>
+                <motion.h2 
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut", delay: 0.2 }}
+                    className="text-white text-xl font-bold tracking-widest uppercase"
+                >
+                    YÜKLENİYOR...
+                </motion.h2>
+            </div>
+        );
+    }
+
     if (!currentUserRole) return (
         <LoginScreen
             onStudentLogin={handleStudentLogin}
@@ -691,7 +727,7 @@ const App = () => {
                 <CountdownTimer targetDateStr={countdownConfig.targetDate} startDateStr={countdownConfig.startDate} targetLabel={countdownConfig.label} />
 
                 <AnimatePresence mode="wait">
-                    {isTeacherMode && view === 'home' && <TeacherDashboard regularClasses={regularClasses} vipClasses={vipClasses} onOpenClass={openClass} onNewClass={() => { setModalType('class'); setModalInputVal(''); }} onNewVipClass={() => { setModalType('vip'); setModalInputVal(''); }} notifications={notifications} />}
+                    {isTeacherMode && view === 'home' && <TeacherDashboard regularClasses={regularClasses} vipClasses={vipClasses} onOpenClass={openClass} onNewClass={() => { setModalType('class'); setModalInputVal(''); }} onNewVipClass={() => { setModalType('vip'); setModalInputVal(''); }} notifications={notifications} showAlert={showAlert} />}
 
                     {isTeacherMode && view === 'class-detail' && selectedClass && (
                         <ClassDetail

@@ -17,7 +17,7 @@ const turkishNormalize = (text) => {
         .replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ı/g, 'i');
 };
 
-const TeacherDashboard = ({ regularClasses, vipClasses, onOpenClass, onNewClass, onNewVipClass, notifications }) => {
+const TeacherDashboard = ({ regularClasses, vipClasses, onOpenClass, onNewClass, onNewVipClass, notifications, showAlert }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [showResults, setShowResults] = useState(false);
 
@@ -87,10 +87,9 @@ const TeacherDashboard = ({ regularClasses, vipClasses, onOpenClass, onNewClass,
 
         // Seçili öğrencilerin tam ID listesini çıkaralım (Global değilse)
         let targetStudentIds = [];
-        let isGlobal = false;
         
         if (selectAllClasses && selectAllVips) {
-            isGlobal = true;
+            // Global
         } else {
             // Seçili sınıflardaki öğrencileri topla
             const classObjs = regularClasses.filter(c => selectedClasses.includes(c.id) || selectAllClasses);
@@ -155,10 +154,10 @@ const TeacherDashboard = ({ regularClasses, vipClasses, onOpenClass, onNewClass,
             setSelectAllClasses(false);
             setSelectAllVips(false);
             setNotifTab('history');
-            alert("Bildirim başarıyla gönderildi!");
+            showAlert('success', 'Başarılı', "Bildirim başarıyla gönderildi!");
         } catch (e) {
             console.error("Bildirim gönderilirken hata:", e);
-            alert("Hata oluştu: " + e.message);
+            showAlert('error', 'Hata', "Hata oluştu: " + e.message);
         }
     };
 
