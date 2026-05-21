@@ -259,7 +259,7 @@ const App = () => {
                 if (sessionStr) {
                     const session = JSON.parse(sessionStr);
                     if (session.role === 'teacher') {
-                        setIsTeacherMode(true); setCurrentUserRole('teacher'); setView('home'); setActiveTab('homework');
+                        setIsTeacherMode(true); setCurrentUserRole('teacher'); setView('home'); setActiveTab('home');
                     } else if (session.role === 'student' || session.role === 'vip-student') {
                         let foundStudent = null, foundClass = null;
                         const searchSpace = session.role === 'vip-student' ? classes.filter(c => c.type === 'vip') : classes.filter(c => c.type !== 'vip');
@@ -299,7 +299,7 @@ const App = () => {
 
     const verifyPin = (inputPin) => {
         if (String(inputPin).trim() === String(dbTeacherPin).trim()) {
-            setIsTeacherMode(true); setCurrentUserRole('teacher'); setView('home'); setActiveTab('homework');
+            setIsTeacherMode(true); setCurrentUserRole('teacher'); setView('home'); setActiveTab('home');
             localStorage.setItem('bh_session', JSON.stringify({ role: 'teacher' }));
         } else {
             showAlert('error', 'Hata', 'Girdiğiniz PIN kodu hatalı! Lütfen tekrar deneyin.');
