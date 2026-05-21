@@ -47,7 +47,7 @@ export const useHomeworkNotifications = (loggedInStudent, selectedClass) => {
                     notifications.push({
                         id: `hw-alert-${topic.id}`,
                         title: '⏰ Son 24 Saat!',
-                        text: `${topic.title} ödevinin teslimine 24 saatten az kaldı. Lütfen tamamlayıp işaretlemeyi unutma!`,
+                        text: `${topic.title} ödevinin teslimine 24 saatten az kaldı. Lütfen tamamlayıp derse gelirken yanında getirmeyi unutma!`,
                         timestamp: now.toISOString(),
                         type: 'homework_alert',
                         isLocal: true
