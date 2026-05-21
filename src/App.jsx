@@ -808,6 +808,8 @@ const App = () => {
                     )}
                 </AnimatePresence>
             </main>
+            </div> {/* End of scrollable area */}
+            </div> {/* End of flex-1 container */}
 
             {showLibraryManager && <LibraryModal libraryCategory={libraryCategory} setLibraryCategory={setLibraryCategory} libraryInput={libraryInput} setLibraryInput={setLibraryInput} libraryDate={libraryDate} setLibraryDate={setLibraryDate} libraryItems={libraryItems} addLibraryItem={addLibraryItem} deleteLibraryItem={deleteLibraryItem} onClose={() => setShowLibraryManager(false)} />}
 
