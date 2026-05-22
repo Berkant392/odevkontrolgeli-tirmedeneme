@@ -492,18 +492,50 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             );
 
             // ════════ SIFIR GECİKME (ZERO-LATENCY) İÇİN SİSTEM VERİTABANI (CONTEXT INJECTION) ════════
-            const dbDump = latestState.current.allStudents.map(s => {
+            
+            // 1. Müfredat Bilgisi (Sınıflara göre konu ve kaynaklar)
+            const curriculums = latestState.current.classes.map(c => ({
+                sinif: c.className,
+                konular: (c.topics || []).map(t => ({
+                    ad: t.title,
+                    kaynaklar: (t.subColumns || []).map(sc => sc.title)
+                }))
+            }));
+
+            // 2. Öğrenci Verileri (Okunabilir notlar)
+            const studentsDump = latestState.current.allStudents.map(s => {
                 const c = latestState.current.classes.find(cls => cls.id === s.classId);
+                
+                let readableGrades = {};
+                if (c && c.topics && s.grades) {
+                    Object.entries(s.grades).forEach(([topicId, cols]) => {
+                        const t = c.topics.find(x => x.id === topicId);
+                        if (t) {
+                            readableGrades[t.title] = {};
+                            Object.entries(cols).forEach(([colId, status]) => {
+                                const sc = (t.subColumns || []).find(x => x.id === colId);
+                                if (sc) {
+                                    readableGrades[t.title][sc.title] = status; // done, missing, vs.
+                                }
+                            });
+                        }
+                    });
+                }
+
                 return {
                     id: s.id,
                     isim: s.name,
                     sinif: c ? c.className : 'Bilinmiyor',
                     vip: s.isVip,
-                    notlar: s.grades || {},
+                    notlar: readableGrades,
                     denemeler: (s.exams || []).map(e => e.net)
                 };
             });
-            const dbString = JSON.stringify(dbDump);
+
+            const dbString = JSON.stringify({
+                MUFREDAT: curriculums,
+                OGRENCILER: studentsDump
+            });
 
             // Jarvis Persona ve Bağlamı
             const contextText = selectedStudent ? `Şu an ${selectedStudent.name} adlı öğrencinin profili açık.` : 'Şu an genel arama modundayız.';
