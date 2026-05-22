@@ -25,8 +25,8 @@ export class GeminiLiveService {
         try {
             this.onStatusChange('connecting', "Bağlanıyor...");
             
-            // Gemini Multimodal Live API endpoint
-            const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
+            // Gemini Multimodal Live API endpoint (v1beta)
+            const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
             this.ws = new WebSocket(url);
 
             this.ws.onopen = () => {
@@ -34,8 +34,8 @@ export class GeminiLiveService {
                 // Bağlantı kurulduğunda ilk Setup mesajını gönderiyoruz
                 const setupMessage = {
                     setup: {
-                        // Resimdeki "Gemini 2.5 Flash" modelini deniyoruz
-                        model: "models/gemini-2.5-flash",
+                        // Live API için resmi desteklenen model ismi
+                        model: "models/gemini-2.0-flash-exp",
                         generationConfig: {
                             responseModalities: ["AUDIO"]
                         },
