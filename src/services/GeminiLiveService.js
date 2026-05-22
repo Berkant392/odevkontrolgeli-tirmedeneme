@@ -48,66 +48,73 @@ export class GeminiLiveService {
 
             // Gemini Multimodal Live API endpoint (v1beta veya v1alpha ikisi de çalışır, v1alpha daha güncel önizlemeler için)
             const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
-            this.ws = new WebSocket(url);
+            
+            return new Promise((resolve) => {
+                this.ws = new WebSocket(url);
 
-            this.ws.onopen = () => {
-                this.onStatusChange('connected', "Bağlandı");
-                // Bağlantı kurulduğunda ilk Setup mesajını gönderiyoruz
-                const setupMessage = {
-                    setup: {
-                        // Dinamik olarak bulduğumuz modeli atıyoruz
-                        model: selectedModel,
-                        generationConfig: {
-                            responseModalities: ["AUDIO"]
-                        },
-                        systemInstruction: {
-                            parts: [{ text: systemInstruction }]
+                this.ws.onopen = () => {
+                    this.onStatusChange('connected', "Bağlandı");
+                    // Bağlantı kurulduğunda ilk Setup mesajını gönderiyoruz
+                    const setupMessage = {
+                        setup: {
+                            // Dinamik olarak bulduğumuz modeli atıyoruz
+                            model: selectedModel,
+                            generationConfig: {
+                                responseModalities: ["AUDIO"]
+                            },
+                            systemInstruction: {
+                                parts: [{ text: systemInstruction }]
+                            }
                         }
+                    };
+                    
+                    if (tools && tools.length > 0) {
+                        setupMessage.setup.tools = [{ functionDeclarations: tools }];
+                    }
+
+                    console.log("📤 Setup Gönderiliyor:", setupMessage);
+                    this.ws.send(JSON.stringify(setupMessage));
+                    resolve(true); // Bağlantı başarılı olunca true dön
+                };
+
+                this.ws.onmessage = async (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log("📥 Sunucudan Gelen Mesaj:", data);
+                        
+                        if (data.setupComplete) {
+                            this.onStatusChange('listening', "Sizi dinliyor...");
+                            return;
+                        }
+                        this.handleServerMessage(data);
+                    } catch (err) {
+                        console.error("Mesaj ayrıştırma hatası:", err);
                     }
                 };
-                
-                if (tools && tools.length > 0) {
-                    setupMessage.setup.tools = [{ functionDeclarations: tools }];
-                }
 
-                this.ws.send(JSON.stringify(setupMessage));
-            };
+                this.ws.onerror = (error) => {
+                    console.error("❌ WebSocket Hatası:", error);
+                    this.onStatusChange('error', "Sunucuya bağlanırken hata oluştu.");
+                    resolve(false);
+                };
 
-            this.ws.onmessage = async (event) => {
-                try {
-                    let dataText = event.data;
-                    if (event.data instanceof Blob) {
-                        dataText = await event.data.text();
+                this.ws.onclose = (event) => {
+                    console.log("🛑 WebSocket kapandı. Kod:", event.code, "Sebep:", event.reason);
+                    
+                    // Eğer hata kodu 1000 değilse, sebebi ekrana yansıt
+                    let errorMsg = "Bağlantı kesildi.";
+                    if (event.code !== 1000 && event.code !== 1005) {
+                         errorMsg = `Bağlantı kesildi (Kod: ${event.code}). Neden: ${event.reason || "Bilinmiyor/Geçersiz Model"}`;
                     }
-                    const data = JSON.parse(dataText);
-                    this.handleServerMessage(data);
-                } catch (err) {
-                    console.error("Mesaj ayrıştırma hatası:", err);
-                }
-            };
-
-            this.ws.onerror = (error) => {
-                console.error("WebSocket Hatası:", error);
-                this.onStatusChange('error', "Sunucuya bağlanırken hata oluştu.");
-            };
-
-            this.ws.onclose = (event) => {
-                console.log("WebSocket kapandı. Kod:", event.code, "Sebep:", event.reason);
-                
-                // Eğer hata kodu 1000 değilse, sebebi ekrana yansıt
-                let errorMsg = "Bağlantı kesildi.";
-                if (event.code !== 1000 && event.code !== 1005) {
-                     errorMsg = `Bağlantı kesildi (Kod: ${event.code}). Neden: ${event.reason || "Bilinmiyor/Geçersiz Model"}`;
-                }
-                
-                this.onStatusChange('disconnected', errorMsg);
-                this.stopAudioCapture();
-            };
-
-            return true;
+                    
+                    this.onStatusChange('disconnected', errorMsg);
+                    this.stopAudioCapture();
+                    resolve(false);
+                };
+            });
         } catch (error) {
-            console.error("Bağlantı başlatılamadı:", error);
-            this.onStatusChange('error', error.message);
+            console.error("Beklenmeyen hata:", error);
+            this.onStatusChange('error', "Beklenmeyen bir hata oluştu.");
             return false;
         }
     }
@@ -146,13 +153,28 @@ export class GeminiLiveService {
     }
 
     async startAudioCapture() {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.warn("WebSocket hazır değil, ses yakalama başlatılamadı.");
+            return;
+        }
 
         try {
-            this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log("🎤 Mikrofon izni isteniyor...");
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    sampleRate: 16000
+                } 
+            });
+            console.log("✅ Mikrofon izni alındı.");
             
             // Gemini 16000Hz örnekleme hızı bekliyor
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+            
             const source = this.audioContext.createMediaStreamSource(this.mediaStream);
             
             // Basit ve geniş uyumlu bir mikrofon yakalayıcı (ScriptProcessor)
