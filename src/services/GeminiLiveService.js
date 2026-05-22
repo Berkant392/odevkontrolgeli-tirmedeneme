@@ -25,8 +25,29 @@ export class GeminiLiveService {
         try {
             this.onStatusChange('connecting', "Bağlanıyor...");
             
-            // Gemini Multimodal Live API endpoint (v1beta)
-            const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
+            // 1. Dinamik Model Bulma (Kullanıcının API Key'ine özel hangi Live modellerin açık olduğunu buluruz)
+            let selectedModel = "models/gemini-2.0-flash-exp"; // Yedek varsayılan
+            try {
+                const modelResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${this.apiKey}`);
+                const modelData = await modelResp.json();
+                if (modelData && modelData.models) {
+                    const liveModels = modelData.models.filter(m => 
+                        m.supportedGenerationMethods && m.supportedGenerationMethods.includes('bidiGenerateContent')
+                    );
+                    if (liveModels.length > 0) {
+                        // İlk desteklenen Live modelini otomatik seç
+                        selectedModel = liveModels[0].name;
+                        console.log("🎙️ Desteklenen Canlı Ses Modeli Bulundu:", selectedModel);
+                    } else {
+                        console.warn("⚠️ API Key'inize tanımlı bir BidiGenerateContent (Canlı Ses) modeli bulunamadı.");
+                    }
+                }
+            } catch (e) {
+                console.warn("Modeller kontrol edilemedi, varsayılan denenecek:", e);
+            }
+
+            // Gemini Multimodal Live API endpoint (v1beta veya v1alpha ikisi de çalışır, v1alpha daha güncel önizlemeler için)
+            const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
             this.ws = new WebSocket(url);
 
             this.ws.onopen = () => {
@@ -34,8 +55,8 @@ export class GeminiLiveService {
                 // Bağlantı kurulduğunda ilk Setup mesajını gönderiyoruz
                 const setupMessage = {
                     setup: {
-                        // Live API için resmi desteklenen model ismi
-                        model: "models/gemini-2.0-flash-exp",
+                        // Dinamik olarak bulduğumuz modeli atıyoruz
+                        model: selectedModel,
                         generationConfig: {
                             responseModalities: ["AUDIO"]
                         },
