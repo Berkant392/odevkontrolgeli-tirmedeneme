@@ -34,7 +34,8 @@ export class GeminiLiveService {
                 // Bağlantı kurulduğunda ilk Setup mesajını gönderiyoruz
                 const setupMessage = {
                     setup: {
-                        model: "models/gemini-2.0-flash-exp",
+                        // Resimdeki "Gemini 2.5 Flash" modelini deniyoruz
+                        model: "models/gemini-2.5-flash",
                         generationConfig: {
                             responseModalities: ["AUDIO"]
                         },
@@ -69,8 +70,16 @@ export class GeminiLiveService {
                 this.onStatusChange('error', "Sunucuya bağlanırken hata oluştu.");
             };
 
-            this.ws.onclose = () => {
-                this.onStatusChange('disconnected', "Bağlantı kesildi.");
+            this.ws.onclose = (event) => {
+                console.log("WebSocket kapandı. Kod:", event.code, "Sebep:", event.reason);
+                
+                // Eğer hata kodu 1000 değilse, sebebi ekrana yansıt
+                let errorMsg = "Bağlantı kesildi.";
+                if (event.code !== 1000 && event.code !== 1005) {
+                     errorMsg = `Bağlantı kesildi (Kod: ${event.code}). Neden: ${event.reason || "Bilinmiyor/Geçersiz Model"}`;
+                }
+                
+                this.onStatusChange('disconnected', errorMsg);
                 this.stopAudioCapture();
             };
 
