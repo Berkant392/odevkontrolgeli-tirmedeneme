@@ -491,9 +491,9 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 }
             );
 
-            // ════════ SIFIR GECİKME (ZERO-LATENCY) İÇİN SİSTEM VERİTABANI (CONTEXT INJECTION) ════════
+            // ════════ HİBRİT MİMARİ İÇİN VERİTABANI ÖZETİ ════════
             
-            // 1. Müfredat Bilgisi (Sınıflara göre konu ve kaynaklar)
+            // 1. Müfredat Bilgisi (Sınıflara göre konu ve kaynaklar) - (Genel fihrist)
             const curriculums = latestState.current.classes.map(c => ({
                 sinif: c.className,
                 konular: (c.topics || []).map(t => ({
@@ -502,8 +502,21 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 }))
             }));
 
-            // 2. Öğrenci Verileri (Okunabilir notlar)
-            const studentsDump = latestState.current.allStudents.map(s => {
+            // 2. Öğrenci Fihristi (Sadece kimlik bilgileri, notlar/detaylar yok)
+            const studentsIndex = latestState.current.allStudents.map(s => {
+                const c = latestState.current.classes.find(cls => cls.id === s.classId);
+                return {
+                    id: s.id,
+                    isim: s.name,
+                    sinif: c ? c.className : 'Bilinmiyor',
+                    vip: s.isVip
+                };
+            });
+
+            // 3. Ekranda Aktif Olan Öğrencinin Detayları (Sıfır Gecikme İçin)
+            let activeStudentDetails = null;
+            if (selectedStudent) {
+                const s = selectedStudent;
                 const c = latestState.current.classes.find(cls => cls.id === s.classId);
                 
                 let readableGrades = {};
@@ -515,26 +528,31 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                             Object.entries(cols).forEach(([colId, status]) => {
                                 const sc = (t.subColumns || []).find(x => x.id === colId);
                                 if (sc) {
-                                    readableGrades[t.title][sc.title] = status; // done, missing, vs.
+                                    let statusText = status;
+                                    if (status === 'done') statusText = 'Yapıldı';
+                                    else if (status === 'missing') statusText = 'Eksik';
+                                    else if (status === 'assigned') statusText = 'Ödev Verildi';
+                                    else if (status === 'exempt') statusText = 'Muaf';
+                                    readableGrades[t.title][sc.title] = statusText;
                                 }
                             });
                         }
                     });
                 }
+                
+                const formattedExams = (s.exams || []).map((e, index) => `${index + 1}. Deneme: ${e.net} Net`);
 
-                return {
-                    id: s.id,
+                activeStudentDetails = {
                     isim: s.name,
-                    sinif: c ? c.className : 'Bilinmiyor',
-                    vip: s.isVip,
                     notlar: readableGrades,
-                    denemeler: (s.exams || []).map(e => e.net)
+                    denemeler: formattedExams
                 };
-            });
+            }
 
             const dbString = JSON.stringify({
                 MUFREDAT: curriculums,
-                OGRENCILER: studentsDump
+                OGRENCI_FIHRISTI: studentsIndex,
+                AKTIF_OGRENCI: activeStudentDetails
             });
 
             // Jarvis Persona ve Bağlamı
@@ -544,10 +562,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             Kullanıcı sana sesli olarak komut verecek veya soru soracak. Kısa, net ve anlaşılır cevaplar ver.
             ÖNEMLİ KURAL: Kesinlikle iç düşüncelerini (thinking process), İngilizce planlarını veya **Crafting...** gibi analizlerini ÇIKTI OLARAK VERME. SADECE doğrudan söyleyeceğin cevabı Türkçe olarak ilet.
             
-            [SİSTEM VERİTABANI - ÖĞRENCİLER VE NOTLAR]
+            [SİSTEM VERİTABANI ÖZETİ]
             ${dbString}
             
-            KURAL: Yukarıdaki veritabanında tüm öğrencilerin güncel durumu, deneme netleri ve sınıf bilgileri yer almaktadır. Bir öğrenci hakkında bilgi sorulduğunda veya "Merve'yi bul" dendiğinde ASLA FONKSİYON ÇAĞIRMA. Sadece doğrudan yukarıdaki veriye bakarak "Hocam Merve 11-A'da, deneme notu 65" veya "İki tane Merve var, hangisi?" diye doğrudan SESLİ CEVAP VER. Fonksiyonları SADECE sistemi değiştirmek (ödev işaretlemek) veya arayüzde ekranı değiştirmek (öğrencinin profilini açmak) için kullan.`;
+            KURAL 1: Yukarıdaki veritabanında tüm öğrencilerin fihristi (ad, sınıf, id) yer almaktadır. Sadece AKTIF_OGRENCI kısmında ekrandaki öğrencinin tüm notları peşin olarak bulunur. Eğer kullanıcı AKTIF_OGRENCI hakkında soru sorarsa doğrudan SESLİ CEVAP VER.
+            KURAL 2: Eğer kullanıcı ekranda OLMAYAN (OGRENCI_FIHRISTI'nde bulunan ama AKTIF_OGRENCI olmayan) bir öğrencinin deneme notlarını veya ödev durumunu sorarsa, BİLGİ VERMEDEN ÖNCE "get_student_details" fonksiyonunu çağır. ÇAĞIRIRKEN her zaman sesli olarak "Hemen sisteme bakıyorum hocam, bir saniye..." gibi bir bekleme cümlesi kur. Böylece kullanıcı verinin çekildiğini anlar.
+            KURAL 3: Sisteme müdahale etmek (ödev işaretlemek vs.) veya ekrandaki öğrenciyi değiştirmek (Örn: Merve'yi bul) için "apply_system_action" aracını kullan.`;
 
             // ════════ TOOL (FONKSİYON) TANIMLAMALARI ════════
             const tools = [
@@ -581,6 +601,17 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         },
                         required: ["action_type"]
                     }
+                },
+                {
+                    name: "get_student_details",
+                    description: "Ekranda açık olmayan (AKTIF_OGRENCI olmayan) bir öğrencinin ödev notlarına veya deneme sonuçlarına bakmak için kullanılır. Bunu çağırmadan önce mutlaka sesli olarak 'Hemen kontrol ediyorum hocam...' gibi bir şey söyle.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            student_id: { type: "STRING", description: "Verisi çekilecek öğrencinin ID'si." }
+                        },
+                        required: ["student_id"]
+                    }
                 }
             ];
 
@@ -591,7 +622,46 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 const state = latestState.current;
 
                 try {
-                    if (name === "apply_system_action") {
+                    if (name === "get_student_details") {
+                        const student = state.allStudents.find(s => String(s.id) === String(args.student_id));
+                        if (!student) {
+                            response = { success: false, message: "Öğrenci bulunamadı." };
+                        } else {
+                            const c = state.classes.find(cls => cls.id === student.classId);
+                            let readableGrades = {};
+                            if (c && c.topics && student.grades) {
+                                Object.entries(student.grades).forEach(([topicId, cols]) => {
+                                    const t = c.topics.find(x => x.id === topicId);
+                                    if (t) {
+                                        readableGrades[t.title] = {};
+                                        Object.entries(cols).forEach(([colId, status]) => {
+                                            const sc = (t.subColumns || []).find(x => x.id === colId);
+                                            if (sc) {
+                                                let statusText = status;
+                                                if (status === 'done') statusText = 'Yapıldı';
+                                                else if (status === 'missing') statusText = 'Eksik';
+                                                else if (status === 'assigned') statusText = 'Ödev Verildi';
+                                                else if (status === 'exempt') statusText = 'Muaf';
+                                                readableGrades[t.title][sc.title] = statusText;
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                            
+                            const formattedExams = (student.exams || []).map((e, index) => `${index + 1}. Deneme: ${e.net} Net`);
+                            
+                            response = {
+                                success: true,
+                                data: {
+                                    isim: student.name,
+                                    notlar: readableGrades,
+                                    denemeler: formattedExams
+                                },
+                                instruction: "Veriler başarıyla çekildi. Bu verilere bakarak kullanıcıya cevap ver."
+                            };
+                        }
+                    } else if (name === "apply_system_action") {
                         if (args.action_type === "save_and_close") {
                             applyChangesRef.current?.();
                             response = { success: true, message: "Veriler kaydedildi ve sistem kapatılıyor. Kullanıcıya işlemi başardığını onayla." };
