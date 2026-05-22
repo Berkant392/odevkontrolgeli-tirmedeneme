@@ -70,7 +70,7 @@ const turkishNormalize = (text) => {
 // 🛠️ GELİŞTİRİLMİŞ DURUM TESPİTİ (Karışıklıkları Önler)
 const detectStatus = (text) => {
     if (!text) return null;
-    
+
     const normalizedText = turkishNormalize(text);
 
     // 1. Aşama: Tam Kelime/Öbek Eşleşmesi (En Güvenilir)
@@ -212,7 +212,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         // 2. Fuse.js ile Bulanık Arama
         const fuse = new Fuse(allStudents, { keys: ['name'], threshold: 0.3, ignoreLocation: true });
         const results = fuse.search(inputText).map(r => r.item);
-        
+
         if (results.length > 0) return { students: results.slice(0, 5), isSingle: results.length === 1 };
         return { students: [], isSingle: false };
     }, [allStudents]);
@@ -242,7 +242,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 textNorm = textNorm.replace(new RegExp(short, 'g'), full);
             });
         }
-        
+
         let bestMatch = null;
         let maxLength = -1;
         let maxMatchedWords = -1;
@@ -260,20 +260,20 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             }
         });
 
-        if (bestMatch) return bestMatch; 
+        if (bestMatch) return bestMatch;
 
         // 2. KELİME BAZLI ARAMA (Eğer cümlenin bir kısmı eksikse)
         const inputWords = textNorm.split(/\s+/).filter(w => w.length > 1);
-        
+
         items.forEach(item => {
             const itemTitle = getSafeText(item.title).toLocaleLowerCase('tr-TR');
             const itemNorm = turkishNormalize(itemTitle);
             const itemWords = itemNorm.split(/\s+/).filter(w => w.length > 1);
-            
+
             let matchedWords = 0;
             inputWords.forEach(iw => {
-                if(itemWords.some(tw => tw === iw || tw.includes(iw) || iw.includes(tw))) {
-                   matchedWords++; 
+                if (itemWords.some(tw => tw === iw || tw.includes(iw) || iw.includes(tw))) {
+                    matchedWords++;
                 }
             });
 
@@ -291,7 +291,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         // 3. FUSE.JS (Son çare, hafif esnek arama)
         const fuse = new Fuse(items, {
             keys: ['title'],
-            threshold: 0.35, 
+            threshold: 0.35,
             ignoreLocation: true,
             minMatchCharLength: 2
         });
@@ -321,7 +321,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             }
             return;
         }
-        
+
         if (normText.match(/\b(ogrenci degistir|yeni ogrenci|ogrenci ara|baska ogrenci|degistir)\b/)) {
             handleResetStudent();
             return;
@@ -352,7 +352,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             if (searchResult.isSingle) {
                 const student = searchResult.students[0];
                 const targetClass = (classes || []).find(c => c.id === student.classId);
-                
+
                 setFoundStudents([student]);
                 setSelectedStudent(student);
                 setFoundTopics(targetClass?.topics || []);
@@ -370,7 +370,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         const status = detectStatus(text);
         const targetClass = (classes || []).find(c => c.id === selectedStudent.classId);
         const topics = targetClass?.topics || [];
-        
+
         let targetTopic = null;
 
         // 1. Önce Konuyu Bul (Sıra numarası veya İsim ile)
@@ -397,7 +397,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         // Konu adını metinden çıkararak sadece işlem kısmını bırakalım ki yanlış eşleşmesin
         const topicTitleNorm = turkishNormalize(getSafeText(targetTopic.title));
         const textWithoutTopic = normText.replace(topicTitleNorm, "").trim();
-        
+
         const hasAllKeyword = textWithoutTopic.match(/\b(tumunu|tamamini|hepsini|butun|tum|tumu|tamami|hepsi|hepsine|tumune|butunu|hepsin|tamamin)\b/);
         const hasNoneKeyword = textWithoutTopic.match(/\b(hicbiri|hicbirini|hicbirine|hic biri|hicbir|hic)\b/);
         const isBulkAction = hasAllKeyword || hasNoneKeyword;
@@ -421,7 +421,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         }
 
         // DURUM VARSA İŞLE
-        
+
         // A) "Tümü" veya "Hiçbiri" denmişse, o konudaki tüm kaynakları işaretle
         if (isBulkAction) {
             const finalStatus = hasNoneKeyword ? 'missing' : status;
@@ -431,16 +431,16 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             setJarvisFeedback(`✅ ${targetTopic.title} altındaki tüm kaynaklar "${finalStatus}" yapıldı.`);
             autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
             return;
-        } 
-        
+        }
+
         // B) Sadece 1 kaynak varsa direkt işaretle
         if (subColumnsCount === 1) {
             handleDraftGradeChangeRef.current?.(selectedStudent.id, subColumns[0].id, status);
             setJarvisFeedback(`✅ ${targetTopic.title} -> ${subColumns[0].title}: "${status}" kaydedildi.`);
             autoListenTimerRef.current = setTimeout(() => startListeningRef.current?.(), 1500);
             return;
-        } 
-        
+        }
+
         // C) Birden fazla kaynak varsa, kaynağı bul
         const targetCol = findTopicOrSource(subColumns, textWithoutTopic, 'source');
         if (targetCol) {
@@ -525,29 +525,29 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     parameters: {
                         type: "OBJECT",
                         properties: {
-                            action_type: { 
-                                type: "STRING", 
-                                description: "Yapılacak işlemin türü.", 
-                                enum: ["open_student_profile", "mark_homework"] 
+                            action_type: {
+                                type: "STRING",
+                                description: "Yapılacak işlemin türü.",
+                                enum: ["open_student_profile", "mark_homework", "save_and_close"]
                             },
-                            student_id: { 
-                                type: "STRING", 
-                                description: "İşlem yapılacak öğrencinin benzersiz ID'si (veritabanından bul)." 
+                            student_id: {
+                                type: "STRING",
+                                description: "İşlem yapılacak öğrencinin benzersiz ID'si (veritabanından bul)."
                             },
-                            topic_name: { 
-                                type: "STRING", 
-                                description: "Ödevin konusu (mark_homework için zorunlu)." 
+                            topic_name: {
+                                type: "STRING",
+                                description: "Ödevin konusu (mark_homework için zorunlu)."
                             },
-                            source_name: { 
-                                type: "STRING", 
-                                description: "Kaynak adı (Örn: Soru Bankası, Tümü). Belirtilmemişse boş bırak." 
+                            source_name: {
+                                type: "STRING",
+                                description: "Kaynak adı (Örn: Soru Bankası, Tümü). Belirtilmemişse boş bırak."
                             },
-                            status: { 
-                                type: "STRING", 
-                                description: "Ödevin durumu.", enum: ["yapıldı", "yapılmadı", "eksik"] 
+                            status: {
+                                type: "STRING",
+                                description: "Ödevin durumu.", enum: ["yapıldı", "yapılmadı", "eksik"]
                             }
                         },
-                        required: ["action_type", "student_id"]
+                        required: ["action_type"]
                     }
                 }
             ];
@@ -560,56 +560,65 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
 
                 try {
                     if (name === "apply_system_action") {
-                        const student = state.allStudents.find(s => String(s.id) === String(args.student_id));
-                        
-                        if (!student) {
-                            response = { success: false, message: "Geçersiz öğrenci ID'si." };
-                        } else if (args.action_type === "open_student_profile") {
-                            const targetClass = state.classes.find(c => c.id === student.classId);
-                            // Ekran güncellemeleri
-                            setSelectedStudent(student);
-                            setFoundStudents([student]);
-                            setFoundTopics(targetClass?.topics || []);
-                            setCommandMode('homework');
-                            response = { success: true, message: `${student.name} profili ekranda açıldı. Kullanıcıya işlemi başardığını onayla.` };
-                        } else if (args.action_type === "mark_homework") {
-                            const targetClass = state.classes.find(c => c.id === student.classId);
-                            const topics = targetClass?.topics || [];
-                            
-                            // Konu bulma
-                            const topicNorm = turkishNormalize(args.topic_name || "");
-                            let targetTopic = topics.find(t => turkishNormalize(getSafeText(t.title)).includes(topicNorm) || topicNorm.includes(turkishNormalize(getSafeText(t.title))));
-                            
-                            const topicOrderMatch = args.topic_name ? args.topic_name.match(/(\d+)/) : null;
-                            if (!targetTopic && topicOrderMatch) {
-                                const index = parseInt(topicOrderMatch[1]) - 1;
-                                if (topics[index]) targetTopic = topics[index];
-                            }
+                        if (args.action_type === "save_and_close") {
+                            applyChangesRef.current?.();
+                            response = { success: true, message: "Veriler kaydedildi ve sistem kapatılıyor. Kullanıcıya işlemi başardığını onayla." };
+                        } else {
+                            const student = state.allStudents.find(s => String(s.id) === String(args.student_id));
 
-                            if (!targetTopic) {
-                                response = { success: false, message: `"${args.topic_name}" adında bir konu bulunamadı. Kullanıcıdan tekrar etmesini iste.` };
-                            } else {
-                                const subCols = targetTopic.subColumns || [];
-                                let columnsToUpdate = [];
+                            if (!student) {
+                                response = { success: false, message: "Geçersiz öğrenci ID'si." };
+                            } else if (args.action_type === "open_student_profile") {
+                                const targetClass = state.classes.find(c => c.id === student.classId);
+                                // Ekran güncellemeleri
+                                setSelectedStudent(student);
+                                setFoundStudents([student]);
+                                setFoundTopics(targetClass?.topics || []);
+                                setCommandMode('homework');
+                                response = { success: true, message: `${student.name} profili ekranda açıldı. Kullanıcıya işlemi başardığını onayla.` };
+                            } else if (args.action_type === "mark_homework") {
+                                const targetClass = state.classes.find(c => c.id === student.classId);
+                                const topics = targetClass?.topics || [];
 
-                                if (!args.source_name || args.source_name.toLowerCase() === 'tümü' || args.source_name.toLowerCase() === 'hepsi') {
-                                    columnsToUpdate = subCols; // Tüm kaynakları işaretle
-                                } else {
-                                    const sourceNorm = turkishNormalize(args.source_name);
-                                    const matchedCol = subCols.find(c => turkishNormalize(getSafeText(c.title)).includes(sourceNorm));
-                                    if (matchedCol) {
-                                        columnsToUpdate = [matchedCol];
-                                    }
+                                // Konu bulma
+                                const topicNorm = turkishNormalize(args.topic_name || "");
+                                let targetTopic = topics.find(t => turkishNormalize(getSafeText(t.title)).includes(topicNorm) || topicNorm.includes(turkishNormalize(getSafeText(t.title))));
+
+                                const topicOrderMatch = args.topic_name ? args.topic_name.match(/(\d+)/) : null;
+                                if (!targetTopic && topicOrderMatch) {
+                                    const index = parseInt(topicOrderMatch[1]) - 1;
+                                    if (topics[index]) targetTopic = topics[index];
                                 }
 
-                                if (columnsToUpdate.length === 0) {
-                                    response = { success: false, message: `Konu bulundu ancak "${args.source_name}" adında bir kaynak bulunamadı.` };
+                                if (!targetTopic) {
+                                    response = { success: false, message: `"${args.topic_name}" adında bir konu bulunamadı. Kullanıcıdan tekrar etmesini iste.` };
                                 } else {
-                                    // Güncelleme işlemi
-                                    columnsToUpdate.forEach(col => {
-                                        handleDraftGradeChangeRef.current?.(student.id, targetTopic.id, col.id, args.status);
-                                    });
-                                    response = { success: true, message: `Başarılı! ${targetTopic.title} konusu için ${columnsToUpdate.length} kaynak "${args.status}" olarak işaretlendi. Kullanıcıya "Tamamdır, ödevi işaretledim" şeklinde onay ver.` };
+                                    const subCols = targetTopic.subColumns || [];
+                                    let columnsToUpdate = [];
+
+                                    if (!args.source_name || args.source_name.toLowerCase() === 'tümü' || args.source_name.toLowerCase() === 'hepsi') {
+                                        columnsToUpdate = subCols; // Tüm kaynakları işaretle
+                                    } else {
+                                        const sourceNorm = turkishNormalize(args.source_name);
+                                        const matchedCol = subCols.find(c => turkishNormalize(getSafeText(c.title)).includes(sourceNorm));
+                                        if (matchedCol) {
+                                            columnsToUpdate = [matchedCol];
+                                        }
+                                    }
+
+                                    if (columnsToUpdate.length === 0) {
+                                        response = { success: false, message: `Konu bulundu ancak "${args.source_name}" adında bir kaynak bulunamadı.` };
+                                    } else {
+                                        // Status Mapping
+                                        let finalStatus = 'done';
+                                        if (args.status === 'yapılmadı' || args.status === 'eksik') finalStatus = 'missing';
+
+                                        // Güncelleme işlemi
+                                        columnsToUpdate.forEach(col => {
+                                            handleDraftGradeChangeRef.current?.(student.id, col.id, finalStatus);
+                                        });
+                                        response = { success: true, message: `Başarılı! ${targetTopic.title} konusu için ${columnsToUpdate.length} kaynak "${args.status}" olarak işaretlendi. Kullanıcıya "Tamamdır, ödevi işaretledim" şeklinde onay ver.` };
+                                    }
                                 }
                             }
                         }
@@ -641,12 +650,12 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
     const stopListening = useCallback(() => {
         if (autoListenTimerRef.current) clearTimeout(autoListenTimerRef.current);
         if (processTimerRef.current) clearTimeout(processTimerRef.current);
-        
+
         if (geminiServiceRef.current) {
             geminiServiceRef.current.disconnect();
             geminiServiceRef.current = null;
         }
-        
+
         setIsListening(false);
         setIsProcessing(false);
         setJarvisFeedback("Mikrofon kapatıldı.");
@@ -715,11 +724,11 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 {/* ÜST RADAR */}
                 <div className="relative overflow-hidden bg-slate-50/70 border-b border-slate-100 p-6 flex flex-col items-center justify-center shrink-0">
                     <button onClick={onClose} className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors z-30">
-                        <X size={20}/>
+                        <X size={20} />
                     </button>
 
                     <div className="absolute top-5 left-6 flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-widest z-20">
-                        <TerminalSquare size={13}/> 
+                        <TerminalSquare size={13} />
                         {commandMode === 'student' ? '🔍 ÖĞRENCİ ARAMA MODU' : '📝 ÖDEV YÖNETİM MODU'}
                     </div>
 
@@ -764,7 +773,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                     onClick={handleResetStudent}
                                     className="flex items-center gap-1.5 text-[11px] font-black bg-purple-50 text-brandPurple border border-purple-200 px-4 py-2.5 rounded-xl hover:bg-brandPurple hover:text-white transition-all shadow-sm hover:shadow-md active:scale-95"
                                 >
-                                    <UserPlus size={14}/> YENİ ÖĞRENCİ ARA
+                                    <UserPlus size={14} /> YENİ ÖĞRENCİ ARA
                                 </button>
                             )}
                         </div>
@@ -779,8 +788,8 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                         )}
                         <div className="flex items-center gap-1.5 justify-center font-black text-slate-700 text-sm">
                             <span className="text-brandPurple font-black">
-                                {isProcessing ? <Loader2 size={14} className="animate-spin"/> : '>'}
-                            </span> 
+                                {isProcessing ? <Loader2 size={14} className="animate-spin" /> : '>'}
+                            </span>
                             {jarvisFeedback}
                         </div>
 
@@ -794,7 +803,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                                     className="mt-3 flex flex-wrap justify-center gap-1.5 max-w-full overflow-x-auto p-2.5 bg-white border border-slate-100 rounded-2xl shadow-sm"
                                 >
                                     <span className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1 px-2">
-                                        <HelpCircle size={12}/> Kaynak Seçin:
+                                        <HelpCircle size={12} /> Kaynak Seçin:
                                     </span>
                                     {pendingSources.map(col => (
                                         <button
@@ -858,7 +867,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     {foundStudents.length > 1 && !selectedStudent && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
                             <h4 className="text-slate-400 font-bold text-[10px] uppercase tracking-wider ml-1 flex items-center gap-2">
-                                <Search size={12}/> Eşleşen Öğrenciler — Lütfen Seçin
+                                <Search size={12} /> Eşleşen Öğrenciler — Lütfen Seçin
                             </h4>
                             {foundStudents.map(student => (
                                 <motion.button
@@ -959,7 +968,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     {!selectedStudent && foundStudents.length <= 1 && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full min-h-[180px] flex flex-col items-center justify-center text-slate-400 font-mono py-12">
                             <div className="relative mb-4">
-                                <Search size={48} className="text-slate-300"/>
+                                <Search size={48} className="text-slate-300" />
                                 {isListening && <span className="absolute inset-0 rounded-full bg-brandPurple/20 animate-ping"></span>}
                             </div>
                             <p className="text-xs font-black text-slate-400">
