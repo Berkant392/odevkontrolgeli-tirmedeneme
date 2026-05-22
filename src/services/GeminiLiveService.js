@@ -79,7 +79,11 @@ export class GeminiLiveService {
 
                 this.ws.onmessage = async (event) => {
                     try {
-                        const data = JSON.parse(event.data);
+                        let dataText = event.data;
+                        if (dataText instanceof Blob) {
+                            dataText = await dataText.text();
+                        }
+                        const data = JSON.parse(dataText);
                         console.log("📥 Sunucudan Gelen Mesaj:", data);
                         
                         if (data.setupComplete) {
