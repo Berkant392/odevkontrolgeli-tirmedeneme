@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, Loader2, UserPlus } from 'lucide-react';
+import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, Loader2, UserPlus, Camera } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import Fuse from 'fuse.js';
 import { GeminiLiveService } from '../../services/GeminiLiveService';
@@ -106,8 +106,14 @@ const AssistantModal = ({ classes, allTrials = [], updateClassInDb, onClose, ini
     const [draftGrades, setDraftGrades] = useState({});
     const [commandMode, setCommandMode] = useState(initialStudent ? 'homework' : 'student');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isCameraOn, setIsCameraOn] = useState(false);
+    const [reminders, setReminders] = useState(() => {
+        const saved = localStorage.getItem('jarvis_reminders');
+        return saved ? JSON.parse(saved) : [];
+    });
 
     // ════════ REFS ════════
+    const videoRef = useRef(null);
     const recognitionRef = useRef(null);
     const autoListenTimerRef = useRef(null);
     const processTimerRef = useRef(null); // Nefes alma ve duraklama payı için
@@ -210,6 +216,10 @@ const AssistantModal = ({ classes, allTrials = [], updateClassInDb, onClose, ini
             allTrials
         };
     }, [classes, allStudents, selectedStudent, draftGrades, allTrials]);
+
+    useEffect(() => {
+        localStorage.setItem('jarvis_reminders', JSON.stringify(reminders));
+    }, [reminders]);
 
     // ════════ USEEFFECT ════════
     useEffect(() => {
@@ -622,6 +632,10 @@ const AssistantModal = ({ classes, allTrials = [], updateClassInDb, onClose, ini
                 ? `Şu an ekranda "${selectedStudent.name}" adlı öğrencinin profili açık.` 
                 : 'Şu an genel arama modundayız, henüz öğrenci seçilmedi.';
             
+            const remindersText = reminders.length > 0 
+                ? "Mevcut Hatırlatıcıların:\n" + reminders.map((r, i) => `${i + 1}. ${r.text} (Tarih: ${r.date})`).join("\n") 
+                : "Şu an için aktif bir hatırlatıcın bulunmuyor.";
+
             const prompt = `KİMLİĞİN:
 Sen Berkant Hoca'nın eğitim platformundaki yapay zeka asistanı JARVİS'sin.
 Adın Jarvis. Sen bir Google ürünü DEĞİLSİN. Kendini asla "Google asistanı", "AI model", "language model" olarak tanıtma.
@@ -629,6 +643,8 @@ Sana "Sen kimsin?" diye sorulursa "Ben Jarvis, Berkant Hoca'nın eğitim platfor
 Türkçeyi kusursuz, kısa ve doğal konuş. Akademik ama samimi ol.
 
 MEVCUT BAĞLAM: ${contextText}
+
+${remindersText}
 
 VERİ ERİŞİMİN:
 Aşağıdaki veritabanında TÜM sınıfların, TÜM öğrencilerin, TÜM ödevlerin (konular ve kaynaklar) ve TÜM deneme sonuçlarının tam listesi yer almaktadır.
@@ -646,6 +662,8 @@ KURALLAR VE GÖREVLERİN (ÇOK ÖNEMLİ):
 5. RAPORLAMA: Deneme netlerini ve ödev tamamlama oranını birleştirerek doğrudan veritabanından oku ve sesli cevap ver.
 6. SADECE sesli sohbet etme, sistemi değiştirmek istendiğinde KESİNLİKLE fonksiyon çağırarak sistemde aksiyon al!
 7. EKSİK BİLGİ (Needs Clarification): Kullanıcı ödevi işaretlemeni istediğinde KİMİN ödevi veya HANGİ KONU olduğu belirsizse, tahmin yürütme! Fonksiyonu eksik argümanlarla çağır, sistem sana "DİKKAT: Hangi öğrenci/konu?" uyarısı verecektir. O zaman kullanıcıya kibarca doğrudan sor ve cevabı bekle.
+8. HATIRLATICILAR: Kullanıcı bir şeyi hatırlatmanı isterse "manage_reminders" fonksiyonunu "add" action'ı ile çağır. Silmek isterse "delete" çağır.
+9. GÖRSEL ANALİZ: Kullanıcı sana bir şey gösterip soruyorsa (örn: "bu nedir", "nerede hata var"), kameradan görebildiğini bil ve gördüklerini analiz et.
 
 YASAKLAR:
 - İç düşüncelerini, planlarını, analizlerini ASLA söyleme.
@@ -685,6 +703,33 @@ YASAKLAR:
                             }
                         },
                         required: ["action_type"]
+                    }
+                },
+                {
+                    name: "manage_reminders",
+                    description: "Hatırlatıcı (To-Do) ekle, sil veya listele.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            action: {
+                                type: "STRING",
+                                description: "İşlem tipi: 'add', 'delete', 'list'",
+                                enum: ["add", "delete", "list"]
+                            },
+                            text: {
+                                type: "STRING",
+                                description: "Hatırlatılacak metin (sadece add için). Örn: 'Ahmet'in ödevini kontrol et'"
+                            },
+                            date: {
+                                type: "STRING",
+                                description: "Zaman (sadece add için). Örn: 'Yarın akşam'"
+                            },
+                            reminder_id: {
+                                type: "INTEGER",
+                                description: "Silinecek hatırlatıcının sırası/numarası (sadece delete için)"
+                            }
+                        },
+                        required: ["action"]
                     }
                 }
             ];
@@ -800,13 +845,27 @@ YASAKLAR:
                                         setJarvisFeedback(toastMsg);
                                         
                                         response = { success: true, message: `${getSafeText(targetTopic.title)} konusu için ${columnsToUpdate.length} kaynak "${args.status || 'yapıldı'}" olarak işaretlendi. Onay panelde bekliyor.` };
+                                        }
                                     }
                                 }
                             }
                         }
+                    } else if (name === "manage_reminders") {
+                        if (args.action === 'add') {
+                            const newReminder = { text: args.text, date: args.date || 'Belirtilmemiş' };
+                            setReminders(prev => [...prev, newReminder]);
+                            response = { success: true, message: `Hatırlatıcı eklendi: ${args.text}` };
+                            setJarvisFeedback(`Hatırlatıcı eklendi: ${args.text}`);
+                        } else if (args.action === 'delete') {
+                            const idx = (args.reminder_id || 1) - 1;
+                            setReminders(prev => prev.filter((_, i) => i !== idx));
+                            response = { success: true, message: "Hatırlatıcı silindi." };
+                            setJarvisFeedback("Hatırlatıcı silindi.");
+                        } else if (args.action === 'list') {
+                            response = { success: true, message: `Hatırlatıcılar: ${reminders.map((r,i) => (i+1)+". "+r.text).join(", ")}` };
+                        }
                     }
-                }
-            } catch (e) {
+                } catch (e) {
                     console.error("Tool Execution Error:", e);
                     response = { success: false, message: "Sistemde teknik bir hata oluştu: " + e.message };
                 }
@@ -826,7 +885,7 @@ YASAKLAR:
             if (connected) await geminiServiceRef.current.startAudioCapture();
         }
 
-    }, [selectedStudent]);
+    }, [selectedStudent, reminders]);
 
     startListeningRef.current = startListening;
 
@@ -906,6 +965,31 @@ YASAKLAR:
             >
                 {/* ÜST RADAR */}
                 <div className="relative overflow-hidden bg-slate-50/70 border-b border-slate-100 p-6 flex flex-col items-center justify-center shrink-0">
+                    
+                    {/* CAMERA BUTTON & VIEW */}
+                    <div className="absolute right-4 top-4 z-50 flex flex-col gap-2 items-end">
+                        {isCameraOn && (
+                            <div className="w-32 h-24 bg-black rounded-xl overflow-hidden border border-slate-700 shadow-md">
+                                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                            </div>
+                        )}
+                        <button
+                            onClick={async () => {
+                                if (isCameraOn) {
+                                    geminiServiceRef.current?.stopCameraCapture();
+                                    setIsCameraOn(false);
+                                } else {
+                                    const success = await geminiServiceRef.current?.startCameraCapture(videoRef.current);
+                                    if (success) setIsCameraOn(true);
+                                }
+                            }}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm group ${isCameraOn ? 'bg-emerald-500 shadow-emerald-200' : 'bg-slate-100 hover:bg-slate-200 border border-slate-200'}`}
+                            title="Kamerayı Aç/Kapat"
+                        >
+                            <Camera size={18} className={isCameraOn ? 'text-white' : 'text-slate-500 group-hover:text-slate-700'} />
+                        </button>
+                    </div>
+
                     <button onClick={onClose} className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors z-30">
                         <X size={20} />
                     </button>
