@@ -65,7 +65,14 @@ export class GeminiLiveService {
                             // Dinamik olarak bulduğumuz modeli atıyoruz
                             model: selectedModel,
                             generationConfig: {
-                                responseModalities: ["AUDIO"]
+                                responseModalities: ["AUDIO"],
+                                speechConfig: {
+                                    voiceConfig: {
+                                        prebuiltVoiceConfig: {
+                                            voiceName: "Aoede" // Neşeli ve daha enerjik kadın sesi
+                                        }
+                                    }
+                                }
                             },
                             systemInstruction: {
                                 parts: [{ text: systemInstruction }]
