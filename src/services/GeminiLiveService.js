@@ -234,10 +234,10 @@ export class GeminiLiveService {
 
         const msg = {
             realtimeInput: {
-                mediaChunks: [{
+                audio: {
                     mimeType: "audio/pcm;rate=16000",
                     data: base64Pcm
-                }]
+                }
             }
         };
         
@@ -405,10 +405,10 @@ export class GeminiLiveService {
 
             const msg = {
                 realtimeInput: {
-                    mediaChunks: [{
+                    video: {
                         mimeType: "image/jpeg",
                         data: base64Jpeg
-                    }]
+                    }
                 }
             };
             
