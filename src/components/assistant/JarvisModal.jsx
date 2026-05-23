@@ -92,7 +92,7 @@ const detectStatus = (text) => {
 // ═══════════════════════════════════════════════════════════════
 // 🎯 ANA BİLEŞEN
 // ═══════════════════════════════════════════════════════════════
-const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) => {
+const AssistantModal = ({ classes, allTrials = [], updateClassInDb, onClose, initialStudent }) => {
     // ════════ STATE ════════
     const [isListening, setIsListening] = useState(false);
     const [speechTranscript, setSpeechTranscript] = useState("");
@@ -142,13 +142,63 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
         }, 0);
     }, [draftGrades]);
 
+    const pendingChangesList = useMemo(() => {
+        const list = [];
+        Object.entries(draftGrades).forEach(([studentId, grades]) => {
+            const student = allStudents.find(s => String(s.id) === String(studentId));
+            if (!student) return;
+            const targetClass = classes.find(c => c.id === student.classId);
+            if (!targetClass) return;
+
+            Object.entries(grades).forEach(([colId, statusId]) => {
+                let topicTitle = "Bilinmeyen Konu";
+                let colTitle = "Bilinmeyen Kaynak";
+                (targetClass.topics || []).forEach(t => {
+                    const matchedCol = (t.subColumns || []).find(sc => sc.id === colId);
+                    if (matchedCol) {
+                        topicTitle = getSafeText(t.title);
+                        colTitle = getSafeText(matchedCol.title);
+                    }
+                });
+
+                list.push({
+                    studentId,
+                    studentName: student.name,
+                    colId,
+                    statusId,
+                    topicTitle,
+                    colTitle
+                });
+            });
+        });
+        return list;
+    }, [draftGrades, allStudents, classes]);
+
+    const discardChange = useCallback((studentId, colId) => {
+        setDraftGrades(prev => {
+            const next = { ...prev };
+            if (next[studentId]) {
+                const updatedStudentGrades = { ...next[studentId] };
+                delete updatedStudentGrades[colId];
+                if (Object.keys(updatedStudentGrades).length === 0) {
+                    delete next[studentId];
+                } else {
+                    next[studentId] = updatedStudentGrades;
+                }
+            }
+            return next;
+        });
+        setJarvisFeedback("Değişiklik iptal edildi.");
+    }, []);
+
     // ════════ LATEST STATE REFS FOR GEMINI ════════
     // Gemini Live API'nin fonksiyonlarında güncel state'i okuyabilmek için
     const latestState = useRef({
         classes: [],
         allStudents: [],
         selectedStudent: null,
-        draftGrades: {}
+        draftGrades: {},
+        allTrials: []
     });
 
     useEffect(() => {
@@ -156,9 +206,10 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             classes,
             allStudents,
             selectedStudent,
-            draftGrades
+            draftGrades,
+            allTrials
         };
-    }, [classes, allStudents, selectedStudent, draftGrades]);
+    }, [classes, allStudents, selectedStudent, draftGrades, allTrials]);
 
     // ════════ USEEFFECT ════════
     useEffect(() => {
@@ -512,6 +563,9 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 const ogrenciler = (cls.students || []).filter(Boolean).map(s => {
                     // ── Ödev durumları (FLAT grades yapısı: { colId: status }) ──
                     const odevler = {};
+                    let totalHomeworks = 0;
+                    let completedHomeworks = 0;
+
                     (cls.topics || []).forEach(topic => {
                         const konuAdi = getSafeText(topic.title);
                         odevler[konuAdi] = {};
@@ -519,23 +573,35 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                             const kaynakAdi = getSafeText(sc.title);
                             const rawStatus = s.grades?.[sc.id] || 'assigned';
                             odevler[konuAdi][kaynakAdi] = statusMap[rawStatus] || rawStatus;
+
+                            totalHomeworks++;
+                            if (rawStatus === 'done') {
+                                completedHomeworks++;
+                            }
                         });
                     });
                     
-                    // ── Deneme netleri ──
-                    const denemeler = (s.exams || []).map((e, i) => {
-                        if (typeof e === 'object' && e !== null) {
-                            return `${i + 1}. Deneme: ${e.net ?? e.score ?? e.puan ?? JSON.stringify(e)} Net`;
-                        }
-                        return `${i + 1}. Deneme: ${e} Net`;
+                    // ── Deneme netleri (Firestore trials koleksiyonundan) ──
+                    const studentTrials = (latestState.current.allTrials || []).filter(t => String(t.studentId) === String(s.id));
+                    const denemeler = studentTrials.map((e, i) => {
+                        return `${e.title || 'Deneme'} (${e.type || 'TYT'}): ${e.totalNet || 0} Net [Tarih: ${e.date || 'Belirtilmemiş'}]`;
                     });
+
+                    const totalNetSum = studentTrials.reduce((sum, t) => sum + (Number(t.totalNet) || 0), 0);
+                    const avgNet = studentTrials.length > 0 ? (totalNetSum / studentTrials.length).toFixed(2) : "0.00";
+                    const maxNet = studentTrials.length > 0 ? Math.max(...studentTrials.map(t => Number(t.totalNet) || 0)).toFixed(2) : "0.00";
+                    const completionRate = totalHomeworks > 0 ? ((completedHomeworks / totalHomeworks) * 100).toFixed(0) : "0";
                     
                     return {
                         id: s.id,
                         isim: s.name,
                         vip: cls.type === 'vip',
                         odevler,
-                        denemeler: denemeler.length > 0 ? denemeler : ['Henüz deneme girilmemiş']
+                        denemeler: denemeler.length > 0 ? denemeler : ['Henüz deneme girilmemiş'],
+                        ortalamaNet: avgNet + " Net",
+                        enYuksekNet: maxNet + " Net",
+                        toplamDenemeSayisi: studentTrials.length,
+                        odevTamamlamaOrani: `%${completionRate} (${completedHomeworks}/${totalHomeworks} ödev yapıldı)`
                     };
                 });
                 
@@ -982,25 +1048,131 @@ FONKSİYON KULLANIMI:
                         </motion.div>
                     )}
 
-                    {/* KİLİTLİ ÖĞRENCİ ÖDEV LİSTESİ */}
-                    {selectedStudent && foundStudents.length === 1 && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 pb-6">
-                            {/* ÖZET BAŞLIK */}
-                            <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedStudent.isVip ? 'bg-amber-100' : 'bg-purple-100'}`}>
-                                        <Lock size={18} className={selectedStudent.isVip ? 'text-amber-600' : 'text-brandPurple'} />
+                    {selectedStudent && foundStudents.length === 1 && (() => {
+                        const studentTrials = (allTrials || []).filter(t => String(t.studentId) === String(selectedStudent.id));
+                        const totalNetSum = studentTrials.reduce((sum, t) => sum + (Number(t.totalNet) || 0), 0);
+                        const avgNet = studentTrials.length > 0 ? (totalNetSum / studentTrials.length).toFixed(2) : "0.00";
+                        const maxNet = studentTrials.length > 0 ? Math.max(...studentTrials.map(t => Number(t.totalNet) || 0)).toFixed(2) : "0.00";
+
+                        // Homework completion stats
+                        const studentClass = (classes || []).find(c => c && c.id === selectedStudent.classId);
+                        let totalHomeworks = 0;
+                        let completedHomeworks = 0;
+                        if (studentClass) {
+                            const currentStudentData = studentClass.students?.find(s => s && s.id === selectedStudent.id);
+                            (studentClass.topics || []).forEach(topic => {
+                                (topic.subColumns || []).forEach(sc => {
+                                    totalHomeworks++;
+                                    const rawStatus = draftGrades[selectedStudent.id]?.[sc.id] !== undefined
+                                        ? draftGrades[selectedStudent.id]?.[sc.id]
+                                        : (currentStudentData?.grades?.[sc.id] || 'assigned');
+                                    if (rawStatus === 'done') {
+                                        completedHomeworks++;
+                                    }
+                                });
+                            });
+                        }
+                        const completionPercentage = totalHomeworks > 0 ? Math.round((completedHomeworks / totalHomeworks) * 100) : 0;
+
+                        return (
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 pb-6">
+                                {/* ÖZET BAŞLIK */}
+                                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedStudent.isVip ? 'bg-amber-100' : 'bg-purple-100'}`}>
+                                            <Lock size={18} className={selectedStudent.isVip ? 'text-amber-600' : 'text-brandPurple'} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-slate-700 text-sm">{selectedStudent.name}</h3>
+                                            <p className="text-[10px] font-bold text-slate-400">{selectedStudent.isVip ? 'VIP Özel Ders' : selectedStudent.className}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 className="font-black text-slate-700 text-sm">{selectedStudent.name}</h3>
-                                        <p className="text-[10px] font-bold text-slate-400">{selectedStudent.isVip ? 'VIP Özel Ders' : selectedStudent.className}</p>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-bold text-slate-400">Değişiklik</p>
+                                        <p className="text-lg font-black text-brandPurple">{changeCount}</p>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-bold text-slate-400">Değişiklik</p>
-                                    <p className="text-lg font-black text-brandPurple">{changeCount}</p>
+
+                                {/* PREMİUM İSTATİSTİK VE ANALİZ KARTI */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/30 border border-indigo-100 rounded-2xl p-3.5 flex flex-col justify-between shadow-sm">
+                                        <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-wide">Ortalama Net</span>
+                                        <span className="text-lg font-black text-indigo-700 mt-1">{avgNet} <span className="text-[10px] font-normal text-indigo-500">TYT</span></span>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/30 border border-emerald-100 rounded-2xl p-3.5 flex flex-col justify-between shadow-sm">
+                                        <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wide">En Yüksek Net</span>
+                                        <span className="text-lg font-black text-emerald-700 mt-1">{maxNet} <span className="text-[10px] font-normal text-emerald-500">TYT</span></span>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-purple-50 to-purple-100/30 border border-purple-100 rounded-2xl p-3.5 flex flex-col justify-between shadow-sm">
+                                        <span className="text-[9px] font-bold text-purple-500 uppercase tracking-wide">Deneme Sayısı</span>
+                                        <span className="text-lg font-black text-purple-700 mt-1">{studentTrials.length} <span className="text-[10px] font-normal text-purple-500">Adet</span></span>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-amber-50 to-amber-100/30 border border-amber-100 rounded-2xl p-3.5 flex flex-col justify-between shadow-sm">
+                                        <span className="text-[9px] font-bold text-amber-500 uppercase tracking-wide">Ödev Durumu</span>
+                                        <span className="text-lg font-black text-amber-700 mt-1">%{completionPercentage} <span className="text-[10px] font-normal text-amber-500">({completedHomeworks}/{totalHomeworks})</span></span>
+                                    </div>
                                 </div>
-                            </div>
+
+                                {/* SON DENEME SONUÇLARI */}
+                                {studentTrials.length > 0 && (
+                                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                                        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                            📈 Son Deneme Sonuçları
+                                        </h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {[...studentTrials].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3).map((trial, i) => (
+                                                <div key={trial.id || i} className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                                                    <span className="text-[9px] font-black text-slate-500 uppercase">{trial.type}</span>
+                                                    <span className="text-xs font-bold text-slate-700">{trial.title || 'Deneme'}</span>
+                                                    <span className="bg-brandPurple/10 text-brandPurple font-black text-[10px] px-2 py-0.5 rounded-full">{trial.totalNet} Net</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* YAPAY ZEKA ONAY BEKLEYENLER PANELI */}
+                                {pendingChangesList.length > 0 && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 15 }} 
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="bg-purple-50/50 border border-purple-200 rounded-2xl p-4 shadow-sm"
+                                    >
+                                        <div className="flex items-center justify-between border-b border-purple-100 pb-2 mb-3">
+                                            <h4 className="text-[10px] font-black text-purple-700 uppercase tracking-wider flex items-center gap-2">
+                                                🔔 YAPAY ZEKA DEĞİŞİKLİKLERİ (ONAY BEKLİYOR)
+                                            </h4>
+                                            <span className="text-[9px] font-black bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full">{pendingChangesList.length} İşlem</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {pendingChangesList.map((change, idx) => {
+                                                const opt = STATUS_OPTIONS.find(o => o.id === change.statusId);
+                                                return (
+                                                    <div key={idx} className="bg-white border border-purple-100 rounded-xl p-3 flex items-center justify-between gap-3 shadow-sm">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs font-black text-slate-700 truncate">{change.studentName}</p>
+                                                            <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                                                                {change.topicTitle} → <span className="font-bold text-slate-500">{change.colTitle}</span>
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${lightStatusStyles[change.statusId] || 'bg-slate-100 text-slate-500'}`}>
+                                                                {opt?.label || change.statusId}
+                                                            </span>
+                                                            <button 
+                                                                onClick={() => discardChange(change.studentId, change.colId)}
+                                                                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors active:scale-90"
+                                                                title="Değişikliği Reddet"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </motion.div>
+                                )}
 
                             {sortedFoundTopics.map((topic, topicIndex) => (
                                 <motion.div
@@ -1049,7 +1221,8 @@ FONKSİYON KULLANIMI:
                                 </motion.div>
                             ))}
                         </motion.div>
-                    )}
+                    );
+                })()}
 
                     {/* BOŞ DURUM */}
                     {!selectedStudent && foundStudents.length <= 1 && (
