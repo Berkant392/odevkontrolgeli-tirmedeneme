@@ -343,6 +343,48 @@ export class GeminiLiveService {
         }
     }
 
+    async startScreenCapture(videoElement) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.warn("WebSocket hazır değil, ekran paylaşımı başlatılamadı.");
+            return false;
+        }
+
+        try {
+            console.log("🖥️ Ekran paylaşımı izni isteniyor...");
+            this.videoStream = await navigator.mediaDevices.getDisplayMedia({ 
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } } 
+            });
+            console.log("✅ Ekran paylaşımı izni alındı.");
+            
+            // Kullanıcı tarayıcının kendi arayüzünden paylaşımı durdurursa
+            this.videoStream.getVideoTracks()[0].onended = () => {
+                if (this.onScreenCaptureEnded) this.onScreenCaptureEnded();
+                this.stopCameraCapture();
+            };
+
+            if (videoElement) {
+                videoElement.srcObject = this.videoStream;
+            }
+
+            // Kare yakalamak için canvas oluştur
+            this.videoCanvas = document.createElement('canvas');
+            this.videoCanvas.width = 1280;
+            this.videoCanvas.height = 720;
+            this.videoCtx = this.videoCanvas.getContext('2d');
+
+            // Saniyede 1 kare (1 fps) gönder
+            this.videoInterval = setInterval(() => {
+                this.sendVideoFrame(videoElement);
+            }, 1000);
+
+            return true;
+        } catch (error) {
+            console.error("Ekran paylaşımı hatası:", error);
+            this.onStatusChange('error', "Ekran paylaşımı reddedildi veya hata oluştu.");
+            return false;
+        }
+    }
+
     sendVideoFrame(videoElement) {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.videoCtx || !videoElement) return;
 
@@ -369,6 +411,14 @@ export class GeminiLiveService {
             
             this.ws.send(JSON.stringify(msg));
         }
+    }
+
+    getSnapshotBase64() {
+        if (this.videoCanvas && this.videoCtx) {
+            // Tam veya yüksek kalitede almak için 0.9 kullanıyoruz
+            return this.videoCanvas.toDataURL('image/jpeg', 0.9);
+        }
+        return null;
     }
 
     stopCameraCapture() {
