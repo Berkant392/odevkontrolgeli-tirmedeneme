@@ -38,7 +38,7 @@ import TrialTracker from './components/views/TrialTracker';
 
 const App = () => {
     // 🔥 DATA HOOKS
-    const { classes, libraryItems, notifications, dbTeacherPin, countdownConfig } = useFirebaseData();
+    const { classes, libraryItems, notifications, allTrials, dbTeacherPin, countdownConfig } = useFirebaseData();
     const { isOnline, deferredPrompt, isStandalone } = usePWA();
 
     const [currentUserRole, setCurrentUserRole] = useState(null);
@@ -939,7 +939,7 @@ const App = () => {
 
 
 
-            {showAssistant && <JarvisModal classes={classes} updateClassInDb={updateClassInDb} onClose={() => setShowAssistant(false)} initialStudent={selectedStudentForView} />}
+            {showAssistant && <JarvisModal classes={classes} allTrials={allTrials} updateClassInDb={updateClassInDb} onClose={() => setShowAssistant(false)} initialStudent={selectedStudentForView} />}
 
             {/* BİLGİ GİRİŞ/DÜZENLEME MODALLARI */}
             {modalType && (
