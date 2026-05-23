@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, Loader2, UserPlus, Camera } from 'lucide-react';
+import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, Loader2, UserPlus, Camera, Monitor, Minimize2, Maximize2, BookOpen, Download } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
+import { jsPDF } from "jspdf";
 import Fuse from 'fuse.js';
 import { GeminiLiveService } from '../../services/GeminiLiveService';
 
@@ -107,8 +108,17 @@ const AssistantModal = ({ classes, allTrials = [], updateClassInDb, onClose, ini
     const [commandMode, setCommandMode] = useState(initialStudent ? 'homework' : 'student');
     const [isProcessing, setIsProcessing] = useState(false);
     const [isCameraOn, setIsCameraOn] = useState(false);
+    const [isScreenShared, setIsScreenShared] = useState(false);
+    const [isMiniMode, setIsMiniMode] = useState(false);
+    const [showNotesView, setShowNotesView] = useState(false);
+    
     const [reminders, setReminders] = useState(() => {
         const saved = localStorage.getItem('jarvis_reminders');
+        return saved ? JSON.parse(saved) : [];
+    });
+    
+    const [jarvisNotes, setJarvisNotes] = useState(() => {
+        const saved = localStorage.getItem('jarvis_notes');
         return saved ? JSON.parse(saved) : [];
     });
 
@@ -220,6 +230,22 @@ const AssistantModal = ({ classes, allTrials = [], updateClassInDb, onClose, ini
     useEffect(() => {
         localStorage.setItem('jarvis_reminders', JSON.stringify(reminders));
     }, [reminders]);
+
+    useEffect(() => {
+        localStorage.setItem('jarvis_notes', JSON.stringify(jarvisNotes));
+    }, [jarvisNotes]);
+
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (jarvisNotes.length > 0) {
+                e.preventDefault();
+                e.returnValue = "Kaydedilmemiş akıllı notlarınız var! PDF olarak indirmek isteyebilirsiniz.";
+                return e.returnValue;
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [jarvisNotes]);
 
     // ════════ USEEFFECT ════════
     useEffect(() => {
@@ -663,7 +689,7 @@ KURALLAR VE GÖREVLERİN (ÇOK ÖNEMLİ):
 6. SADECE sesli sohbet etme, sistemi değiştirmek istendiğinde KESİNLİKLE fonksiyon çağırarak sistemde aksiyon al!
 7. EKSİK BİLGİ (Needs Clarification): Kullanıcı ödevi işaretlemeni istediğinde KİMİN ödevi veya HANGİ KONU olduğu belirsizse, tahmin yürütme! Fonksiyonu eksik argümanlarla çağır, sistem sana "DİKKAT: Hangi öğrenci/konu?" uyarısı verecektir. O zaman kullanıcıya kibarca doğrudan sor ve cevabı bekle.
 8. HATIRLATICILAR: Kullanıcı bir şeyi hatırlatmanı isterse "manage_reminders" fonksiyonunu "add" action'ı ile çağır. Silmek isterse "delete" çağır.
-9. GÖRSEL ANALİZ: Kullanıcı sana bir şey gösterip soruyorsa (örn: "bu nedir", "nerede hata var"), kameradan görebildiğini bil ve gördüklerini analiz et.
+9. GÖRSEL ANALİZ & NOT ALMA: Kullanıcı ekranını veya kamerasını paylaşıyorsa söylediklerini (veya "bunu not al" komutunu) "take_note" fonksiyonu ile not al. O anki ekran görüntüsü otomatik olarak nota eklenecektir.
 
 YASAKLAR:
 - İç düşüncelerini, planlarını, analizlerini ASLA söyleme.
@@ -730,6 +756,20 @@ YASAKLAR:
                             }
                         },
                         required: ["action"]
+                    }
+                },
+                {
+                    name: "take_note",
+                    description: "Kullanıcının gösterdiği veya söylediği önemli bir şeyi resimli olarak not al.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            note_text: {
+                                type: "STRING",
+                                description: "Kaydedilecek not metni (veya notun başlığı/içeriği)."
+                            }
+                        },
+                        required: ["note_text"]
                     }
                 }
             ];
@@ -864,6 +904,17 @@ YASAKLAR:
                         } else if (args.action === 'list') {
                             response = { success: true, message: `Hatırlatıcılar: ${reminders.map((r,i) => (i+1)+". "+r.text).join(", ")}` };
                         }
+                    } else if (name === "take_note") {
+                        const snapshot = geminiServiceRef.current.getSnapshotBase64();
+                        const newNote = {
+                            id: Date.now(),
+                            text: args.note_text,
+                            image: snapshot,
+                            date: new Date().toLocaleString('tr-TR')
+                        };
+                        setJarvisNotes(prev => [...prev, newNote]);
+                        response = { success: true, message: "Not ve o anki ekran görüntüsü başarıyla kaydedildi." };
+                        setJarvisFeedback("Akıllı not ve ekran görüntüsü kaydedildi 📝");
                     }
                 } catch (e) {
                     console.error("Tool Execution Error:", e);
@@ -956,48 +1007,94 @@ YASAKLAR:
     // JSX RENDER
     // ═══════════════════════════════════════════════════════════════
     return (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.97, y: 12 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.97, y: 12 }}
-                className="bg-white border border-slate-200 rounded-[2.2rem] w-full max-w-2xl overflow-hidden shadow-float flex flex-col max-h-[85vh]"
-            >
-                {/* ÜST RADAR */}
-                <div className="relative overflow-hidden bg-slate-50/70 border-b border-slate-100 p-6 flex flex-col items-center justify-center shrink-0">
+        <AnimatePresence>
+            <div className={`fixed inset-0 z-[200] flex transition-all duration-500 ${isMiniMode ? 'items-end justify-end p-4 pointer-events-none' : 'items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm'}`} onClick={!isMiniMode ? onClose : undefined}>
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.97, y: 12 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.97, y: 12 }}
+                    className={`bg-white border border-slate-200 overflow-hidden shadow-float flex flex-col pointer-events-auto transition-all duration-500 ${isMiniMode ? 'w-80 h-auto rounded-[2rem] shadow-2xl' : 'w-full max-w-4xl max-h-[90vh] rounded-[2rem] shadow-2xl'}`}
+                    onClick={(e) => e.stopPropagation()}
+                >
                     
-                    {/* CAMERA BUTTON & VIEW */}
-                    <div className="absolute right-4 top-4 z-50 flex flex-col gap-2 items-end">
-                        {isCameraOn && (
-                            <div className="w-32 h-24 bg-black rounded-xl overflow-hidden border border-slate-700 shadow-md">
+                    {/* ÜST RADAR / HEADER */}
+                    <div className="relative overflow-hidden bg-slate-50/90 backdrop-blur border-b border-slate-100 p-6 flex flex-col items-center justify-center shrink-0">
+                        
+                        {/* SAĞ ÜST KONTROLLER (CAMERA, MONITOR, MINI, CLOSE) */}
+                        <div className="absolute right-4 top-4 z-50 flex gap-2 items-center">
+                            
+                            {/* Not Defteri Butonu */}
+                            {!isMiniMode && (
+                                <button onClick={() => setShowNotesView(!showNotesView)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm group border ${showNotesView ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-indigo-200'}`} title="Notlarım">
+                                    <BookOpen size={18} />
+                                </button>
+                            )}
+
+                            {/* Ekran Paylaşımı Butonu */}
+                            <button
+                                onClick={async () => {
+                                    if (isScreenShared) {
+                                        geminiServiceRef.current?.stopCameraCapture(); // Aynı metodu kullanıyoruz
+                                        setIsScreenShared(false);
+                                    } else {
+                                        if (isCameraOn) setIsCameraOn(false);
+                                        const success = await geminiServiceRef.current?.startScreenCapture(videoRef.current);
+                                        if (success) setIsScreenShared(true);
+                                    }
+                                }}
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm group border ${isScreenShared ? 'bg-blue-500 text-white border-blue-600' : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-200'}`}
+                                title="Ekranı Paylaş"
+                            >
+                                <Monitor size={18} />
+                            </button>
+
+                            {/* Kamera Butonu */}
+                            <button
+                                onClick={async () => {
+                                    if (isCameraOn) {
+                                        geminiServiceRef.current?.stopCameraCapture();
+                                        setIsCameraOn(false);
+                                    } else {
+                                        if (isScreenShared) setIsScreenShared(false);
+                                        const success = await geminiServiceRef.current?.startCameraCapture(videoRef.current);
+                                        if (success) setIsCameraOn(true);
+                                    }
+                                }}
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm group border ${isCameraOn ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-200'}`}
+                                title="Kamerayı Aç/Kapat"
+                            >
+                                <Camera size={18} className={isCameraOn ? 'text-white' : 'text-slate-500 group-hover:text-slate-700'} />
+                            </button>
+
+                            {/* Mini Mod Butonu */}
+                            <button onClick={() => { setIsMiniMode(!isMiniMode); setShowNotesView(false); }} className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition-colors" title="Mini Mod">
+                                {isMiniMode ? <Maximize2 size={18} /> : <Minimize2 size={18} />}
+                            </button>
+
+                            {/* Kapat Butonu */}
+                            <button onClick={onClose} className="w-10 h-10 rounded-xl text-slate-400 flex items-center justify-center hover:text-slate-600 hover:bg-slate-100 transition-colors z-30" title="Kapat">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* GİZLİ VİDEO ÖNİZLEME (Mini Modda gizli) */}
+                        {(isCameraOn || isScreenShared) && !isMiniMode && (
+                            <div className="absolute left-4 top-4 w-32 h-24 bg-black rounded-xl overflow-hidden border border-slate-700 shadow-md z-40">
                                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                             </div>
                         )}
-                        <button
-                            onClick={async () => {
-                                if (isCameraOn) {
-                                    geminiServiceRef.current?.stopCameraCapture();
-                                    setIsCameraOn(false);
-                                } else {
-                                    const success = await geminiServiceRef.current?.startCameraCapture(videoRef.current);
-                                    if (success) setIsCameraOn(true);
-                                }
-                            }}
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm group ${isCameraOn ? 'bg-emerald-500 shadow-emerald-200' : 'bg-slate-100 hover:bg-slate-200 border border-slate-200'}`}
-                            title="Kamerayı Aç/Kapat"
-                        >
-                            <Camera size={18} className={isCameraOn ? 'text-white' : 'text-slate-500 group-hover:text-slate-700'} />
-                        </button>
-                    </div>
+                        
+                        {/* MİNİ MODDA VİDEO ÖNİZLEME */}
+                        {(isCameraOn || isScreenShared) && isMiniMode && (
+                            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+                                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                            </div>
+                        )}
 
-                    <button onClick={onClose} className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors z-30">
-                        <X size={20} />
-                    </button>
-
-                    <div className="absolute top-5 left-6 flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-widest z-20">
-                        <TerminalSquare size={13} />
-                        {commandMode === 'student' ? '🔍 ÖĞRENCİ ARAMA MODU' : '📝 ÖDEV YÖNETİM MODU'}
-                    </div>
+                        <div className={`absolute top-5 left-6 flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-widest z-20 ${isMiniMode ? 'hidden' : ''}`}>
+                            <TerminalSquare size={13} />
+                            {showNotesView ? '📖 AKILLI NOT DEFTERİ' : (commandMode === 'student' ? '🔍 ÖĞRENCİ ARAMA MODU' : '📝 ÖDEV YÖNETİM MODU')}
+                        </div>
 
                     {/* MIC RADAR */}
                     <div
@@ -1017,37 +1114,39 @@ YASAKLAR:
                         )}
                     </div>
 
-                    {/* AKTİF ÖĞRENCİ BAR */}
-                    <div className="w-full max-w-xl z-10 flex gap-2">
-                        <div className="flex-1 bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 flex items-center justify-between shadow-sm">
-                            <div className="flex items-center gap-2.5">
-                                <div className={`w-2.5 h-2.5 rounded-full ${selectedStudent ? 'bg-emerald-500' : isListening ? 'bg-amber-400 animate-pulse' : 'bg-slate-300'}`}></div>
-                                <span className="text-slate-400 font-medium">
-                                    {commandMode === 'student' ? 'Aranan:' : 'Aktif:'}
-                                </span>
-                                <span className="text-brandPurple font-black text-base">
-                                    {selectedStudent ? selectedStudent.name : "İsim bekleniyor..."}
-                                </span>
-                                {selectedStudent && (
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${selectedStudent.isVip ? 'bg-amber-100 text-amber-600 border border-amber-200' : 'bg-purple-100 text-brandPurple border border-purple-200'}`}>
-                                        {selectedStudent.isVip ? 'VIP' : selectedStudent.className}
+                    {/* AKTİF ÖĞRENCİ BAR (MİNİ MODDA GİZLİ) */}
+                    {!isMiniMode && (
+                        <div className="w-full max-w-xl z-10 flex gap-2">
+                            <div className="flex-1 bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 flex items-center justify-between shadow-sm">
+                                <div className="flex items-center gap-2.5">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${selectedStudent ? 'bg-emerald-500' : isListening ? 'bg-amber-400 animate-pulse' : 'bg-slate-300'}`}></div>
+                                    <span className="text-slate-400 font-medium">
+                                        {commandMode === 'student' ? 'Aranan:' : 'Aktif:'}
                                     </span>
+                                    <span className="text-brandPurple font-black text-base">
+                                        {selectedStudent ? selectedStudent.name : "İsim bekleniyor..."}
+                                    </span>
+                                    {selectedStudent && (
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${selectedStudent.isVip ? 'bg-amber-100 text-amber-600 border border-amber-200' : 'bg-purple-100 text-brandPurple border border-purple-200'}`}>
+                                            {selectedStudent.isVip ? 'VIP' : selectedStudent.className}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {selectedStudent && (
+                                    <button
+                                        onClick={handleResetStudent}
+                                        className="flex items-center gap-1.5 text-[11px] font-black bg-purple-50 text-brandPurple border border-purple-200 px-4 py-2.5 rounded-xl hover:bg-brandPurple hover:text-white transition-all shadow-sm hover:shadow-md active:scale-95"
+                                    >
+                                        <UserPlus size={14} /> YENİ ÖĞRENCİ ARA
+                                    </button>
                                 )}
                             </div>
-
-                            {selectedStudent && (
-                                <button
-                                    onClick={handleResetStudent}
-                                    className="flex items-center gap-1.5 text-[11px] font-black bg-purple-50 text-brandPurple border border-purple-200 px-4 py-2.5 rounded-xl hover:bg-brandPurple hover:text-white transition-all shadow-sm hover:shadow-md active:scale-95"
-                                >
-                                    <UserPlus size={14} /> YENİ ÖĞRENCİ ARA
-                                </button>
-                            )}
                         </div>
-                    </div>
+                    )}
 
                     {/* FEEDBACK ALANI */}
-                    <div className="z-10 text-center w-full px-4 min-h-[40px] flex flex-col justify-center items-center mt-3">
+                    <div className={`z-10 text-center w-full px-4 min-h-[40px] flex flex-col justify-center items-center ${isMiniMode ? 'mt-0' : 'mt-3'}`}>
                         {speechTranscript && (
                             <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[11px] text-slate-400 font-medium italic mb-1">
                                 "{speechTranscript}" {isProcessing && <span className="text-amber-500 not-italic ml-1">(İşleniyor...)</span>}
@@ -1127,8 +1226,59 @@ YASAKLAR:
                     </div>
                 </div>
 
-                {/* GÖREV MATRİSİ */}
+                {/* GÖREV MATRİSİ (MİNİ MODDA GİZLİ) */}
+                {!isMiniMode && (
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-slate-50/40 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    
+                    {/* NOTLAR GÖRÜNÜMÜ */}
+                    {showNotesView ? (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-black text-slate-700 flex items-center gap-2">
+                                    <BookOpen size={20} className="text-indigo-500" /> Akıllı Not Defteri
+                                </h3>
+                                {jarvisNotes.length > 0 && (
+                                    <button 
+                                        onClick={exportNotesToPDF}
+                                        className="flex items-center gap-2 bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-600 shadow-sm"
+                                    >
+                                        <Download size={14} /> PDF İNDİR
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {jarvisNotes.length === 0 ? (
+                                <div className="text-center py-12 text-slate-400 text-sm font-medium">
+                                    Henüz hiç not alınmamış. Jarvis'e "Şunu not al" demeyi deneyin.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {jarvisNotes.map(note => (
+                                        <div key={note.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col group relative">
+                                            {note.image && (
+                                                <div className="aspect-video w-full bg-slate-900 overflow-hidden relative">
+                                                    <img src={note.image} alt="Not Görseli" className="w-full h-full object-contain" />
+                                                </div>
+                                            )}
+                                            <div className="p-4 flex-1 flex flex-col justify-between">
+                                                <p className="text-sm font-medium text-slate-700 leading-relaxed mb-3">{note.text}</p>
+                                                <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
+                                                    <span className="text-[10px] font-bold text-slate-400">{note.date}</span>
+                                                    <button 
+                                                        onClick={() => setJarvisNotes(prev => prev.filter(n => n.id !== note.id))}
+                                                        className="text-[10px] font-bold text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        SİL
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </motion.div>
+                    ) : (
+                        <>
 
                     {/* ÇOKLU ÖĞRENCİ LİSTESİ */}
                     {foundStudents.length > 1 && !selectedStudent && (
@@ -1353,9 +1503,13 @@ YASAKLAR:
                             </p>
                         </motion.div>
                     )}
-                </div>
+                            </>
+                        )}
+                    </div>
+                )}
 
-                {/* ALT PANEL */}
+                {/* ALT PANEL (MİNİ MODDA GİZLİ) */}
+                {!isMiniMode && (
                 <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-between items-center gap-4 shrink-0">
                     <div className="flex flex-col">
                         <span className="text-[11px] font-bold text-slate-400 tracking-wide ml-1">{changeCount} Değişiklik</span>
@@ -1377,8 +1531,10 @@ YASAKLAR:
                         </button>
                     </div>
                 </div>
+                )}
             </motion.div>
         </div>
+        </AnimatePresence>
     );
 };
 
