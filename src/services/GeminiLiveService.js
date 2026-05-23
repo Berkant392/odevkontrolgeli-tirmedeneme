@@ -28,7 +28,7 @@ export class GeminiLiveService {
             this.onStatusChange('connecting', "Bağlanıyor...");
             
             // 1. Dinamik Model Bulma (Kullanıcının API Key'ine özel hangi Live modellerin açık olduğunu buluruz)
-            let selectedModel = "models/gemini-2.0-flash-exp"; // Yedek varsayılan
+            let selectedModel = "models/gemini-3.1-flash-live-preview"; // Yedek varsayılan olarak Gemini 3.0/3.1 ayarlandı
             try {
                 const modelResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${this.apiKey}`);
                 const modelData = await modelResp.json();
@@ -37,9 +37,18 @@ export class GeminiLiveService {
                         m.supportedGenerationMethods && m.supportedGenerationMethods.includes('bidiGenerateContent')
                     );
                     if (liveModels.length > 0) {
-                        // İlk desteklenen Live modelini otomatik seç
-                        selectedModel = liveModels[0].name;
-                        console.log("🎙️ Desteklenen Canlı Ses Modeli Bulundu:", selectedModel);
+                        // En akıllı ve gelişmiş Gemini 3 serisi modelini önceliklendir (Gemini 3.0 veya 3.1)
+                        const gemini3Models = liveModels.filter(m => m.name.includes('gemini-3'));
+                        
+                        if (gemini3Models.length > 0) {
+                            // Bulunan ilk Gemini 3 modelini seç
+                            selectedModel = gemini3Models[0].name;
+                            console.log("🚀 Daha Gelişmiş Gemini 3 Canlı Ses Modeli Bulundu:", selectedModel);
+                        } else {
+                            // Gemini 3 yoksa, desteklenen ilk modeli kullan (örneğin Gemini 2.0 veya 2.5)
+                            selectedModel = liveModels[0].name;
+                            console.log("🎙️ Desteklenen Canlı Ses Modeli Bulundu:", selectedModel);
+                        }
                     } else {
                         console.warn("⚠️ API Key'inize tanımlı bir BidiGenerateContent (Canlı Ses) modeli bulunamadı.");
                     }
