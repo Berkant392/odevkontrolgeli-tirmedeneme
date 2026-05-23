@@ -7,12 +7,14 @@ export const useFirebaseData = () => {
     const [classes, setClasses] = useState([]);
     const [libraryItems, setLibraryItems] = useState([]);
     const [notifications, setNotifications] = useState([]);
+    const [allTrials, setAllTrials] = useState([]);
     const [dbTeacherPin, setDbTeacherPin] = useState(DEFAULT_PIN);
     const [countdownConfig, setCountdownConfig] = useState({ targetDate: '2026-06-20T00:00:00', startDate: '2025-06-20T00:00:00', label: 'YKS 2026' });
 
     useEffect(() => {
         const unsubClasses = onSnapshot(collection(db, CLASSES_COLLECTION), (snap) => setClasses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const unsubLibrary = onSnapshot(collection(db, LIBRARY_COLLECTION), (snap) => setLibraryItems(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubTrials = onSnapshot(collection(db, 'trials'), (snap) => setAllTrials(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const qNotif = query(collection(db, NOTIFICATIONS_COLLECTION), orderBy('timestamp', 'desc'), limit(10));
         const unsubNotif = onSnapshot(qNotif, (snap) => setNotifications(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         
@@ -23,13 +25,14 @@ export const useFirebaseData = () => {
                 if (data.countdown) setCountdownConfig(data.countdown);
             }
         });
-        return () => { unsubClasses(); unsubLibrary(); unsubNotif(); unsubConfig(); };
+        return () => { unsubClasses(); unsubLibrary(); unsubTrials(); unsubNotif(); unsubConfig(); };
     }, []);
 
     return {
         classes,
         libraryItems,
         notifications,
+        allTrials,
         dbTeacherPin,
         countdownConfig
     };
