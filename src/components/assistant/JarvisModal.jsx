@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Save, TerminalSquare, ChevronRight, HelpCircle, Search, Lock, Loader2, UserPlus, Camera, Monitor, Minimize2, Maximize2, BookOpen, Download } from 'lucide-react';
+import { X, Search, UserPlus, Lock, Mic, Save, HelpCircle, AlertCircle, Camera, Monitor, TerminalSquare, Maximize2, Minimize2, BookOpen, Download, Loader2, ChevronRight, CheckCircle2, Circle, Clock } from 'lucide-react';
 import { STATUS_OPTIONS } from '../../utils/constants';
 import { jsPDF } from "jspdf";
 import Fuse from 'fuse.js';
@@ -1003,6 +1003,59 @@ YASAKLAR:
         setTimeout(() => startListeningRef.current?.(), 600);
     }, [classes]);
 
+    const exportNotesToPDF = () => {
+        const doc = new jsPDF();
+        let yPos = 20;
+
+        doc.setFontSize(22);
+        doc.setTextColor(79, 70, 229); // Indigo
+        doc.text("Jarvis Akilli Not Defteri", 105, yPos, { align: "center" });
+        yPos += 15;
+
+        jarvisNotes.forEach((note, index) => {
+            if (yPos > 270) {
+                doc.addPage();
+                yPos = 20;
+            }
+
+            doc.setFontSize(12);
+            doc.setTextColor(100, 116, 139); // Slate-500
+            doc.text(`${note.date}`, 20, yPos);
+            yPos += 7;
+
+            doc.setFontSize(14);
+            doc.setTextColor(30, 41, 59); // Slate-800
+            // Türkçe karakter uyumluluğu için basit replace (Gelecekte özel font yüklenebilir)
+            const sanitizedText = note.text
+                .replace(/ğ/g, 'g').replace(/Ğ/g, 'G')
+                .replace(/ü/g, 'u').replace(/Ü/g, 'U')
+                .replace(/ş/g, 's').replace(/Ş/g, 'S')
+                .replace(/ı/g, 'i').replace(/İ/g, 'I')
+                .replace(/ö/g, 'o').replace(/Ö/g, 'O')
+                .replace(/ç/g, 'c').replace(/Ç/g, 'C');
+                
+            const textLines = doc.splitTextToSize(sanitizedText, 170);
+            doc.text(textLines, 20, yPos);
+            yPos += (textLines.length * 7) + 5;
+
+            if (note.image) {
+                if (yPos > 220) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                try {
+                    doc.addImage(note.image, 'JPEG', 20, yPos, 170, 95);
+                    yPos += 105;
+                } catch (e) {
+                    console.error("Görsel PDF'e eklenirken hata:", e);
+                }
+            }
+            yPos += 10;
+        });
+
+        doc.save("Jarvis_Notlari.pdf");
+    };
+
     // ═══════════════════════════════════════════════════════════════
     // JSX RENDER
     // ═══════════════════════════════════════════════════════════════
@@ -1077,19 +1130,16 @@ YASAKLAR:
                             </button>
                         </div>
 
-                        {/* GİZLİ VİDEO ÖNİZLEME (Mini Modda gizli) */}
-                        {(isCameraOn || isScreenShared) && !isMiniMode && (
-                            <div className="absolute left-4 top-4 w-32 h-24 bg-black rounded-xl overflow-hidden border border-slate-700 shadow-md z-40">
-                                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                            </div>
-                        )}
-                        
-                        {/* MİNİ MODDA VİDEO ÖNİZLEME */}
-                        {(isCameraOn || isScreenShared) && isMiniMode && (
-                            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
-                                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                            </div>
-                        )}
+                        {/* VİDEO ÖNİZLEME (TEK REFERANS) */}
+                        <div className={`
+                            ${(isCameraOn || isScreenShared) ? 'block' : 'hidden'}
+                            ${isMiniMode 
+                                ? 'absolute inset-0 z-0 opacity-20 pointer-events-none' 
+                                : 'absolute left-4 top-4 w-32 h-24 bg-black rounded-xl overflow-hidden border border-slate-700 shadow-md z-40'
+                            }
+                        `}>
+                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                        </div>
 
                         <div className={`absolute top-5 left-6 flex items-center gap-2 text-slate-400 text-[10px] font-black tracking-widest z-20 ${isMiniMode ? 'hidden' : ''}`}>
                             <TerminalSquare size={13} />
