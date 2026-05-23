@@ -470,8 +470,21 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
             geminiServiceRef.current = new GeminiLiveService(
                 (type, text) => {
                     if (type === 'text') {
-                        // AI'nin iç düşüncelerini (örn: **Thinking**) filtrele
-                        const cleanText = text.replace(/\*\*[^*]+\*\*/g, '').replace(/I'm currently focused on.*/gi, '').trim();
+                        // ═══ GELİŞMİŞ İÇ DÜŞÜNCE FİLTRESİ ═══
+                        let cleanText = text
+                            .replace(/\*\*[^*]+\*\*/g, '')           // **Thinking**, **Crafting** vb.
+                            .replace(/\*[^*]+\*/g, '')               // *italik düşünceler*
+                            .replace(/```[\s\S]*?```/g, '')          // kod blokları
+                            .trim();
+                        
+                        // İngilizce cümle tespiti (AI'nın iç planlaması)
+                        const englishPatterns = /^(I'm |I am |I will |I need |I should |I'll |My |Let me |Okay,? |Sure,? |Now |First |The user|Crafting|Registered|Processing|Searching|Looking|Checking|Analyzing|Here'?s|This is|Based on)/i;
+                        const isMostlyEnglish = (cleanText.match(/[a-zA-Z]/g) || []).length > cleanText.length * 0.7;
+                        
+                        if (englishPatterns.test(cleanText) || (isMostlyEnglish && cleanText.length > 10)) {
+                            return; // İngilizce iç düşünce — gösterme
+                        }
+                        
                         if (cleanText.length > 0) {
                             setJarvisFeedback(cleanText);
                             setSpeechTranscript(prev => prev + " " + cleanText);
@@ -491,235 +504,207 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                 }
             );
 
-            // ════════ HİBRİT MİMARİ İÇİN VERİTABANI ÖZETİ ════════
+            // ════════ TAM BAĞLAM AJANI — VERİ TOPLAMA MOTORU ════════
             
-            // 1. Müfredat Bilgisi (Sınıflara göre konu ve kaynaklar) - (Genel fihrist)
-            const curriculums = latestState.current.classes.map(c => ({
-                sinif: c.className,
-                konular: (c.topics || []).map(t => ({
-                    ad: t.title,
-                    kaynaklar: (t.subColumns || []).map(sc => sc.title)
-                }))
-            }));
-
-            // 2. Öğrenci Fihristi (Sadece kimlik bilgileri, notlar/detaylar yok)
-            const studentsIndex = latestState.current.allStudents.map(s => {
-                const c = latestState.current.classes.find(cls => cls.id === s.classId);
-                return {
-                    id: s.id,
-                    isim: s.name,
-                    sinif: c ? c.className : 'Bilinmiyor',
-                    vip: s.isVip
-                };
-            });
-
-            // 3. Ekranda Aktif Olan Öğrencinin Detayları (Sıfır Gecikme İçin)
-            let activeStudentDetails = null;
-            if (selectedStudent) {
-                const s = selectedStudent;
-                const c = latestState.current.classes.find(cls => cls.id === s.classId);
-                
-                let readableGrades = {};
-                if (c && c.topics && s.grades) {
-                    Object.entries(s.grades).forEach(([topicId, cols]) => {
-                        const t = c.topics.find(x => x.id === topicId);
-                        if (t) {
-                            readableGrades[t.title] = {};
-                            Object.entries(cols).forEach(([colId, status]) => {
-                                const sc = (t.subColumns || []).find(x => x.id === colId);
-                                if (sc) {
-                                    let statusText = status;
-                                    if (status === 'done') statusText = 'Yapıldı';
-                                    else if (status === 'missing') statusText = 'Eksik';
-                                    else if (status === 'assigned') statusText = 'Ödev Verildi';
-                                    else if (status === 'exempt') statusText = 'Muaf';
-                                    readableGrades[t.title][sc.title] = statusText;
-                                }
-                            });
-                        }
+            const statusMap = { done: 'Yapıldı', missing: 'Eksik', assigned: 'Ödev Verildi', exempt: 'Muaf' };
+            
+            const fullDump = latestState.current.classes.map(cls => {
+                const ogrenciler = (cls.students || []).filter(Boolean).map(s => {
+                    // ── Ödev durumları (FLAT grades yapısı: { colId: status }) ──
+                    const odevler = {};
+                    (cls.topics || []).forEach(topic => {
+                        const konuAdi = getSafeText(topic.title);
+                        odevler[konuAdi] = {};
+                        (topic.subColumns || []).forEach(sc => {
+                            const kaynakAdi = getSafeText(sc.title);
+                            const rawStatus = s.grades?.[sc.id] || 'assigned';
+                            odevler[konuAdi][kaynakAdi] = statusMap[rawStatus] || rawStatus;
+                        });
                     });
-                }
+                    
+                    // ── Deneme netleri ──
+                    const denemeler = (s.exams || []).map((e, i) => {
+                        if (typeof e === 'object' && e !== null) {
+                            return `${i + 1}. Deneme: ${e.net ?? e.score ?? e.puan ?? JSON.stringify(e)} Net`;
+                        }
+                        return `${i + 1}. Deneme: ${e} Net`;
+                    });
+                    
+                    return {
+                        id: s.id,
+                        isim: s.name,
+                        vip: cls.type === 'vip',
+                        odevler,
+                        denemeler: denemeler.length > 0 ? denemeler : ['Henüz deneme girilmemiş']
+                    };
+                });
                 
-                const formattedExams = (s.exams || []).map((e, index) => `${index + 1}. Deneme: ${e.net} Net`);
-
-                activeStudentDetails = {
-                    isim: s.name,
-                    notlar: readableGrades,
-                    denemeler: formattedExams
+                return {
+                    sinif: cls.className,
+                    konular: (cls.topics || []).map(t => ({
+                        ad: getSafeText(t.title),
+                        kaynaklar: (t.subColumns || []).map(sc => getSafeText(sc.title))
+                    })),
+                    ogrenciler
                 };
-            }
-
-            const dbString = JSON.stringify({
-                MUFREDAT: curriculums,
-                OGRENCI_FIHRISTI: studentsIndex,
-                AKTIF_OGRENCI: activeStudentDetails
             });
 
-            // Jarvis Persona ve Bağlamı
-            const contextText = selectedStudent ? `Şu an ${selectedStudent.name} adlı öğrencinin profili açık.` : 'Şu an genel arama modundayız.';
-            const prompt = `Sen Berkant Hoca'nın eğitim platformundaki yapay zeka asistanı Jarvis'sin. Türkçeyi kusursuz ve doğal konuşuyorsun.
-            Mevcut bağlam: ${contextText}
-            Kullanıcı sana sesli olarak komut verecek veya soru soracak. Kısa, net ve anlaşılır cevaplar ver.
-            ÖNEMLİ KURAL: Kesinlikle iç düşüncelerini (thinking process), İngilizce planlarını veya **Crafting...** gibi analizlerini ÇIKTI OLARAK VERME. SADECE doğrudan söyleyeceğin cevabı Türkçe olarak ilet.
+            const dbString = JSON.stringify(fullDump);
+
+            // ════════ JARVIS PERSONA & SİSTEM PROMPT'U ════════
+            const contextText = selectedStudent 
+                ? `Şu an ekranda "${selectedStudent.name}" adlı öğrencinin profili açık.` 
+                : 'Şu an genel arama modundayız, henüz öğrenci seçilmedi.';
             
-            [SİSTEM VERİTABANI ÖZETİ]
-            ${dbString}
-            
-            KURAL 1: Yukarıdaki veritabanında tüm öğrencilerin fihristi (ad, sınıf, id) yer almaktadır. Sadece AKTIF_OGRENCI kısmında ekrandaki öğrencinin tüm notları peşin olarak bulunur. Eğer kullanıcı AKTIF_OGRENCI hakkında soru sorarsa doğrudan SESLİ CEVAP VER.
-            KURAL 2: Eğer kullanıcı ekranda OLMAYAN (OGRENCI_FIHRISTI'nde bulunan ama AKTIF_OGRENCI olmayan) bir öğrencinin deneme notlarını veya ödev durumunu sorarsa, BİLGİ VERMEDEN ÖNCE "get_student_details" fonksiyonunu çağır. ÇAĞIRIRKEN her zaman sesli olarak "Hemen sisteme bakıyorum hocam, bir saniye..." gibi bir bekleme cümlesi kur. Böylece kullanıcı verinin çekildiğini anlar.
-            KURAL 3: Sisteme müdahale etmek (ödev işaretlemek vs.) veya ekrandaki öğrenciyi değiştirmek (Örn: Merve'yi bul) için "apply_system_action" aracını kullan.`;
+            const prompt = `KİMLİĞİN:
+Sen Berkant Hoca'nın eğitim platformundaki yapay zeka asistanı JARVİS'sin.
+Adın Jarvis. Sen bir Google ürünü DEĞİLSİN. Kendini asla "Google asistanı", "AI model", "language model" olarak tanıtma.
+Sana "Sen kimsin?" diye sorulursa "Ben Jarvis, Berkant Hoca'nın eğitim platformunun yapay zeka asistanıyım" de.
+Türkçeyi kusursuz, kısa ve doğal konuş. Akademik ama samimi ol.
+
+MEVCUT BAĞLAM: ${contextText}
+
+VERİ ERİŞİMİN:
+Aşağıdaki veritabanında TÜM sınıfların, TÜM öğrencilerin, TÜM ödevlerin (konular ve kaynaklar) ve TÜM deneme sonuçlarının tam listesi yer almaktadır.
+Bu veri SENİN HAFIZANDADİR. Her soruya doğrudan bu veriden cevap ver. "Bilmiyorum" veya "erişemiyorum" DEME.
+
+[VERİTABANI]
+${dbString}
+[/VERİTABANI]
+
+YAPABILIRLERIN:
+1. Öğrenci bilgisi sorulduğunda: İsim, sınıf, VIP durumu, ödev tamamlama oranı, deneme netleri hakkında detaylı rapor ver.
+2. Ödev durumu sorulduğunda: Hangi konunun hangi kaynağı yapıldı/eksik/verildi olduğunu listele.
+3. Rapor istendiğinde: Deneme netlerini, ödev tamamlama oranını, güçlü/zayıf yönleri harmanlayarak kısa ama profesyonel bir rehber öğretmen raporu sun.
+4. Aynı isimde birden fazla öğrenci varsa: Hangisinden bahsedildiğini sor.
+5. "apply_system_action" fonksiyonu ile ödev durumunu değiştir, öğrenci profilini aç, veya kaydet ve kapat.
+
+YASAKLAR:
+- İç düşüncelerini, planlarını, analizlerini ASLA söyleme.
+- İngilizce konuşma. Sadece Türkçe.
+- "Bunu yapamam", "erişimim yok", "bilmiyorum" deme — tüm veriye erişimin var.
+- Fonksiyon çağırırken kullanıcıya teknik detay verme, sadece sonucu söyle.
+
+FONKSİYON KULLANIMI:
+- Bilgi sormak (öğrenci ara, rapor ver, not sor) için FONKSİYON ÇAĞIRMA — doğrudan veritabanından oku ve sesli cevap ver.
+- Sadece SİSTEMİ DEĞİŞTİRMEK için (ödev işaretle, profil aç, kaydet) "apply_system_action" fonksiyonunu çağır.`;
 
             // ════════ TOOL (FONKSİYON) TANIMLAMALARI ════════
             const tools = [
                 {
                     name: "apply_system_action",
-                    description: "Sisteme müdahale etmek, arayüzü değiştirmek veya ödev notu girmek için kullanılır. Öğrenci araması veya rapor okuması için DEĞİL, sadece veritabanını DEĞİŞTİRMEK için çağır.",
+                    description: "Sisteme müdahale: ödev durumunu değiştir, öğrenci profilini aç, veya kaydet ve kapat. Bilgi okumak için ÇAĞIRMA.",
                     parameters: {
                         type: "OBJECT",
                         properties: {
                             action_type: {
                                 type: "STRING",
-                                description: "Yapılacak işlemin türü.",
+                                description: "Yapılacak işlem.",
                                 enum: ["open_student_profile", "mark_homework", "save_and_close"]
                             },
                             student_id: {
                                 type: "STRING",
-                                description: "İşlem yapılacak öğrencinin benzersiz ID'si (veritabanından bul)."
+                                description: "Öğrencinin benzersiz ID'si (veritabanından bul). save_and_close için gerekli değil."
                             },
                             topic_name: {
                                 type: "STRING",
-                                description: "Ödevin konusu (mark_homework için zorunlu)."
+                                description: "Konu adı (mark_homework için). Örn: Logaritma, Türev"
                             },
                             source_name: {
                                 type: "STRING",
-                                description: "Kaynak adı (Örn: Soru Bankası, Tümü). Belirtilmemişse boş bırak."
+                                description: "Kaynak adı. Örn: Soru Bankası, Föy, Tümü. Belirtilmezse tüm kaynakları işaretle."
                             },
                             status: {
                                 type: "STRING",
-                                description: "Ödevin durumu.", enum: ["yapıldı", "yapılmadı", "eksik"]
+                                description: "Yeni durum.",
+                                enum: ["yapıldı", "yapılmadı", "eksik"]
                             }
                         },
                         required: ["action_type"]
                     }
-                },
-                {
-                    name: "get_student_details",
-                    description: "Ekranda açık olmayan (AKTIF_OGRENCI olmayan) bir öğrencinin ödev notlarına veya deneme sonuçlarına bakmak için kullanılır. Bunu çağırmadan önce mutlaka sesli olarak 'Hemen kontrol ediyorum hocam...' gibi bir şey söyle.",
-                    parameters: {
-                        type: "OBJECT",
-                        properties: {
-                            student_id: { type: "STRING", description: "Verisi çekilecek öğrencinin ID'si." }
-                        },
-                        required: ["student_id"]
-                    }
                 }
             ];
 
-            // ════════ FONKSİYON İŞLEYİCİSİ (ON_FUNCTION_CALL) ════════
+            // ════════ FONKSİYON İŞLEYİCİSİ ════════
             geminiServiceRef.current.onFunctionCall = async (call) => {
                 const { name, args, id } = call;
                 let response = {};
                 const state = latestState.current;
 
                 try {
-                    if (name === "get_student_details") {
-                        const student = state.allStudents.find(s => String(s.id) === String(args.student_id));
-                        if (!student) {
-                            response = { success: false, message: "Öğrenci bulunamadı." };
-                        } else {
-                            const c = state.classes.find(cls => cls.id === student.classId);
-                            let readableGrades = {};
-                            if (c && c.topics && student.grades) {
-                                Object.entries(student.grades).forEach(([topicId, cols]) => {
-                                    const t = c.topics.find(x => x.id === topicId);
-                                    if (t) {
-                                        readableGrades[t.title] = {};
-                                        Object.entries(cols).forEach(([colId, status]) => {
-                                            const sc = (t.subColumns || []).find(x => x.id === colId);
-                                            if (sc) {
-                                                let statusText = status;
-                                                if (status === 'done') statusText = 'Yapıldı';
-                                                else if (status === 'missing') statusText = 'Eksik';
-                                                else if (status === 'assigned') statusText = 'Ödev Verildi';
-                                                else if (status === 'exempt') statusText = 'Muaf';
-                                                readableGrades[t.title][sc.title] = statusText;
-                                            }
-                                        });
-                                    }
-                                });
-                            }
-                            
-                            const formattedExams = (student.exams || []).map((e, index) => `${index + 1}. Deneme: ${e.net} Net`);
-                            
-                            response = {
-                                success: true,
-                                data: {
-                                    isim: student.name,
-                                    notlar: readableGrades,
-                                    denemeler: formattedExams
-                                },
-                                instruction: "Veriler başarıyla çekildi. Bu verilere bakarak kullanıcıya cevap ver."
-                            };
-                        }
-                    } else if (name === "apply_system_action") {
+                    if (name === "apply_system_action") {
+                        // ── Kaydet ve Kapat ──
                         if (args.action_type === "save_and_close") {
                             applyChangesRef.current?.();
-                            response = { success: true, message: "Veriler kaydedildi ve sistem kapatılıyor. Kullanıcıya işlemi başardığını onayla." };
+                            response = { success: true, message: "Veriler kaydedildi ve panel kapatılıyor." };
                         } else {
+                            // ── Öğrenci Bul ──
                             const student = state.allStudents.find(s => String(s.id) === String(args.student_id));
 
                             if (!student) {
-                                response = { success: false, message: "Geçersiz öğrenci ID'si." };
+                                response = { success: false, message: "Geçersiz öğrenci ID'si. Kullanıcıya öğrencinin adını tekrar sormasını iste." };
+                            
+                            // ── Profil Aç ──
                             } else if (args.action_type === "open_student_profile") {
                                 const targetClass = state.classes.find(c => c.id === student.classId);
-                                // Ekran güncellemeleri
                                 setSelectedStudent(student);
                                 setFoundStudents([student]);
                                 setFoundTopics(targetClass?.topics || []);
                                 setCommandMode('homework');
-                                response = { success: true, message: `${student.name} profili ekranda açıldı. Kullanıcıya işlemi başardığını onayla.` };
+                                response = { success: true, message: `${student.name} profili açıldı.` };
+                            
+                            // ── Ödev İşaretle ──
                             } else if (args.action_type === "mark_homework") {
                                 const targetClass = state.classes.find(c => c.id === student.classId);
                                 const topics = targetClass?.topics || [];
 
                                 // Konu bulma
                                 const topicNorm = turkishNormalize(args.topic_name || "");
-                                let targetTopic = topics.find(t => turkishNormalize(getSafeText(t.title)).includes(topicNorm) || topicNorm.includes(turkishNormalize(getSafeText(t.title))));
+                                let targetTopic = topics.find(t => {
+                                    const tNorm = turkishNormalize(getSafeText(t.title));
+                                    return tNorm.includes(topicNorm) || topicNorm.includes(tNorm);
+                                });
 
-                                const topicOrderMatch = args.topic_name ? args.topic_name.match(/(\d+)/) : null;
-                                if (!targetTopic && topicOrderMatch) {
-                                    const index = parseInt(topicOrderMatch[1]) - 1;
-                                    if (topics[index]) targetTopic = topics[index];
+                                if (!targetTopic) {
+                                    const topicOrderMatch = args.topic_name ? args.topic_name.match(/(\d+)/) : null;
+                                    if (topicOrderMatch) {
+                                        const index = parseInt(topicOrderMatch[1]) - 1;
+                                        if (topics[index]) targetTopic = topics[index];
+                                    }
                                 }
 
                                 if (!targetTopic) {
-                                    response = { success: false, message: `"${args.topic_name}" adında bir konu bulunamadı. Kullanıcıdan tekrar etmesini iste.` };
+                                    response = { success: false, message: `"${args.topic_name}" konusu bulunamadı. Mevcut konular: ${topics.map(t => getSafeText(t.title)).join(', ')}` };
                                 } else {
                                     const subCols = targetTopic.subColumns || [];
                                     let columnsToUpdate = [];
 
                                     if (!args.source_name || args.source_name.toLowerCase() === 'tümü' || args.source_name.toLowerCase() === 'hepsi') {
-                                        columnsToUpdate = subCols; // Tüm kaynakları işaretle
+                                        columnsToUpdate = subCols;
                                     } else {
                                         const sourceNorm = turkishNormalize(args.source_name);
-                                        const matchedCol = subCols.find(c => turkishNormalize(getSafeText(c.title)).includes(sourceNorm));
-                                        if (matchedCol) {
-                                            columnsToUpdate = [matchedCol];
-                                        }
+                                        const matchedCol = subCols.find(c => {
+                                            const cNorm = turkishNormalize(getSafeText(c.title));
+                                            return cNorm.includes(sourceNorm) || sourceNorm.includes(cNorm);
+                                        });
+                                        if (matchedCol) columnsToUpdate = [matchedCol];
                                     }
 
                                     if (columnsToUpdate.length === 0) {
-                                        response = { success: false, message: `Konu bulundu ancak "${args.source_name}" adında bir kaynak bulunamadı.` };
+                                        response = { success: false, message: `"${args.source_name}" kaynağı bulunamadı. Mevcut kaynaklar: ${subCols.map(c => getSafeText(c.title)).join(', ')}` };
                                     } else {
-                                        // Status Mapping
                                         let finalStatus = 'done';
                                         if (args.status === 'yapılmadı' || args.status === 'eksik') finalStatus = 'missing';
 
-                                        // Güncelleme işlemi
                                         columnsToUpdate.forEach(col => {
                                             handleDraftGradeChangeRef.current?.(student.id, col.id, finalStatus);
                                         });
-                                        response = { success: true, message: `Başarılı! ${targetTopic.title} konusu için ${columnsToUpdate.length} kaynak "${args.status}" olarak işaretlendi. Kullanıcıya "Tamamdır, ödevi işaretledim" şeklinde onay ver.` };
+                                        
+                                        // ── Değişiklik Bildirimi (Toast) ──
+                                        const toastMsg = `✏️ ${student.name} → ${getSafeText(targetTopic.title)}${columnsToUpdate.length === subCols.length ? ' (Tümü)' : ' / ' + columnsToUpdate.map(c => getSafeText(c.title)).join(', ')}: ${args.status || 'yapıldı'}`;
+                                        setJarvisFeedback(toastMsg);
+                                        
+                                        response = { success: true, message: `${getSafeText(targetTopic.title)} konusu için ${columnsToUpdate.length} kaynak "${args.status || 'yapıldı'}" olarak işaretlendi. Onay panelde bekliyor.` };
                                     }
                                 }
                             }
@@ -727,7 +712,7 @@ const AssistantModal = ({ classes, updateClassInDb, onClose, initialStudent }) =
                     }
                 } catch (e) {
                     console.error("Tool Execution Error:", e);
-                    response = { success: false, message: "Sistemde teknik bir hata oluştu." };
+                    response = { success: false, message: "Sistemde teknik bir hata oluştu: " + e.message };
                 }
 
                 geminiServiceRef.current.sendFunctionResponse(id, name, response);
