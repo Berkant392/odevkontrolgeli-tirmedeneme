@@ -645,6 +645,7 @@ KURALLAR VE GÖREVLERİN (ÇOK ÖNEMLİ):
 4. KAYDETME: Kullanıcı "kaydet", "işlemleri bitir" dediğinde "save_and_close" çağır.
 5. RAPORLAMA: Deneme netlerini ve ödev tamamlama oranını birleştirerek doğrudan veritabanından oku ve sesli cevap ver.
 6. SADECE sesli sohbet etme, sistemi değiştirmek istendiğinde KESİNLİKLE fonksiyon çağırarak sistemde aksiyon al!
+7. EKSİK BİLGİ (Needs Clarification): Kullanıcı ödevi işaretlemeni istediğinde KİMİN ödevi veya HANGİ KONU olduğu belirsizse, tahmin yürütme! Fonksiyonu eksik argümanlarla çağır, sistem sana "DİKKAT: Hangi öğrenci/konu?" uyarısı verecektir. O zaman kullanıcıya kibarca doğrudan sor ve cevabı bekle.
 
 YASAKLAR:
 - İç düşüncelerini, planlarını, analizlerini ASLA söyleme.
@@ -667,11 +668,11 @@ YASAKLAR:
                             },
                             student_id: {
                                 type: "STRING",
-                                description: "Öğrencinin benzersiz ID'si (veritabanından bul). clear_student_profile ve save_and_close için gerekli değil."
+                                description: "Öğrencinin benzersiz ID'si (veritabanından bul). clear_student_profile ve save_and_close için gerekli değil. Eğer bilinmiyorsa boş bırak."
                             },
                             topic_name: {
                                 type: "STRING",
-                                description: "Konu adı (mark_homework için). Örn: Logaritma, Türev"
+                                description: "Konu adı (mark_homework için). Örn: Logaritma, Türev. Eğer bilinmiyorsa boş bırak."
                             },
                             source_name: {
                                 type: "STRING",
@@ -710,11 +711,20 @@ YASAKLAR:
                             response = { success: true, message: "Mevcut öğrenci profili kapatıldı, genel arama moduna geçildi." };
                             
                         } else {
-                            // ── Öğrenci Bul ──
-                            const student = state.allStudents.find(s => String(s.id) === String(args.student_id));
+                            // ── Öğrenci Bul (veya mevcut kilitli öğrenciyi kullan) ──
+                            let student = null;
+                            if (args.student_id) {
+                                student = state.allStudents.find(s => String(s.id) === String(args.student_id));
+                            } else if (state.selectedStudent) {
+                                student = state.selectedStudent;
+                            }
 
                             if (!student) {
-                                response = { success: false, message: "Geçersiz öğrenci ID'si. Kullanıcıya öğrencinin adını tekrar sormasını iste." };
+                                // ── EKSİK VERİ SORMA (Needs Clarification - Student) ──
+                                response = { 
+                                    success: false, 
+                                    message: "DİKKAT: İşlemi hangi öğrenci için yapacağımı bilmiyorum. Lütfen kullanıcıya doğrudan 'Hemen yapıyorum hocam, ancak hangi öğrenci için?' diye sor ve işlemi askıda tut."
+                                };
                             
                             // ── Profil Aç ──
                             } else if (args.action_type === "open_student_profile") {
@@ -727,21 +737,28 @@ YASAKLAR:
                             
                             // ── Ödev İşaretle ──
                             } else if (args.action_type === "mark_homework") {
-                                const targetClass = state.classes.find(c => c.id === student.classId);
-                                const topics = targetClass?.topics || [];
-                                
-                                // Olası olarak ekranda kilitli değilse hemen kilitle ki hoca değişikliği görebilsin
-                                setSelectedStudent(student);
-                                setFoundStudents([student]);
-                                setFoundTopics(topics);
-                                setCommandMode('homework');
+                                if (!args.topic_name) {
+                                    // ── EKSİK VERİ SORMA (Needs Clarification - Topic) ──
+                                    response = { 
+                                        success: false, 
+                                        message: `DİKKAT: ${student.name} için hangi konuyu işaretleyeceğimi belirtmedin. Lütfen kullanıcıya '${student.name} için hangi konuyu işaretlememi istersiniz?' diye sor.` 
+                                    };
+                                } else {
+                                    const targetClass = state.classes.find(c => c.id === student.classId);
+                                    const topics = targetClass?.topics || [];
+                                    
+                                    // Olası olarak ekranda kilitli değilse hemen kilitle ki hoca değişikliği görebilsin
+                                    setSelectedStudent(student);
+                                    setFoundStudents([student]);
+                                    setFoundTopics(topics);
+                                    setCommandMode('homework');
 
-                                // Konu bulma
-                                const topicNorm = turkishNormalize(args.topic_name || "");
-                                let targetTopic = topics.find(t => {
-                                    const tNorm = turkishNormalize(getSafeText(t.title));
-                                    return tNorm.includes(topicNorm) || topicNorm.includes(tNorm);
-                                });
+                                    // Konu bulma
+                                    const topicNorm = turkishNormalize(args.topic_name || "");
+                                    let targetTopic = topics.find(t => {
+                                        const tNorm = turkishNormalize(getSafeText(t.title));
+                                        return tNorm.includes(topicNorm) || topicNorm.includes(tNorm);
+                                    });
 
                                 if (!targetTopic) {
                                     const topicOrderMatch = args.topic_name ? args.topic_name.match(/(\d+)/) : null;
@@ -788,7 +805,8 @@ YASAKLAR:
                             }
                         }
                     }
-                } catch (e) {
+                }
+            } catch (e) {
                     console.error("Tool Execution Error:", e);
                     response = { success: false, message: "Sistemde teknik bir hata oluştu: " + e.message };
                 }
