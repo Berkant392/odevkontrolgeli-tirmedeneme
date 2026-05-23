@@ -27,34 +27,28 @@ export class GeminiLiveService {
         try {
             this.onStatusChange('connecting', "Bağlanıyor...");
             
-            // 1. Dinamik Model Bulma (Kullanıcının API Key'ine özel hangi Live modellerin açık olduğunu buluruz)
-            let selectedModel = "models/gemini-3.1-flash-live-preview"; // Yedek varsayılan olarak Gemini 3.0/3.1 ayarlandı
+            // 1. Model Seçimi: Kullanıcının talebi üzerine en güncel "Gemini 3 Flash Live" modelini zorla seçiyoruz.
+            // (Yeni preview modeller bazen API listesinde listelenmeyebilir ancak doğrudan isimle çağrılabilir)
+            let selectedModel = "models/gemini-3.1-flash-live-preview";
+            
+            console.log("🚀 En güncel model zorunlu olarak seçildi:", selectedModel);
+
+            // Opsiyonel: Sadece bilgilendirme amaçlı API'deki modelleri kontrol edip loglayabiliriz,
+            // ancak seçimi değiştirmeyeceğiz çünkü 3.1 modelinin kullanılmasını kesin olarak istiyoruz.
             try {
-                const modelResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${this.apiKey}`);
-                const modelData = await modelResp.json();
-                if (modelData && modelData.models) {
-                    const liveModels = modelData.models.filter(m => 
-                        m.supportedGenerationMethods && m.supportedGenerationMethods.includes('bidiGenerateContent')
-                    );
-                    if (liveModels.length > 0) {
-                        // En akıllı ve gelişmiş Gemini 3 serisi modelini önceliklendir (Gemini 3.0 veya 3.1)
-                        const gemini3Models = liveModels.filter(m => m.name.includes('gemini-3'));
-                        
-                        if (gemini3Models.length > 0) {
-                            // Bulunan ilk Gemini 3 modelini seç
-                            selectedModel = gemini3Models[0].name;
-                            console.log("🚀 Daha Gelişmiş Gemini 3 Canlı Ses Modeli Bulundu:", selectedModel);
-                        } else {
-                            // Gemini 3 yoksa, desteklenen ilk modeli kullan (örneğin Gemini 2.0 veya 2.5)
-                            selectedModel = liveModels[0].name;
-                            console.log("🎙️ Desteklenen Canlı Ses Modeli Bulundu:", selectedModel);
+                fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${this.apiKey}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data && data.models) {
+                            const liveModels = data.models.filter(m => 
+                                m.supportedGenerationMethods && m.supportedGenerationMethods.includes('bidiGenerateContent')
+                            );
+                            console.log("ℹ️ API'nin listelediği erişilebilir canlı modeller:", liveModels.map(m => m.name));
                         }
-                    } else {
-                        console.warn("⚠️ API Key'inize tanımlı bir BidiGenerateContent (Canlı Ses) modeli bulunamadı.");
-                    }
-                }
+                    })
+                    .catch(e => console.warn("Model listesi alınamadı, ancak 3.1 modeli ile devam ediliyor.", e));
             } catch (e) {
-                console.warn("Modeller kontrol edilemedi, varsayılan denenecek:", e);
+                // Sessizce geç
             }
 
             // Gemini Multimodal Live API endpoint (v1beta veya v1alpha ikisi de çalışır, v1alpha daha güncel önizlemeler için)
