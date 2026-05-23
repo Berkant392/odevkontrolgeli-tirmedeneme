@@ -5,6 +5,8 @@ export class GeminiLiveService {
         this.audioContext = null;
         this.mediaStream = null;
         this.processor = null;
+        this.videoStream = null;
+        this.videoInterval = null;
         
         // Ses çalma işlemleri için
         this.playbackContext = null;
@@ -305,6 +307,81 @@ export class GeminiLiveService {
         this.nextPlayTime += audioBuffer.duration;
     }
 
+    async startCameraCapture(videoElement) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.warn("WebSocket hazır değil, kamera yakalama başlatılamadı.");
+            return false;
+        }
+
+        try {
+            console.log("📷 Kamera izni isteniyor...");
+            this.videoStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "environment" } 
+            });
+            console.log("✅ Kamera izni alındı.");
+            
+            if (videoElement) {
+                videoElement.srcObject = this.videoStream;
+            }
+
+            // Kare yakalamak için canvas oluştur
+            this.videoCanvas = document.createElement('canvas');
+            this.videoCanvas.width = 640;
+            this.videoCanvas.height = 480;
+            this.videoCtx = this.videoCanvas.getContext('2d');
+
+            // Saniyede 1 kare (1 fps) gönder
+            this.videoInterval = setInterval(() => {
+                this.sendVideoFrame(videoElement);
+            }, 1000);
+
+            return true;
+        } catch (error) {
+            console.error("Kamera hatası:", error);
+            this.onStatusChange('error', "Kamera erişimi reddedildi.");
+            return false;
+        }
+    }
+
+    sendVideoFrame(videoElement) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.videoCtx || !videoElement) return;
+
+        // Video boyutlarını kontrol edip canvas'ı güncelle
+        if (videoElement.videoWidth && videoElement.videoHeight) {
+            if (this.videoCanvas.width !== videoElement.videoWidth) {
+                this.videoCanvas.width = videoElement.videoWidth;
+                this.videoCanvas.height = videoElement.videoHeight;
+            }
+            this.videoCtx.drawImage(videoElement, 0, 0, this.videoCanvas.width, this.videoCanvas.height);
+            
+            // Base64 JPEG oluştur
+            const dataUrl = this.videoCanvas.toDataURL('image/jpeg', 0.6);
+            const base64Jpeg = dataUrl.split(',')[1];
+
+            const msg = {
+                realtimeInput: {
+                    mediaChunks: [{
+                        mimeType: "image/jpeg",
+                        data: base64Jpeg
+                    }]
+                }
+            };
+            
+            this.ws.send(JSON.stringify(msg));
+        }
+    }
+
+    stopCameraCapture() {
+        if (this.videoInterval) {
+            clearInterval(this.videoInterval);
+            this.videoInterval = null;
+        }
+        if (this.videoStream) {
+            this.videoStream.getTracks().forEach(track => track.stop());
+            this.videoStream = null;
+        }
+    }
+
     stopPlayback() {
         if (this.playbackContext) {
             this.playbackContext.close();
@@ -329,6 +406,7 @@ export class GeminiLiveService {
 
     disconnect() {
         this.stopAudioCapture();
+        this.stopCameraCapture();
         this.stopPlayback();
         if (this.ws) {
             this.ws.close();
