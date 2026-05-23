@@ -638,39 +638,36 @@ Bu veri SENİN HAFIZANDADİR. Her soruya doğrudan bu veriden cevap ver. "Bilmiy
 ${dbString}
 [/VERİTABANI]
 
-YAPABILIRLERIN:
-1. Öğrenci bilgisi sorulduğunda: İsim, sınıf, VIP durumu, ödev tamamlama oranı, deneme netleri hakkında detaylı rapor ver.
-2. Ödev durumu sorulduğunda: Hangi konunun hangi kaynağı yapıldı/eksik/verildi olduğunu listele.
-3. Rapor istendiğinde: Deneme netlerini, ödev tamamlama oranını, güçlü/zayıf yönleri harmanlayarak kısa ama profesyonel bir rehber öğretmen raporu sun.
-4. Aynı isimde birden fazla öğrenci varsa: Hangisinden bahsedildiğini sor.
-5. "apply_system_action" fonksiyonu ile ödev durumunu değiştir, öğrenci profilini aç, veya kaydet ve kapat.
+KURALLAR VE GÖREVLERİN (ÇOK ÖNEMLİ):
+1. ÖĞRENCİ SEÇİMİ: Kullanıcı bir öğrenci adı söylediğinde veya bir öğrenci hakkında işlem yapmak istediğinde İLK İŞ OLARAK KESİNLİKLE "apply_system_action" fonksiyonunu "open_student_profile" action_type ile çağır. Bu öğrenciyi ekrana kilitler!
+2. ÖĞRENCİ DEĞİŞTİRME/ÇIKMA: Kullanıcı "başka öğrenciye geç", "öğrenci değiştir", "geri dön", "kapat" dediğinde KESİNLİKLE "apply_system_action" fonksiyonunu "clear_student_profile" action_type ile çağır. (student_id boş gönderilebilir)
+3. ÖDEV İŞARETLEME: Kullanıcı "yapıldı", "yapılmadı", "eksik" gibi ödev komutları verdiğinde KESİNLİKLE "apply_system_action" fonksiyonunu "mark_homework" ile çağır.
+4. KAYDETME: Kullanıcı "kaydet", "işlemleri bitir" dediğinde "save_and_close" çağır.
+5. RAPORLAMA: Deneme netlerini ve ödev tamamlama oranını birleştirerek doğrudan veritabanından oku ve sesli cevap ver.
+6. SADECE sesli sohbet etme, sistemi değiştirmek istendiğinde KESİNLİKLE fonksiyon çağırarak sistemde aksiyon al!
 
 YASAKLAR:
 - İç düşüncelerini, planlarını, analizlerini ASLA söyleme.
 - İngilizce konuşma. Sadece Türkçe.
 - "Bunu yapamam", "erişimim yok", "bilmiyorum" deme — tüm veriye erişimin var.
-- Fonksiyon çağırırken kullanıcıya teknik detay verme, sadece sonucu söyle.
-
-FONKSİYON KULLANIMI:
-- Bilgi sormak (öğrenci ara, rapor ver, not sor) için FONKSİYON ÇAĞIRMA — doğrudan veritabanından oku ve sesli cevap ver.
-- Sadece SİSTEMİ DEĞİŞTİRMEK için (ödev işaretle, profil aç, kaydet) "apply_system_action" fonksiyonunu çağır.`;
+- Fonksiyon çağırırken kullanıcıya teknik detay verme, sadece "Hemen yapıyorum" vb. de.`;
 
             // ════════ TOOL (FONKSİYON) TANIMLAMALARI ════════
             const tools = [
                 {
                     name: "apply_system_action",
-                    description: "Sisteme müdahale: ödev durumunu değiştir, öğrenci profilini aç, veya kaydet ve kapat. Bilgi okumak için ÇAĞIRMA.",
+                    description: "Sisteme müdahale: ödev durumunu değiştir, öğrenci profilini aç, profili kapat (öğrenci değiştir), veya kaydet ve kapat. Bilgi okumak için ÇAĞIRMA.",
                     parameters: {
                         type: "OBJECT",
                         properties: {
                             action_type: {
                                 type: "STRING",
                                 description: "Yapılacak işlem.",
-                                enum: ["open_student_profile", "mark_homework", "save_and_close"]
+                                enum: ["open_student_profile", "clear_student_profile", "mark_homework", "save_and_close"]
                             },
                             student_id: {
                                 type: "STRING",
-                                description: "Öğrencinin benzersiz ID'si (veritabanından bul). save_and_close için gerekli değil."
+                                description: "Öğrencinin benzersiz ID'si (veritabanından bul). clear_student_profile ve save_and_close için gerekli değil."
                             },
                             topic_name: {
                                 type: "STRING",
@@ -703,6 +700,15 @@ FONKSİYON KULLANIMI:
                         if (args.action_type === "save_and_close") {
                             applyChangesRef.current?.();
                             response = { success: true, message: "Veriler kaydedildi ve panel kapatılıyor." };
+                        
+                        // ── Öğrenci Değiştir / Temizle ──
+                        } else if (args.action_type === "clear_student_profile") {
+                            setSelectedStudent(null);
+                            setFoundStudents([]);
+                            setFoundTopics([]);
+                            setCommandMode('student');
+                            response = { success: true, message: "Mevcut öğrenci profili kapatıldı, genel arama moduna geçildi." };
+                            
                         } else {
                             // ── Öğrenci Bul ──
                             const student = state.allStudents.find(s => String(s.id) === String(args.student_id));
@@ -717,12 +723,18 @@ FONKSİYON KULLANIMI:
                                 setFoundStudents([student]);
                                 setFoundTopics(targetClass?.topics || []);
                                 setCommandMode('homework');
-                                response = { success: true, message: `${student.name} profili açıldı.` };
+                                response = { success: true, message: `${student.name} profili açıldı ve kilitlendi.` };
                             
                             // ── Ödev İşaretle ──
                             } else if (args.action_type === "mark_homework") {
                                 const targetClass = state.classes.find(c => c.id === student.classId);
                                 const topics = targetClass?.topics || [];
+                                
+                                // Olası olarak ekranda kilitli değilse hemen kilitle ki hoca değişikliği görebilsin
+                                setSelectedStudent(student);
+                                setFoundStudents([student]);
+                                setFoundTopics(topics);
+                                setCommandMode('homework');
 
                                 // Konu bulma
                                 const topicNorm = turkishNormalize(args.topic_name || "");
