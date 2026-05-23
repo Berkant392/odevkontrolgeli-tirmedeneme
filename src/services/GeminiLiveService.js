@@ -138,7 +138,7 @@ export class GeminiLiveService {
             }
         }
         
-        // Asistan bir fonksiyon çağırmak isterse
+        // Asistan bir fonksiyon çağırmak isterse (Standart modelTurn altındaki functionCall)
         if (data.serverContent && data.serverContent.modelTurn) {
             const parts = data.serverContent.modelTurn.parts;
             for (const part of parts) {
@@ -146,6 +146,15 @@ export class GeminiLiveService {
                     if (this.onFunctionCall) {
                         this.onFunctionCall(part.functionCall);
                     }
+                }
+            }
+        }
+
+        // Gemini Multimodal Live API root toolCall desteği
+        if (data.toolCall && data.toolCall.functionCalls) {
+            for (const call of data.toolCall.functionCalls) {
+                if (this.onFunctionCall) {
+                    this.onFunctionCall(call);
                 }
             }
         }
@@ -235,9 +244,11 @@ export class GeminiLiveService {
         const msg = {
             toolResponse: {
                 functionResponses: [{
-                    id: callId,
+                    id: callId || `fc_${Date.now()}`,
                     name: name,
-                    response: response
+                    response: {
+                        result: response
+                    }
                 }]
             }
         };
