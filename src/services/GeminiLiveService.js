@@ -11,6 +11,7 @@ export class GeminiLiveService {
         // Ses çalma işlemleri için
         this.playbackContext = null;
         this.nextPlayTime = 0;
+        this.isAudioMuted = false;
 
         this.onMessageReceived = onMessageReceived;
         this.onStatusChange = onStatusChange;
@@ -206,6 +207,7 @@ export class GeminiLiveService {
             this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
             
             this.processor.onaudioprocess = (e) => {
+                if (this.isAudioMuted) return; // Muted ise dinleme kapalı, çerçeveleri atla
                 const inputData = e.inputBuffer.getChannelData(0);
                 this.sendPcmData(inputData);
             };
@@ -447,6 +449,14 @@ export class GeminiLiveService {
             this.playbackContext.close();
             this.playbackContext = null;
         }
+    }
+
+    muteAudio() {
+        this.isAudioMuted = true;
+    }
+
+    unmuteAudio() {
+        this.isAudioMuted = false;
     }
 
     stopAudioCapture() {
