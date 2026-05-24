@@ -100,9 +100,11 @@ const StudentDashboard = ({ classes, currentUserRole, loggedInStudent, onOpenCla
                 className={`p-5 md:p-8 rounded-[2rem] overflow-hidden relative border shadow-2xl ${isVip ? 'bg-[#FAF8F0] border-yellow-500/30 shadow-vip-glow' : 'bg-gradient-to-br from-smartBlue to-[#d0e3f0] border-slate-200'}`}
             >
                 {/* Dekoratif Işıklar */}
-                {!isVip ? (
-                    <div className="absolute -top-20 -right-20 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none"></div>
-                    <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-amber-500 opacity-20 rounded-full blur-3xl mix-blend-overlay pointer-events-none"></div>
+                {!isVip && (
+                    <>
+                        <div className="absolute -top-20 -right-20 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none"></div>
+                        <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-amber-500 opacity-20 rounded-full blur-3xl mix-blend-overlay pointer-events-none"></div>
+                    </>
                 )}
                 
                 <div className="relative z-10">
