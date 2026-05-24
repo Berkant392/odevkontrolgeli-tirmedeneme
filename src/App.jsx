@@ -102,10 +102,31 @@ const App = () => {
                         if (window.navigator && window.navigator.vibrate) {
                             window.navigator.vibrate([200, 100, 200]);
                         }
-                        // Sesli uyarı eklenebilir veya Toast basılabilir
-                        // Şu an basitçe bir Alert veya Custom Notification gösterebiliriz.
-                        // Alert yerine daha şık bir yöntem için alerti geçici olarak koyuyoruz
-                        setTimeout(() => alert(`🚨 Jarvis Hatırlatıcısı:\n\n${r.text}`), 500);
+                        
+                        setTimeout(() => {
+                            // 1. Uygulama İçi Bildirim Modalı
+                            setSelectedNotification({
+                                id: r.id || Date.now().toString(),
+                                title: '🚨 Jarvis Hatırlatıcısı',
+                                text: r.text,
+                                isLocal: true,
+                                timestamp: new Date().toISOString()
+                            });
+
+                            // 2. Öğretmenin telefonuna uyandırmalı sesli Push Notification gönder (OneSignal)
+                            fetch('/.netlify/functions/sendNotification', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    title: '🚨 Jarvis Hatırlatıcısı',
+                                    text: r.text,
+                                    targetClasses: [],
+                                    targetVipStudents: [],
+                                    targetStudentIds: ['teacher_admin']
+                                })
+                            }).catch(console.error);
+                        }, 500);
+                        
                         changed = true;
                         return { ...r, isTriggered: true };
                     }
@@ -311,6 +332,11 @@ const App = () => {
                     const session = JSON.parse(sessionStr);
                     if (session.role === 'teacher') {
                         setIsTeacherMode(true); setCurrentUserRole('teacher'); setView('home'); setActiveTab('home');
+                        if (window.OneSignalDeferred) {
+                            window.OneSignalDeferred.push(async function(OneSignal) {
+                                await OneSignal.login('teacher_admin');
+                            });
+                        }
                     } else if (session.role === 'student' || session.role === 'vip-student') {
                         let foundStudent = null, foundClass = null;
                         const searchSpace = session.role === 'vip-student' ? classes.filter(c => c.type === 'vip') : classes.filter(c => c.type !== 'vip');
@@ -352,6 +378,13 @@ const App = () => {
         if (String(inputPin).trim() === String(dbTeacherPin).trim()) {
             setIsTeacherMode(true); setCurrentUserRole('teacher'); setView('home'); setActiveTab('home');
             localStorage.setItem('bh_session', JSON.stringify({ role: 'teacher' }));
+            
+            // Öğretmeni OneSignal'e tanıt (Hatırlatıcı push bildirimleri için)
+            if (window.OneSignalDeferred) {
+                window.OneSignalDeferred.push(async function(OneSignal) {
+                    await OneSignal.login('teacher_admin');
+                });
+            }
         } else {
             showAlert('error', 'Hata', 'Girdiğiniz PIN kodu hatalı! Lütfen tekrar deneyin.');
         }
