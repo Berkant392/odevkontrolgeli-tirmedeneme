@@ -979,7 +979,10 @@ YASAKLAR:
                             // Asistan dinlemeyi geçici olarak durdursun ki kendi tıkladığı veya yazdığı şeylerin seslerinden etkilenmesin
                             const wasListening = isListening;
                             if (wasListening) {
-                                stopListening();
+                                if (geminiServiceRef.current) {
+                                    geminiServiceRef.current.stopAudioCapture();
+                                    setIsListening(false);
+                                }
                             }
                             
                             setJarvisFeedback(`🤖 ${args.target} öğesi üzerinde ${args.action_type === 'click' ? 'tıklanıyor' : args.action_type === 'type' ? 'yazılıyor' : 'işlem yapılıyor'}...`);
@@ -988,8 +991,11 @@ YASAKLAR:
                             
                             // Eylem bittikten sonra dinlemeyi geri aç (pürüzsüz geçiş için 800ms bekle)
                             if (wasListening) {
-                                setTimeout(() => {
-                                    startListeningRef.current?.();
+                                setTimeout(async () => {
+                                    if (geminiServiceRef.current) {
+                                        setIsListening(true);
+                                        await geminiServiceRef.current.startAudioCapture();
+                                    }
                                 }, 800);
                             }
                             
