@@ -214,7 +214,8 @@ const AssistantModal = ({ classes, allTrials = [], updateClassInDb, onClose, ini
         allStudents: [],
         selectedStudent: null,
         draftGrades: {},
-        allTrials: []
+        allTrials: [],
+        isScreenShared: false
     });
 
     useEffect(() => {
@@ -223,9 +224,10 @@ const AssistantModal = ({ classes, allTrials = [], updateClassInDb, onClose, ini
             allStudents,
             selectedStudent,
             draftGrades,
-            allTrials
+            allTrials,
+            isScreenShared
         };
-    }, [classes, allStudents, selectedStudent, draftGrades, allTrials]);
+    }, [classes, allStudents, selectedStudent, draftGrades, allTrials, isScreenShared]);
 
     useEffect(() => {
         localStorage.setItem('jarvis_reminders', JSON.stringify(reminders));
@@ -964,11 +966,12 @@ YASAKLAR:
                     } else if (name === "simulate_app_action") {
                         if (window.bhAgent && window.bhAgent.trigger) {
                             // Eğer ekran paylaşımı henüz açılmadıysa, ultra zeki ajanın görerek kontrol edebilmesi için izni otomatik tetikleyelim!
-                            if (!isScreenShared) {
+                            if (!state.isScreenShared) {
                                 setJarvisFeedback("🤖 Jarvis arayüzü görerek hareket etmek istiyor. Lütfen paylaşım izni verin...");
                                 const success = await geminiServiceRef.current?.startScreenCapture(videoRef.current);
                                 if (success) {
                                     setIsScreenShared(true);
+                                    state.isScreenShared = true; // Ardışık görevlerde tekrar istememesi için anında ref'i güncelle
                                     // Paylaşım bağlandıktan sonra 1 saniye bekle ki stream tam otursun
                                     await new Promise(r => setTimeout(r, 1000));
                                 } else {
