@@ -7,7 +7,7 @@ import BottomNav from './components/layout/BottomNav';
 
 // FİREBASE
 import { db } from './config/firebase';
-import { collection, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, addDoc, deleteDoc, getDocs, query, orderBy } from 'firebase/firestore';
 
 // 🔥 CUSTOM HOOKS
 import { usePWA } from './hooks/usePWA';
@@ -41,7 +41,7 @@ import WhatsAppPanel from './components/views/WhatsAppPanel';
 
 const App = () => {
     // 🔥 DATA HOOKS
-    const { classes, libraryItems, notifications, allTrials, dbTeacherPin, countdownConfig } = useFirebaseData();
+    const { classes, libraryItems, notifications, allTrials, dbTeacherPin, countdownConfig, globalReminders } = useFirebaseData();
     const { isOnline, deferredPrompt, isStandalone } = usePWA();
 
     const [currentUserRole, setCurrentUserRole] = useState(null);
@@ -58,14 +58,13 @@ const App = () => {
 
     const [showSplash, setShowSplash] = useState(true);
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setShowSplash(false);
-        }, 2500); // Splash screen en az 2.5 saniye görünecek
+        const timer = setTimeout(() => setShowSplash(false), 2000);
         return () => clearTimeout(timer);
     }, []);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [view, setView] = useState('home');
     const [activeTab, setActiveTab] = useState('home');
+    const [view, setView] = useState('home');
+
     const [selectedClass, setSelectedClass] = useState(null);
     const [selectedStudentForView, setSelectedStudentForView] = useState(null);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -82,28 +81,42 @@ const App = () => {
     const [modalPhoneVal, setModalPhoneVal] = useState("");
 
     // AKILLI YÖNETİCİ BİLDİRİM (HATIRLATICI) SİSTEMİ
-    const [reminders, setReminders] = useState(() => {
-        const saved = localStorage.getItem('jarvis_reminders');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [reminders, setRemindersState] = useState([]);
+    const [isRemindersLoaded, setIsRemindersLoaded] = useState(false);
 
     useEffect(() => {
-        localStorage.setItem('jarvis_reminders', JSON.stringify(reminders));
-    }, [reminders]);
+        if (!isRemindersLoaded && globalReminders) {
+            setRemindersState(globalReminders);
+            setIsRemindersLoaded(true);
+        }
+    }, [globalReminders, isRemindersLoaded]);
+
+    const setReminders = (updater) => {
+        setRemindersState(prev => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            if (JSON.stringify(prev) !== JSON.stringify(next)) {
+                updateDoc(doc(db, SETTINGS_COLLECTION, SETTINGS_DOC), { reminders: next }).catch(console.error);
+            }
+            return next;
+        });
+    };
 
     useEffect(() => {
+        if (!isRemindersLoaded) return;
         const interval = setInterval(() => {
             const now = new Date();
             setReminders(prev => {
                 let changed = false;
+                let triggeredReminder = null;
                 const updated = prev.map(r => {
                     if (r.targetTime && !r.isTriggered && new Date(r.targetTime) <= now) {
                         // Vakti geldi, bildirim gönder (Ses ve Modal/Toast)
                         if (window.navigator && window.navigator.vibrate) {
                             window.navigator.vibrate([200, 100, 200]);
                         }
+                        triggeredReminder = r;
                         
-                        setTimeout(() => {
+                        setTimeout(async () => {
                             // 1. Uygulama İçi Bildirim Modalı
                             setSelectedNotification({
                                 id: r.id || Date.now().toString(),
@@ -125,6 +138,30 @@ const App = () => {
                                     targetStudentIds: ['teacher_admin']
                                 })
                             }).catch(console.error);
+
+                            // 3. Veritabanına Yönetici Bildirimi Olarak Kaydet (Geçmiş takibi için)
+                            try {
+                                const notifRef = collection(db, NOTIFICATIONS_COLLECTION);
+                                await addDoc(notifRef, {
+                                    title: '🚨 Jarvis Hatırlatıcısı',
+                                    text: r.text,
+                                    timestamp: new Date().toISOString(),
+                                    targetClasses: ['teacher_admin'],
+                                    targetVipStudents: [],
+                                    targetNames: "Öğretmen (Sen)"
+                                });
+                                // En eski bildirimleri temizle (Limit: 10)
+                                const snap = await getDocs(query(notifRef, orderBy('timestamp', 'desc')));
+                                if (snap.size > 10) {
+                                    const docsToDelete = snap.docs.slice(10);
+                                    for (let d of docsToDelete) {
+                                        await deleteDoc(doc(db, NOTIFICATIONS_COLLECTION, d.id));
+                                    }
+                                }
+                            } catch (error) {
+                                console.error("Geçmiş bildirimi kaydedilemedi:", error);
+                            }
+                            
                         }, 500);
                         
                         changed = true;
@@ -137,7 +174,7 @@ const App = () => {
         }, 10000); // Her 10 saniyede bir kontrol et
 
         return () => clearInterval(interval);
-    }, []);
+    }, [isRemindersLoaded]);
 
     // ONE SIGNAL INITIALIZATION (Arka plan bildirimleri için)
     const [notificationPermission, setNotificationPermission] = useState(window.Notification?.permission || 'default');
