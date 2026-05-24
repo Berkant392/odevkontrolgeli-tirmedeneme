@@ -963,6 +963,19 @@ YASAKLAR:
                         setJarvisFeedback("Ekran görüntüsü notlara eklendi 📸");
                     } else if (name === "simulate_app_action") {
                         if (window.bhAgent && window.bhAgent.trigger) {
+                            // Eğer ekran paylaşımı henüz açılmadıysa, ultra zeki ajanın görerek kontrol edebilmesi için izni otomatik tetikleyelim!
+                            if (!isScreenShared) {
+                                setJarvisFeedback("🤖 Jarvis arayüzü görerek hareket etmek istiyor. Lütfen paylaşım izni verin...");
+                                const success = await geminiServiceRef.current?.startScreenCapture(videoRef.current);
+                                if (success) {
+                                    setIsScreenShared(true);
+                                    // Paylaşım bağlandıktan sonra 1 saniye bekle ki stream tam otursun
+                                    await new Promise(r => setTimeout(r, 1000));
+                                } else {
+                                    console.warn("Ekran paylaşımı izni verilmedi, arama kör modda devam ediyor.");
+                                }
+                            }
+
                             // Asistan dinlemeyi geçici olarak durdursun ki kendi tıkladığı veya yazdığı şeylerin seslerinden etkilenmesin
                             const wasListening = isListening;
                             if (wasListening) {
