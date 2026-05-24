@@ -983,7 +983,7 @@ YASAKLAR:
                             const wasListening = isListening;
                             if (wasListening) {
                                 if (geminiServiceRef.current) {
-                                    geminiServiceRef.current.stopAudioCapture();
+                                    geminiServiceRef.current.muteAudio();
                                     setIsListening(false);
                                 }
                             }
@@ -994,10 +994,10 @@ YASAKLAR:
                             
                             // Eylem bittikten sonra dinlemeyi geri aç (pürüzsüz geçiş için 800ms bekle)
                             if (wasListening) {
-                                setTimeout(async () => {
+                                setTimeout(() => {
                                     if (geminiServiceRef.current) {
                                         setIsListening(true);
-                                        await geminiServiceRef.current.startAudioCapture();
+                                        geminiServiceRef.current.unmuteAudio();
                                     }
                                 }, 800);
                             }
