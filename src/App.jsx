@@ -683,7 +683,12 @@ const App = () => {
                 isMobile={isMobile} 
                 currentUserRole={currentUserRole} 
                 activeTab={activeTab} 
-                setActiveTab={setActiveTab} 
+                setActiveTab={(tabId) => {
+                    setActiveTab(tabId);
+                    if (view === 'class-detail' || view === 'student-detail') {
+                        setView('home');
+                    }
+                }} 
                 handleLogout={handleLogout} 
                 handleOpenSettings={() => {
                     if (currentUserRole === 'teacher') {
