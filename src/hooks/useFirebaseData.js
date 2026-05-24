@@ -10,6 +10,7 @@ export const useFirebaseData = () => {
     const [allTrials, setAllTrials] = useState([]);
     const [dbTeacherPin, setDbTeacherPin] = useState(DEFAULT_PIN);
     const [countdownConfig, setCountdownConfig] = useState({ targetDate: '2026-06-20T00:00:00', startDate: '2025-06-20T00:00:00', label: 'YKS 2026' });
+    const [globalReminders, setGlobalReminders] = useState([]);
 
     useEffect(() => {
         const unsubClasses = onSnapshot(collection(db, CLASSES_COLLECTION), (snap) => setClasses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
@@ -23,6 +24,7 @@ export const useFirebaseData = () => {
                 const data = docSnap.data();
                 if (data.pin) setDbTeacherPin(data.pin);
                 if (data.countdown) setCountdownConfig(data.countdown);
+                if (data.reminders) setGlobalReminders(data.reminders);
             }
         });
         return () => { unsubClasses(); unsubLibrary(); unsubTrials(); unsubNotif(); unsubConfig(); };
@@ -34,6 +36,7 @@ export const useFirebaseData = () => {
         notifications,
         allTrials,
         dbTeacherPin,
-        countdownConfig
+        countdownConfig,
+        globalReminders
     };
 };
