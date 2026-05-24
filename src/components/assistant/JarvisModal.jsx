@@ -801,7 +801,7 @@ YASAKLAR:
                             },
                             target: {
                                 type: "STRING",
-                                description: "Hedeflenen öğe adı, CSS seçicisi veya düğme metni. Örn: 'net takibi', 'notlarım', 'kapat', 'yeni öğrenci', 'ödev ekle', 'ödev-başlık-girişi', 'ödev-tarih-girişi', 'kaydet', 'ali koç'"
+                                description: "Hedeflenen düğmenin/alanın üzerindeki DÜZ METİN (Asla CSS seçicisi veya XPath KULLANMA). Sadece gördüğün metni gönder. Örn: 'net takibi', 'ödev ekle', 'kaydet', 'ali koç'"
                             },
                             text: {
                                 type: "STRING",
