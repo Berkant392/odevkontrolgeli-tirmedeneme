@@ -97,35 +97,63 @@ const VirtualAgentCursor = () => {
             if (el) return el;
         }
 
-        // 3. Genel DOM Arama
-        const candidates = Array.from(document.querySelectorAll('button, input, a, [role="button"], .cursor-pointer, td, th, h3, h4, span'));
-        
-        let matched = candidates.find(el => {
+        // 3. Gelişmiş Puanlama Tabanlı DOM Arama (Scoring-Based Resolver)
+        const candidates = Array.from(document.querySelectorAll('button, input, textarea, select, a, [role="button"], .cursor-pointer, [onClick], .vip-card, tr, td, th, h3, h4, span, div.flex.items-center.gap-1'));
+
+        let bestMatch = null;
+        let highestScore = -1;
+
+        candidates.forEach(el => {
+            const rect = el.getBoundingClientRect();
+            // Ekranda görünmeyen boyutsuz elementleri (hidden/display:none) atla
+            if (rect.width === 0 || rect.height === 0) return;
+
             const text = el.textContent?.toLowerCase().trim() || '';
             const placeholder = el.getAttribute('placeholder')?.toLowerCase().trim() || '';
             const title = el.getAttribute('title')?.toLowerCase().trim() || '';
-            return text === normalizedTarget || placeholder === normalizedTarget || title === normalizedTarget;
-        });
-        if (matched) return matched;
+            const id = el.id?.toLowerCase().trim() || '';
 
-        matched = candidates.find(el => {
-            const text = el.textContent?.toLowerCase().trim() || '';
-            const placeholder = el.getAttribute('placeholder')?.toLowerCase().trim() || '';
-            return text.includes(normalizedTarget) || placeholder.includes(normalizedTarget);
-        });
-        if (matched) return matched;
+            let score = 0;
 
-        // 4. Öğrenci detayına inen arama (Örn: "ali koç")
-        if (normalizedTarget.length > 2) {
-            const spans = Array.from(document.querySelectorAll('span, p, div.font-bold, font-black'));
-            matched = spans.find(el => {
-                const text = el.textContent?.toLowerCase().trim() || '';
-                return text === normalizedTarget || text.includes(normalizedTarget);
-            });
-            if (matched) {
-                const clickableParent = matched.closest('button, tr, .cursor-pointer, [onClick]');
-                return clickableParent || matched;
+            // 1. Kesin Eşleşme (Exact Match)
+            if (text === normalizedTarget || placeholder === normalizedTarget || title === normalizedTarget || id === normalizedTarget) {
+                score += 100;
             }
+            // 2. Başlangıç Eşleşmesi (Starts With)
+            else if (text.startsWith(normalizedTarget) || placeholder.startsWith(normalizedTarget)) {
+                score += 60;
+            }
+            // 3. İçerme (Includes)
+            else if (text.includes(normalizedTarget) || placeholder.includes(normalizedTarget)) {
+                score += 30;
+            }
+
+            if (score === 0) return; // Kelime hiç eşleşmediyse atla
+
+            // Tag/Tip Puanlaması (Ajan butona basmayı/input'a girmeyi tercih etmeli)
+            const tag = el.tagName.toUpperCase();
+            if (tag === 'BUTTON') score += 25;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') score += 25;
+            if (el.getAttribute('role') === 'button') score += 15;
+            if (el.onclick || el.hasAttribute('onClick')) score += 15;
+
+            // Merkezde/Görünür Olma Puanlaması (Viewport içinde mi?)
+            if (rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth) {
+                score += 15; // Tamamen ekranda görünenlere ekstra öncelik
+            } else if (rect.top >= -500 && rect.bottom <= window.innerHeight + 500) {
+                score += 5; // Yakınlarda olanlara az puan
+            }
+
+            if (score > highestScore) {
+                highestScore = score;
+                bestMatch = el;
+            }
+        });
+
+        if (bestMatch) {
+            // Eğer eşleşen nesne bir text (span/p) ise ve tıklanabilir parent'ı varsa onu al
+            const clickableParent = bestMatch.closest('button, a, [onClick], [role="button"], tr.cursor-pointer');
+            return clickableParent || bestMatch;
         }
 
         return null;
