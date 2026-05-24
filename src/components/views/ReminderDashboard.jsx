@@ -39,6 +39,31 @@ const ReminderDashboard = ({ reminders, setReminders }) => {
     const activeReminders = sortedReminders.filter(r => !r.isTriggered);
     const pastReminders = sortedReminders.filter(r => r.isTriggered);
 
+    const [currentTime, setCurrentTime] = useState(new Date());
+    React.useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const getRemainingTime = (targetTimeStr) => {
+        if (!targetTimeStr) return null;
+        const target = new Date(targetTimeStr);
+        const diff = target - currentTime;
+        if (diff <= 0) return "Süre Doldu";
+        
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const mins = Math.floor((diff / 1000 / 60) % 60);
+        const secs = Math.floor((diff / 1000) % 60);
+        
+        let parts = [];
+        if (days > 0) parts.push(`${days}g`);
+        if (hours > 0) parts.push(`${hours}s`);
+        if (mins > 0) parts.push(`${mins}dk`);
+        if (days === 0 && hours === 0) parts.push(`${secs}sn`);
+        return "Kalan Süre: " + parts.join(" ");
+    };
+
     return (
         <motion.div 
             initial={{ opacity: 0, y: 20 }} 
@@ -127,9 +152,16 @@ const ReminderDashboard = ({ reminders, setReminders }) => {
                                     </button>
                                     <div className="flex-1">
                                         <p className="font-bold text-slate-800 text-sm">{r.text}</p>
-                                        <div className="flex items-center gap-1.5 mt-2 text-xs font-bold text-slate-500">
-                                            <Calendar size={12} />
-                                            {r.targetTime ? new Date(r.targetTime).toLocaleString('tr-TR') : 'Süresiz/Sürekli Hatırlatıcı'}
+                                        <div className="flex flex-col gap-1 mt-2">
+                                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                                                <Calendar size={12} />
+                                                {r.targetTime ? new Date(r.targetTime).toLocaleString('tr-TR') : 'Süresiz/Sürekli Hatırlatıcı'}
+                                            </div>
+                                            {r.targetTime && (
+                                                <div className="text-[10px] font-black text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full w-fit">
+                                                    {getRemainingTime(r.targetTime)}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <button 
