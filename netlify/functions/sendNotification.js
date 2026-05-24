@@ -44,7 +44,11 @@ exports.handler = async (event, context) => {
         const oneSignalPayload = {
             app_id: appId,
             headings: { "en": title, "tr": title },
-            contents: { "en": text, "tr": text }
+            contents: { "en": text, "tr": text },
+            priority: 10,
+            android_sound: "notification",
+            ios_sound: "default",
+            android_visibility: 1
         };
 
         if (send_after) {
