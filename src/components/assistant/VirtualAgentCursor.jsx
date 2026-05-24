@@ -15,6 +15,7 @@ const VirtualAgentCursor = () => {
 
     const trailIdRef = useRef(0);
     const cursorRef = useRef(null);
+    const hideTimeoutRef = useRef(null);
 
     // Akıcı kuyruk izi (trail particles) için pozisyon değiştikçe iz noktaları ekle
     useEffect(() => {
@@ -84,15 +85,9 @@ const VirtualAgentCursor = () => {
             'notlarım butonu': 'button[title="Notlarım"]',
             'akıllı notlar': 'button[title="Notlarım"]',
             'not defteri': 'button[title="Notlarım"]',
-            'yeni öğrenci': 'button',
-            'öğrenci ara': 'button',
             'kapat': 'button[title="Kapat"]',
             'kapat butonu': 'button[title="Kapat"]',
             'ayarlar': 'button[title="Sistem Ayarları"]',
-            'ödev ekle': 'button',
-            'ödev ekle butonu': 'button',
-            'kaydet': 'button',
-            'kaydet butonu': 'button',
             'ödev-başlık-girişi': 'input[placeholder*="Ödev Başlığı"], input[name*="title"], input[id*="title"]',
             'ödev-tarih-girişi': 'input[type="date"], input[name*="date"], input[id*="date"]'
         };
@@ -166,6 +161,11 @@ const VirtualAgentCursor = () => {
     // Sanal İmleç Glide Hareketi, Tıklama ve Kendi Kendini Düzeltmeli Klavye Motoru
     const triggerAction = useCallback(async (actionType, target, text = '') => {
         return new Promise((resolve) => {
+            if (hideTimeoutRef.current) {
+                clearTimeout(hideTimeoutRef.current);
+                hideTimeoutRef.current = null;
+            }
+
             // Ajan görsel tarama yapıyor hissi uyandır
             setActiveAction('tarama');
             setActiveThought(`Ekrandaki interaktif nesneler taranıyor ve etiketleniyor...`);
@@ -251,8 +251,8 @@ const VirtualAgentCursor = () => {
 
                 // Actor-Critic: Tıklama sonrası modal veya veri değişimi oldu mu doğrula
                 setTimeout(() => {
-                    setIsVisible(false);
                     setDetectedTags([]);
+                    hideTimeoutRef.current = setTimeout(() => setIsVisible(false), 3000);
                     resolve({ success: true });
                 }, 400);
             }, 300);
@@ -311,8 +311,8 @@ const VirtualAgentCursor = () => {
             element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
 
             setTimeout(() => {
-                setIsVisible(false);
                 setDetectedTags([]);
+                hideTimeoutRef.current = setTimeout(() => setIsVisible(false), 3000);
                 resolve({ success: true });
             }, 600);
 
@@ -320,8 +320,8 @@ const VirtualAgentCursor = () => {
             // Scroll veya Diğer
             element.scrollIntoView({ behavior: 'smooth', block: 'center' });
             setTimeout(() => {
-                setIsVisible(false);
                 setDetectedTags([]);
+                hideTimeoutRef.current = setTimeout(() => setIsVisible(false), 3000);
                 resolve({ success: true });
             }, 600);
         }
