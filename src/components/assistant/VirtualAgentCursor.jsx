@@ -112,19 +112,20 @@ const VirtualAgentCursor = () => {
             const placeholder = el.getAttribute('placeholder')?.toLowerCase().trim() || '';
             const title = el.getAttribute('title')?.toLowerCase().trim() || '';
             const id = el.id?.toLowerCase().trim() || '';
+            const jarvisTarget = el.getAttribute('data-jarvis-target')?.toLowerCase().trim() || '';
 
             let score = 0;
 
             // 1. Kesin Eşleşme (Exact Match)
-            if (text === normalizedTarget || placeholder === normalizedTarget || title === normalizedTarget || id === normalizedTarget) {
+            if (text === normalizedTarget || placeholder === normalizedTarget || title === normalizedTarget || id === normalizedTarget || jarvisTarget === normalizedTarget) {
                 score += 100;
             }
             // 2. Başlangıç Eşleşmesi (Starts With)
-            else if (text.startsWith(normalizedTarget) || placeholder.startsWith(normalizedTarget)) {
+            else if (text.startsWith(normalizedTarget) || placeholder.startsWith(normalizedTarget) || jarvisTarget.startsWith(normalizedTarget)) {
                 score += 60;
             }
             // 3. İçerme (Includes)
-            else if (text.includes(normalizedTarget) || placeholder.includes(normalizedTarget)) {
+            else if (text.includes(normalizedTarget) || placeholder.includes(normalizedTarget) || jarvisTarget.includes(normalizedTarget)) {
                 score += 30;
             }
 
