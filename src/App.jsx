@@ -187,6 +187,39 @@ const App = () => {
             const next = typeof updater === 'function' ? updater(prev) : updater;
             if (JSON.stringify(prev) !== JSON.stringify(next)) {
                 updateDoc(doc(db, SETTINGS_COLLECTION, SETTINGS_DOC), { reminders: next }).catch(console.error);
+
+                // Yeni eklenen hatırlatıcıları tespit et
+                const addedReminders = next.filter(nItem => !prev.some(pItem => pItem.id === nItem.id));
+                addedReminders.forEach(r => {
+                    if (r.targetTime && !r.isTriggered) {
+                        const targetDate = new Date(r.targetTime);
+                        if (targetDate.getTime() > Date.now()) {
+                            // OneSignal send_after beklediği format string
+                            const pad = (num) => String(num).padStart(2, '0');
+                            const offset = -targetDate.getTimezoneOffset();
+                            const sign = offset >= 0 ? '+' : '-';
+                            const offsetHours = pad(Math.floor(Math.abs(offset) / 60));
+                            const offsetMins = pad(Math.abs(offset) % 60);
+                            const timezoneString = `GMT${sign}${offsetHours}${offsetMins}`;
+                            const sendAfterStr = `${targetDate.getFullYear()}-${pad(targetDate.getMonth()+1)}-${pad(targetDate.getDate())} ${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}:${pad(targetDate.getSeconds())} ${timezoneString}`;
+
+                            fetch('/.netlify/functions/sendNotification', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    title: '🚨 Jarvis Hatırlatıcısı',
+                                    text: r.text,
+                                    targetClasses: [],
+                                    targetVipStudents: [],
+                                    targetStudentIds: ['teacher_admin'],
+                                    send_after: sendAfterStr
+                                })
+                            }).then(res => res.json()).then(data => {
+                                console.log("Arka plan hatırlatıcı bildirimi OneSignal'de planlandı:", sendAfterStr, data);
+                            }).catch(console.error);
+                        }
+                    }
+                });
             }
             return next;
         });
@@ -222,40 +255,31 @@ const App = () => {
             const now = new Date();
             setReminders(prev => {
                 let changed = false;
-                let triggeredReminder = null;
                 const updated = prev.map(r => {
                     if (r.targetTime && !r.isTriggered && new Date(r.targetTime) <= now) {
-                        // Vakti geldi, bildirim gönder (Ses ve Modal/Toast)
-                        playNotificationSound();
-                        if (window.navigator && window.navigator.vibrate) {
-                            window.navigator.vibrate([200, 100, 200]);
-                        }
-                        triggeredReminder = r;
-                        
-                        setTimeout(async () => {
-                            // 1. Uygulama İçi Bildirim Modalı
-                            setSelectedNotification({
-                                id: r.id || Date.now().toString(),
-                                title: '🚨 Jarvis Hatırlatıcısı',
-                                text: r.text,
-                                isLocal: true,
-                                timestamp: new Date().toISOString()
-                            });
+                        const diffMs = now.getTime() - new Date(r.targetTime).getTime();
+                        const isLive = diffMs >= 0 && diffMs < 15000; // Son 15 saniye içinde mi tetiklendi?
 
-                            // 2. Öğretmenin telefonuna uyandırmalı sesli Push Notification gönder (OneSignal)
-                            fetch('/.netlify/functions/sendNotification', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
+                        if (isLive) {
+                            // Canlı tetiklenmede sesli ve görsel uyar
+                            playNotificationSound();
+                            if (window.navigator && window.navigator.vibrate) {
+                                window.navigator.vibrate([200, 100, 200]);
+                            }
+                            
+                            setTimeout(() => {
+                                setSelectedNotification({
+                                    id: r.id || Date.now().toString(),
                                     title: '🚨 Jarvis Hatırlatıcısı',
                                     text: r.text,
-                                    targetClasses: [],
-                                    targetVipStudents: [],
-                                    targetStudentIds: ['teacher_admin']
-                                })
-                            }).catch(console.error);
+                                    isLocal: true,
+                                    timestamp: new Date().toISOString()
+                                });
+                            }, 500);
+                        }
 
-                            // 3. Veritabanına Yönetici Bildirimi Olarak Kaydet (Geçmiş takibi için)
+                        // Her iki durumda da veritabanı kaydı oluştur (Geçmiş takibi için)
+                        setTimeout(async () => {
                             try {
                                 const notifRef = collection(db, NOTIFICATIONS_COLLECTION);
                                 await addDoc(notifRef, {
@@ -277,9 +301,8 @@ const App = () => {
                             } catch (error) {
                                 console.error("Geçmiş bildirimi kaydedilemedi:", error);
                             }
-                            
-                        }, 500);
-                        
+                        }, 600);
+
                         changed = true;
                         return { ...r, isTriggered: true };
                     }
