@@ -42,6 +42,7 @@ const Sidebar = ({
         { id: 'whatsapp', label: 'WhatsApp Mesajı', icon: MessageCircle },
         { id: 'send-notification', label: 'Bildirim Gönder', icon: Bell },
         { id: 'library', label: 'Kütüphane', icon: BookOpen },
+        { id: 'super-agent', label: 'Süper Ajan', icon: Target },
     ];
 
     const studentMenu = [];
