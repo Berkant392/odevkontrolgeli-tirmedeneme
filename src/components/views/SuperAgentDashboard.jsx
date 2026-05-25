@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Play, Pause, RefreshCw, Terminal, Download, Cpu, ShieldAlert, Zap, 
-    Sparkles, BookOpen, Plus, Settings, AlertCircle, Copy, Check, Eye, HelpCircle, ArrowRight
+    Sparkles, BookOpen, Plus, Settings, AlertCircle, Copy, Check, Eye, HelpCircle, ArrowRight,
+    Mic
 } from 'lucide-react';
 import { db } from '../../config/firebase';
 import { collection, addDoc, getDocs, query, orderBy, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
@@ -22,8 +23,55 @@ const SuperAgentDashboard = ({ classes, allTrials }) => {
     const [learnedSkills, setLearnedSkills] = useState([]);
     const [showInstructions, setShowInstructions] = useState(true);
     const [copiedFile, setCopiedFile] = useState(null);
+    const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef(null);
 
     const logsEndRef = useRef(null);
+
+    // Web Speech API - Türkçe Sesli Kontrol Entegrasyonu
+    useEffect(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'tr-TR';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            recognition.onstart = () => {
+                setIsListening(true);
+            };
+
+            recognition.onend = () => {
+                setIsListening(false);
+            };
+
+            recognition.onresult = (event) => {
+                const speechToText = event.results[0][0].transcript;
+                setTaskCommand(speechToText);
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech recognition error:", event.error);
+                setIsListening(false);
+            };
+
+            recognitionRef.current = recognition;
+        }
+    }, []);
+
+    const toggleListening = () => {
+        if (!recognitionRef.current) {
+            alert("Tarayıcınız ses tanıma özelliğini desteklemiyor. Lütfen Chrome kullanın.");
+            return;
+        }
+
+        if (isListening) {
+            recognitionRef.current.stop();
+        } else {
+            recognitionRef.current.start();
+        }
+    };
 
     // Eklenti haberleşmesi için ping-pong mekanizması
     useEffect(() => {
@@ -523,6 +571,18 @@ Bu adımı kurtarmak için alternatif bir eylem planı öner. Tek bir JSON adım
                                 disabled={isExecuting}
                                 className="flex-1 border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-pink-500 transition-colors bg-slate-50"
                             />
+                            
+                            <button
+                                onClick={toggleListening}
+                                disabled={isExecuting}
+                                className={`p-3 rounded-xl border-2 flex items-center justify-center transition-all shrink-0
+                                    ${isListening 
+                                        ? 'bg-rose-500 border-rose-500 text-white animate-pulse shadow-glow' 
+                                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-pink-500 hover:text-pink-500'}`}
+                                title={isListening ? "Dinleniyor..." : "Sesle Komut Ver"}
+                            >
+                                <Mic size={20} />
+                            </button>
                             
                             <button
                                 onClick={() => handleStartAgentTask()}
