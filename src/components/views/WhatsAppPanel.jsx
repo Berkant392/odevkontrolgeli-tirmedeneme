@@ -14,6 +14,7 @@ const WhatsAppPanel = ({ classes, allTrials }) => {
     const [sendQueue, setSendQueue] = useState([]);
     const [currentSendIndex, setCurrentSendIndex] = useState(0);
     const [isSending, setIsSending] = useState(false);
+    const [sendMode, setSendMode] = useState('popup_single'); // 'popup_single' | 'web_single' | 'web_multi'
 
     const toggleClassExpand = (classId) => {
         setExpandedClasses(prev => ({ ...prev, [classId]: !prev[classId] }));
@@ -130,7 +131,18 @@ const WhatsAppPanel = ({ classes, allTrials }) => {
         if (currentSendIndex < sendQueue.length) {
             const item = sendQueue[currentSendIndex];
             const url = `https://web.whatsapp.com/send?phone=${item.phone}&text=${item.text}`;
-            window.open(url, '_blank');
+            
+            if (sendMode === 'popup_single') {
+                const width = 850;
+                const height = 650;
+                const left = window.screen.width - width - 20; // Ekranın sağına yasla
+                const top = 100;
+                window.open(url, 'whatsapp_reusable_window', `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,location=no,toolbar=no,menubar=no`);
+            } else if (sendMode === 'web_single') {
+                window.open(url, 'whatsapp_reusable_window');
+            } else {
+                window.open(url, '_blank');
+            }
             
             if (currentSendIndex + 1 === sendQueue.length) {
                 setIsSending(false); // Bitti
@@ -210,11 +222,48 @@ const WhatsAppPanel = ({ classes, allTrials }) => {
                         </div>
                     </div>
 
+                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                        <h2 className="text-sm font-black text-slate-800 mb-4 uppercase tracking-widest flex items-center gap-2">
+                            <Send size={16} className="text-[#25D366]" /> 2. Gönderim Türü
+                        </h2>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <label className={`flex flex-col p-3 rounded-xl border-2 cursor-pointer transition-colors text-center justify-between h-28 ${sendMode === 'popup_single' ? 'border-[#25D366] bg-[#25D366]/5' : 'border-slate-100 hover:border-slate-200 bg-slate-50'}`}>
+                                <input type="radio" name="sendmode" checked={sendMode === 'popup_single'} onChange={() => setSendMode('popup_single')} className="sr-only" />
+                                <div>
+                                    <div className="font-bold text-slate-800 text-xs flex items-center justify-center gap-1">🚀 Akıllı Pencere</div>
+                                    <div className="text-[10px] text-slate-400 mt-1.5 leading-normal">Yan tarafta bağımsız pop-up pencere açar ve orada günceller. Sıfır sekme kirliliği!</div>
+                                </div>
+                            </label>
+
+                            <label className={`flex flex-col p-3 rounded-xl border-2 cursor-pointer transition-colors text-center justify-between h-28 ${sendMode === 'web_single' ? 'border-[#25D366] bg-[#25D366]/5' : 'border-slate-100 hover:border-slate-200 bg-slate-50'}`}>
+                                <input type="radio" name="sendmode" checked={sendMode === 'web_single'} onChange={() => setSendMode('web_single')} className="sr-only" />
+                                <div>
+                                    <div className="font-bold text-slate-800 text-xs flex items-center justify-center gap-1">🌐 Ayrı Sekme</div>
+                                    <div className="text-[10px] text-slate-400 mt-1.5 leading-normal">Normal tarayıcınızda tek bir sekme üzerinde sırayla açar ve günceller.</div>
+                                </div>
+                            </label>
+
+                            <label className={`flex flex-col p-3 rounded-xl border-2 cursor-pointer transition-colors text-center justify-between h-28 ${sendMode === 'web_multi' ? 'border-[#25D366] bg-[#25D366]/5' : 'border-slate-100 hover:border-slate-200 bg-slate-50'}`}>
+                                <input type="radio" name="sendmode" checked={sendMode === 'web_multi'} onChange={() => setSendMode('web_multi')} className="sr-only" />
+                                <div>
+                                    <div className="font-bold text-slate-800 text-xs flex items-center justify-center gap-1">📑 Klasik Sekmeler</div>
+                                    <div className="text-[10px] text-slate-400 mt-1.5 leading-normal">Her mesajı tamamen yeni bir tarayıcı sekmesinde açan eski klasik yöntem.</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
                     {isSending && (
                         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-[#25D366] rounded-3xl p-6 shadow-lg text-white">
                             <h2 className="text-xl font-black mb-2">Gönderim Kuyruğu Aktif</h2>
-                            <p className="text-sm font-medium text-[#25D366] bg-white/20 p-3 rounded-xl mb-4">
-                                Tarayıcı engeline takılmamak için mesajlar tek tek açılır. WhatsApp Web açıldıktan sonra gönderin ve buraya dönüp "Sıradaki" butonuna basın.
+                            <p className="text-sm font-medium text-white/90 bg-white/20 p-3 rounded-xl mb-4 leading-relaxed">
+                                {sendMode === 'popup_single' 
+                                    ? "Mesajlar ekranın sağında açılan tek bir özel pop-up penceresinde sırayla yüklenecektir. Gönderip buraya dönün ve 'Sıradaki'ne basın."
+                                    : sendMode === 'web_single'
+                                        ? "Mesajlar tarayıcınızdaki tek bir ortak sekmede sırayla açılacaktır. Gönderip buraya dönün ve 'Sıradaki'ne basın."
+                                        : "Tarayıcı engeline takılmamak için mesajlar tek tek açılır. WhatsApp Web açıldıktan sonra gönderin ve buraya dönüp 'Sıradaki' butonuna basın."
+                                }
                             </p>
                             
                             <div className="flex items-center justify-between mb-2">
