@@ -786,7 +786,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     };
 
     // AKILLI RE-ACT DÖNGÜSÜ YÜRÜTME MOTORU
-    const handleStartAgentTask = async (customPrompt = null) => {
+    async function handleStartAgentTask(customPrompt = null) {
         const prompt = customPrompt || taskCommand;
         if (!prompt.trim()) return;
 
@@ -959,7 +959,7 @@ Bu adımı kurtarmak için alternatif bir eylem planı öner. Tek bir JSON adım
             // İmleci temizle
             sendCommandToExtension('STOP_AGENT').catch(console.error);
         }
-    };
+    }
 
     const handleCopyFileContent = (fileName, content) => {
         navigator.clipboard.writeText(content);
