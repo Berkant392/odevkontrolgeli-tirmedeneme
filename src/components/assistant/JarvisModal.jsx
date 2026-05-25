@@ -5,6 +5,7 @@ import { STATUS_OPTIONS } from '../../utils/constants';
 import { jsPDF } from "jspdf";
 import Fuse from 'fuse.js';
 import { GeminiLiveService } from '../../services/GeminiLiveService';
+import { QuestionSolverService } from '../../services/QuestionSolverService';
 
 // ═══════════════════════════════════════════════════════════════
 // 🛡️ GÜVENLİK KALKANI & YARDIMCI FONKSİYONLAR
@@ -205,6 +206,24 @@ const JARVIS_TOOLS = [
             },
             required: ["action_type", "target"]
         }
+    },
+    {
+        name: "solve_complex_question_or_search",
+        description: "Ekrandaki veya kameradaki yks, lgs, matematik, geometri, fizik sorularını çözmek ya da güncel internet aramaları/araştırmaları yapmak için çağrılır. Bilgi okumak veya normal sohbet için ÇAĞIRMA.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                query: {
+                    type: "STRING",
+                    description: "Kullanıcının çözülmesini istediği sorunun özeti veya güncel bilgi talebi."
+                },
+                needsWebSearch: {
+                    type: "BOOLEAN",
+                    description: "Gerçek zamanlı Google araması / güncel internet verisi gerekip gerekmediği."
+                }
+            },
+            required: ["query"]
+        }
     }
 ];
 
@@ -216,6 +235,14 @@ const AssistantModal = ({ classes, allTrials = [], updateClassInDb, onClose, ini
     const [isListening, setIsListening] = useState(false);
     const [speechTranscript, setSpeechTranscript] = useState("");
     const [jarvisFeedback, setJarvisFeedback] = useState("Sistem aktif. Öğrenci adını söyleyin.");
+    
+    // 🧠 ÇOKLU MODEL AKILLI SORU ÇÖZME STATE'LERİ
+    const [isSolverActive, setIsSolverActive] = useState(false);
+    const [solverModel, setSolverModel] = useState("Model 1");
+    const [solverMessage, setSolverMessage] = useState("");
+    const [solverResult, setSolverResult] = useState(null);
+    const questionSolverRef = useRef(new QuestionSolverService());
+
     const [foundStudents, setFoundStudents] = useState(initialStudent ? [initialStudent] : []);
     const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
     const [foundTopics, setFoundTopics] = useState([]);
@@ -988,6 +1015,47 @@ YASAKLAR:
                         setJarvisNotes(prev => [...prev, newNote]);
                         response = { success: true, message: "Ekran görüntüsü başarıyla not defterine eklendi." };
                         setJarvisFeedback("Ekran görüntüsü notlara eklendi 📸");
+                    } else if (name === "solve_complex_question_or_search") {
+                        const snapshot = geminiServiceRef.current?.getSnapshotBase64() || null;
+                        setIsSolverActive(true);
+                        setSolverModel("Model 1");
+                        setSolverMessage("Model 1 ile çözülüyor...");
+                        setSolverResult(null);
+                        setJarvisFeedback("Akıllı akıl yürütme motoru çalıştırılıyor... 🧠");
+
+                        try {
+                            const result = await questionSolverRef.current.solveWithFallback(
+                                args.query,
+                                snapshot,
+                                args.needsWebSearch || false,
+                                (modelName, message, isLimitExceeded) => {
+                                    setSolverModel(modelName);
+                                    setSolverMessage(message);
+                                    if (isLimitExceeded) {
+                                        setJarvisFeedback(`⚠️ ${modelName} limitine ulaşıldı, bir sonraki modele geçiliyor...`);
+                                    }
+                                }
+                            );
+                            
+                            // Başarılı çözüm
+                            setSolverResult(result.text);
+                            setIsSolverActive(false);
+                            setJarvisFeedback(`Çözüm tamamlandı! (Kaynak: ${result.model}) ✅`);
+                            
+                            response = { 
+                                success: true, 
+                                solution: result.text,
+                                message: `Soru Model ${result.model} tarafından başarıyla çözüldü! İşte çözüm:\n\n${result.text}`
+                            };
+                        } catch (err) {
+                            console.error("Soru çözme hatası:", err);
+                            setIsSolverActive(false);
+                            setJarvisFeedback("⚠️ Tüm modeller limit aşımında veya hata verdi.");
+                            response = { 
+                                success: false, 
+                                message: `Tüm gelişmiş modellerimizin limiti dolduğu için soruyu maalesef çözemedim. Hata detayı: ${err.message}`
+                            };
+                        }
                     } else if (name === "simulate_app_action") {
                         if (window.bhAgent && window.bhAgent.trigger) {
                             // Eğer ekran paylaşımı henüz açılmadıysa, ultra zeki ajanın görerek kontrol edebilmesi için izni otomatik tetikleyelim!
@@ -1328,6 +1396,73 @@ YASAKLAR:
                             </span>
                             {jarvisFeedback}
                         </div>
+
+                        {/* 🧠 ÇOKLU MODEL AKILLI SORU ÇÖZME HUD */}
+                        <AnimatePresence>
+                            {isSolverActive && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                                    className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/50 shadow-md w-full max-w-md relative overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none" />
+                                    <div className="flex items-center gap-3 relative z-10">
+                                        <div className="w-8 h-8 rounded-full bg-brandPurple/10 flex items-center justify-center text-brandPurple animate-spin">
+                                            <Loader2 size={18} />
+                                        </div>
+                                        <div className="text-left">
+                                            <h4 className="text-xs font-black text-slate-800 tracking-wider uppercase">AKILLI AKIL YÜRÜTME MOTORU</h4>
+                                            <p className="text-[11px] text-slate-600 font-bold mt-0.5">{solverMessage}</p>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        <AnimatePresence>
+                            {solverResult && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    className="mt-4 p-4 rounded-2xl bg-white border border-slate-150 shadow-lg text-left max-h-[300px] overflow-y-auto w-full max-w-md relative scrollbar-thin"
+                                >
+                                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-2.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Son Çözülen Soru / Arama Yanıtı</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    const newNote = {
+                                                        id: Date.now(),
+                                                        text: solverResult,
+                                                        image: null,
+                                                        date: new Date().toLocaleString('tr-TR')
+                                                    };
+                                                    setJarvisNotes(prev => [...prev, newNote]);
+                                                    setJarvisFeedback("Çözüm akıllı not defterine kaydedildi! 📝");
+                                                }}
+                                                className="text-[10px] font-black text-brandPurple hover:bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-100 transition-all active:scale-95"
+                                            >
+                                                Nota Kaydet
+                                            </button>
+                                            <button 
+                                                onClick={() => setSolverResult(null)}
+                                                className="text-[10px] font-black text-slate-400 hover:text-slate-600 transition-colors px-2 py-1"
+                                            >
+                                                Temizle
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-line prose prose-slate">
+                                        {solverResult}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
                         {/* BEKLEYEN KAYNAK PANELİ */}
                         <AnimatePresence>
