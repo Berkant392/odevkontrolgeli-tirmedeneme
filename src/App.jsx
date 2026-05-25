@@ -176,11 +176,11 @@ const App = () => {
     const [isRemindersLoaded, setIsRemindersLoaded] = useState(false);
 
     useEffect(() => {
-        if (!isRemindersLoaded && globalReminders) {
+        if (globalReminders) {
             setRemindersState(globalReminders);
             setIsRemindersLoaded(true);
         }
-    }, [globalReminders, isRemindersLoaded]);
+    }, [globalReminders]);
 
     const setReminders = (updater) => {
         setRemindersState(prev => {
@@ -190,6 +190,30 @@ const App = () => {
             }
             return next;
         });
+    };
+
+    const playNotificationSound = () => {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const playTone = (freq, time, duration) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, time);
+                gain.gain.setValueAtTime(0, time);
+                gain.gain.linearRampToValueAtTime(0.3, time + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+                osc.start(time);
+                osc.stop(time + duration);
+            };
+            const now = audioCtx.currentTime;
+            playTone(587.33, now, 0.35); // D5
+            playTone(880, now + 0.12, 0.45); // A5
+        } catch (e) {
+            console.error("Ses sentezlenemedi:", e);
+        }
     };
 
     useEffect(() => {
@@ -202,6 +226,7 @@ const App = () => {
                 const updated = prev.map(r => {
                     if (r.targetTime && !r.isTriggered && new Date(r.targetTime) <= now) {
                         // Vakti geldi, bildirim gönder (Ses ve Modal/Toast)
+                        playNotificationSound();
                         if (window.navigator && window.navigator.vibrate) {
                             window.navigator.vibrate([200, 100, 200]);
                         }
@@ -363,8 +388,17 @@ const App = () => {
     });
     const [selectedNotification, setSelectedNotification] = useState(null);
 
-    // Öğrenci için birleşik bildirimler
+    // Öğrenci veya öğretmen için birleşik bildirimler
     const studentNotifications = React.useMemo(() => {
+        if (currentUserRole === 'teacher') {
+            let teacherNotifs = notifications.filter(n => {
+                if (n.targetClasses && n.targetClasses.includes('teacher_admin')) return true;
+                return false;
+            });
+            teacherNotifs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            return teacherNotifs.map((n, idx) => ({ ...n, id: n.id || `notif_${idx}` })).slice(0, 10);
+        }
+
         if (!loggedInStudent) return [];
         let globalNotifs = notifications.filter(n => {
             if (n.targetClasses && n.targetClasses.includes('all')) return true;
@@ -383,7 +417,7 @@ const App = () => {
 
     // Badge API (uygulama ikonundaki rozet)
     useEffect(() => {
-        if (currentUserRole === 'student' || currentUserRole === 'vip-student') {
+        if (currentUserRole === 'student' || currentUserRole === 'vip-student' || currentUserRole === 'teacher') {
             if (navigator.setAppBadge) {
                 if (unreadCount > 0) navigator.setAppBadge(unreadCount).catch(console.error);
                 else navigator.clearAppBadge().catch(console.error);
