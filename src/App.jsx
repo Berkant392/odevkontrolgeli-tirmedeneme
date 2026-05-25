@@ -40,6 +40,7 @@ import TrialTracker from './components/views/TrialTracker';
 import VirtualAgentCursor from './components/assistant/VirtualAgentCursor';
 import ReminderDashboard from './components/views/ReminderDashboard';
 import WhatsAppPanel from './components/views/WhatsAppPanel';
+import SuperAgentDashboard from './components/views/SuperAgentDashboard';
 
 const App = () => {
     // 🔥 DATA HOOKS
@@ -974,6 +975,7 @@ const App = () => {
                     {isTeacherMode && view === 'home' && activeTab === 'library' && <LibraryView libraryCategory={libraryCategory} setLibraryCategory={setLibraryCategory} libraryInput={libraryInput} setLibraryInput={setLibraryInput} libraryDate={libraryDate} setLibraryDate={setLibraryDate} libraryItems={libraryItems} addLibraryItem={addLibraryItem} deleteLibraryItem={deleteLibraryItem} />}
                     {isTeacherMode && view === 'home' && activeTab === 'reminders' && <ReminderDashboard reminders={reminders} setReminders={setReminders} />}
                     {isTeacherMode && view === 'home' && activeTab === 'whatsapp' && <WhatsAppPanel classes={classes} allTrials={allTrials} />}
+                    {isTeacherMode && view === 'home' && activeTab === 'super-agent' && <SuperAgentDashboard classes={classes} allTrials={allTrials} />}
 
                     {isTeacherMode && view === 'class-detail' && selectedClass && (
                         <ClassDetail
