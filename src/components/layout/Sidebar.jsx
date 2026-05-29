@@ -104,26 +104,7 @@ const Sidebar = ({
 
             {/* Orta Kısım: Menü Öğeleri */}
             <div className="flex-1 py-6 flex flex-col gap-2 overflow-y-auto overflow-x-hidden px-3">
-                {activeStudentSession && (
-                    <button
-                        onClick={() => joinLiveSession(activeStudentSession)}
-                        className="flex items-center gap-3 p-3 rounded-xl transition-all duration-300 relative group bg-gradient-to-tr from-brandPurple to-blue-600 text-white font-black shadow-lg hover:shadow-brandPurple/30 border border-brandPurple animate-pulse"
-                    >
-                        <div className="shrink-0 relative">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping absolute -top-1 -right-1"></span>
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 absolute -top-0.5 -right-0.5"></span>
-                            <Rocket size={20} />
-                        </div>
-                        <span className={`whitespace-nowrap transition-opacity duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>
-                            Canlı Derse Katıl
-                        </span>
-                        {!isExpanded && !isMobile && (
-                            <div className="absolute left-full ml-4 px-2 py-1 bg-brandPurple text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-md">
-                                Canlı Derse Katıl
-                            </div>
-                        )}
-                    </button>
-                )}
+                {/* Removed persistent live class join button per user request */}
                 {menuItems.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400 opacity-60 space-y-3 mt-10">
                         <Rocket size={40} strokeWidth={1.5} className={currentUserRole === 'vip-student' ? 'text-amber-500 mb-2' : 'text-brandPurple mb-2'} />
