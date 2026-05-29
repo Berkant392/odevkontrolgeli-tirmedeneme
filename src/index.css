@@ -360,3 +360,89 @@ tbody tr:hover { background-color: #f1f5f9; }
 @media print { body { background-color: white !important; margin: 0; padding: 0; } .no-print { display: none !important; } .print-only { display: block !important; } @page { margin: 1cm; } }
 .print-only { display: none; }
 @media (max-width: 768px) { .fab-button { bottom: calc(85px + env(safe-area-inset-bottom)); right: 20px; width: 60px; height: 60px; } }
+
+/* =========================================================
+   🎥 LIVEKIT CANLI DERS — MOBİL & PC OVERRIDE'LARI
+   ========================================================= */
+
+/* Kök konteynerin ekranı tam kaplaması */
+.lk-classroom-root {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 9999 !important;
+    overflow: hidden !important;
+    /* iOS Safari tam ekran düzeltmesi */
+    height: 100dvh !important;
+    width: 100vw !important;
+}
+
+/* LiveKit bileşenlerinin taşmasını engelle */
+.lk-classroom-root .lk-room-container,
+.lk-classroom-root .lk-video-conference,
+.lk-classroom-root [data-lk-theme] {
+    height: 100% !important;
+    width: 100% !important;
+    overflow: hidden !important;
+}
+
+/* LiveKit kontrol çubuğunun mobilde düzgün görünmesi */
+.lk-classroom-root .lk-control-bar {
+    padding-bottom: env(safe-area-inset-bottom) !important;
+    z-index: 50 !important;
+}
+
+/* Video grid'in taşmasını engelle */
+.lk-classroom-root .lk-grid-layout {
+    overflow: hidden !important;
+}
+
+/* Videoların kırpılmaması */
+.lk-classroom-root .lk-participant-tile video {
+    object-fit: cover !important;
+}
+
+/* Yüzen kontrol paneli buton stilleri */
+.lk-button-custom {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 12px !important;
+    background: rgba(30, 41, 59, 0.8) !important;
+    border: 1px solid rgba(71, 85, 105, 0.5) !important;
+    color: white !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s ease !important;
+    padding: 0 !important;
+}
+.lk-button-custom:hover {
+    background: rgba(51, 65, 85, 0.9) !important;
+}
+.lk-button-custom[data-lk-enabled="false"],
+.lk-button-custom[data-lk-muted="true"] {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+}
+
+/* Fullscreen modunda iOS status bar düzeltmesi */
+.lk-classroom-root:fullscreen {
+    padding-top: 0 !important;
+}
+
+/* Mobil küçük ekranlarda LiveKit düzeltmeleri */
+@media (max-width: 640px) {
+    .lk-classroom-root .lk-control-bar {
+        padding: 8px !important;
+        gap: 4px !important;
+    }
+    .lk-classroom-root .lk-control-bar button {
+        min-width: unset !important;
+        padding: 8px !important;
+        font-size: 0 !important; /* Buton yazılarını gizle, sadece ikonlar kalsın */
+    }
+    .lk-classroom-root .lk-control-bar button svg {
+        width: 18px !important;
+        height: 18px !important;
+    }
+}
