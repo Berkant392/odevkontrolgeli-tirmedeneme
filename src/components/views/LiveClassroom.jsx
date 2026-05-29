@@ -26,7 +26,7 @@ const roomOptions = {
         resolution: VideoPresets.h720.resolution,  // 720p varsayılan yakalama
     },
     screenShareCaptureDefaults: {
-        resolution: { width: 1920, height: 1080, frameRate: 120 } // Ekran paylaşımı için potansiyel maksimum 120 FPS yakalama
+        resolution: { width: 1920, height: 1080, frameRate: 60 } // Güvenli limit: 60 FPS (120 FPS bazı cihazlarda çökmeye/kapanmaya sebep olur)
     },
     publishDefaults: {
         simulcast: true,       // Birden fazla kalite katmanı gönder (düşük gecikme için kritik)
@@ -34,14 +34,13 @@ const roomOptions = {
         
         // 🔥 AKILLI FPS ve ÇÖZÜNÜRLÜK KATMANLARI (İnternet Hızına Göre Otomatik Geçiş)
         screenShareSimulcastLayers: [
-            { width: 1920, height: 1080, frameRate: 120, bitrate: 5000000 }, // Çok iyi internet (120 FPS / Yüksek Kalite)
-            { width: 1920, height: 1080, frameRate: 60, bitrate: 3000000 },  // İyi internet (60 FPS / Standart Akıcı)
+            { width: 1920, height: 1080, frameRate: 60, bitrate: 3000000 },  // Çok İyi internet (60 FPS / Standart Akıcı)
             { width: 1280, height: 720, frameRate: 30, bitrate: 1500000 },   // Orta internet (30 FPS / Yeterli)
             { width: 854, height: 480, frameRate: 10, bitrate: 400000 },     // Kötü internet (10 FPS / Eski takılmalı ancak kopmayan hal)
         ],
         screenShareEncoding: {
-            maxBitrate: 5000000,
-            maxFramerate: 120 // Yayının çıkabileceği maksimum limit
+            maxBitrate: 3000000,
+            maxFramerate: 60 // Yayının çıkabileceği maksimum limit
         },
         dtx: true,             // Sessizlikte ses paketi gönderme (bant genişliği tasarrufu)
         red: true,             // Ses hata düzeltme (paket kaybına karşı)
