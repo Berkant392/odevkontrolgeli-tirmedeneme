@@ -831,6 +831,21 @@ const App = () => {
         }
     };
 
+    // 🔥 CANLI DERS AKTİFSE — Tüm layout'u atla, sadece LiveClassroom render et
+    if (view === 'live-classroom' && activeLiveSession) {
+        return (
+            <LiveClassroom 
+                session={activeLiveSession} 
+                isTeacherMode={isTeacherMode} 
+                onEndSession={endLiveSession} 
+                onClose={() => { setView('home'); setActiveLiveSession(null); }}
+                classes={classes}
+                loggedInStudent={loggedInStudent}
+                showAlert={showAlert}
+            />
+        );
+    }
+
     return (
         <div className={`flex h-screen overflow-hidden ${currentUserRole === 'vip-student' ? 'bg-slate-900' : 'bg-lightBg'}`}>
             <Sidebar 
@@ -1108,16 +1123,7 @@ const App = () => {
                         />
                     )}
 
-                    {view === 'live-classroom' && activeLiveSession && (
-                        <LiveClassroom 
-                            session={activeLiveSession} 
-                            isTeacherMode={isTeacherMode} 
-                            onEndSession={endLiveSession} 
-                            onClose={() => { setView('home'); setActiveLiveSession(null); }}
-                            classes={classes}
-                            loggedInStudent={loggedInStudent}
-                        />
-                    )}
+                    {/* LiveClassroom artık layout dışında render ediliyor — buradan kaldırıldı */}
                 </AnimatePresence>
             </main>
             </div> {/* End of scrollable area */}
