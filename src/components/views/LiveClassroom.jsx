@@ -47,6 +47,103 @@ const LiveClassroom = ({
     const [alertMessage, setAlertMessage] = useState(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
+    // 🔒 PWA & Mobile Native Permission States & Flow
+    const [permissionFlowState, setPermissionFlowState] = useState('checking'); // 'checking' | 'need_prompt' | 'denied' | 'ready'
+    const [permissionStatus, setPermissionStatus] = useState({ camera: 'prompt', microphone: 'prompt' });
+
+    // Robust Permission Query Helper
+    const checkPermissions = async () => {
+        try {
+            if (!navigator.permissions || !navigator.permissions.query) {
+                return { camera: 'prompt', microphone: 'prompt' };
+            }
+            
+            // Query state of both media devices safely
+            const [camStatus, micStatus] = await Promise.all([
+                navigator.permissions.query({ name: 'camera' }).catch(() => null),
+                navigator.permissions.query({ name: 'microphone' }).catch(() => null)
+            ]);
+            
+            return {
+                camera: camStatus ? camStatus.state : 'prompt',
+                microphone: micStatus ? micStatus.state : 'prompt'
+            };
+        } catch (e) {
+            console.error("İzin sorgulama hatası:", e);
+            return { camera: 'prompt', microphone: 'prompt' };
+        }
+    };
+
+    // Pre-flight permission loader on mount
+    useEffect(() => {
+        const initPermissions = async () => {
+            const perms = await checkPermissions();
+            setPermissionStatus(perms);
+            
+            // If already fully granted, launch Jitsi instantly (one-time grant behavior!)
+            if (perms.camera === 'granted' && perms.microphone === 'granted') {
+                setPermissionFlowState('ready');
+            } else if (perms.camera === 'denied' || perms.microphone === 'denied') {
+                setPermissionFlowState('denied');
+            } else {
+                setPermissionFlowState('need_prompt');
+            }
+        };
+        
+        initPermissions();
+    }, []);
+
+    // Interactive permission requester for gold action buttons
+    const handleRequestPermissions = async (requestType) => {
+        setIsLoading(true);
+        try {
+            const constraints = {};
+            if (requestType === 'both') {
+                constraints.audio = true;
+                constraints.video = true;
+            } else if (requestType === 'audio') {
+                constraints.audio = true;
+            } else if (requestType === 'video') {
+                constraints.video = true;
+            }
+            
+            // Force browser popup prompt
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            stream.getTracks().forEach(t => t.stop()); // release lock immediately
+            
+            // Sync status
+            const perms = await checkPermissions();
+            setPermissionStatus(perms);
+            setPermissionFlowState('ready');
+        } catch (e) {
+            console.warn("İzin alma hatası, alternatif deneniyor:", e);
+            
+            // Attempt graceful downgrade if requested 'both' but client lacks camera/webcam
+            if (requestType === 'both') {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(t => t.stop());
+                    
+                    const perms = await checkPermissions();
+                    setPermissionStatus(perms);
+                    setPermissionFlowState('ready');
+                    return;
+                } catch (err2) {
+                    console.error("Ses izni de alınamadı:", err2);
+                }
+            }
+            
+            // Set to blocked flow state so instructions are shown
+            setPermissionFlowState('denied');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleJoinWithoutPermissions = () => {
+        setPermissionFlowState('ready');
+    };
+
     // 1. Standalone / Query Param Yüklemesi için Firestore Dinleyicisi
     useEffect(() => {
         if (!sessionId) return;
@@ -101,7 +198,7 @@ const LiveClassroom = ({
 
     // 3. Jitsi Iframe Başlatma
     useEffect(() => {
-        if (!session || !isJitsiLoaded || !containerRef.current) return;
+        if (permissionFlowState !== 'ready' || !session || !isJitsiLoaded || !containerRef.current) return;
 
         setIsLoading(true);
 
@@ -223,15 +320,55 @@ const LiveClassroom = ({
     }, [session?.allowCamera, session?.allowMic, isTeacherMode]);
 
     // Yerel Kontrol Metodları
-    const toggleMic = () => {
+    const toggleMic = async () => {
         if (!isTeacherMode && session?.allowMic === false) return;
+        
+        const perms = await checkPermissions();
+        if (perms.microphone === 'denied') {
+            setAlertMessage({
+                type: 'warning',
+                title: 'Mikrofon Yetkisi Engellenmiş',
+                text: 'Mikrofon izniniz engellenmiş durumda. Lütfen tarayıcınızın adres çubuğundaki kilit simgesine tıklayarak izin verin.'
+            });
+            return;
+        } else if (perms.microphone === 'prompt') {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(t => t.stop());
+                setPermissionStatus(prev => ({ ...prev, microphone: 'granted' }));
+            } catch (e) {
+                console.warn("Mikrofon izni alınamadı:", e);
+                return;
+            }
+        }
+        
         if (apiRef.current) {
             apiRef.current.executeCommand('toggleAudio');
         }
     };
 
-    const toggleVideo = () => {
+    const toggleVideo = async () => {
         if (!isTeacherMode && session?.allowCamera === false) return;
+        
+        const perms = await checkPermissions();
+        if (perms.camera === 'denied') {
+            setAlertMessage({
+                type: 'warning',
+                title: 'Kamera Yetkisi Engellenmiş',
+                text: 'Kamera izniniz engellenmiş durumda. Lütfen tarayıcınızın adres çubuğundaki kilit simgesine tıklayarak izin verin.'
+            });
+            return;
+        } else if (perms.camera === 'prompt') {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                stream.getTracks().forEach(t => t.stop());
+                setPermissionStatus(prev => ({ ...prev, camera: 'granted' }));
+            } catch (e) {
+                console.warn("Kamera izni alınamadı:", e);
+                return;
+            }
+        }
+        
         if (apiRef.current) {
             apiRef.current.executeCommand('toggleVideo');
         }
@@ -278,9 +415,121 @@ const LiveClassroom = ({
 
     if (!session) {
         return (
-            <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 text-slate-200">
+            <div className="w-full h-[calc(100vh-160px)] md:h-[calc(100vh-110px)] p-4 md:p-6 rounded-[2.5rem] bg-slate-950 flex flex-col items-center justify-center gap-4 text-slate-200 border border-slate-800">
                 <Loader2 size={36} className="text-brandPurple animate-spin" />
                 <p className="text-sm font-bold uppercase tracking-wider">Canlı Ders Odasına Bağlanılıyor...</p>
+            </div>
+        );
+    }
+
+    if (permissionFlowState === 'checking') {
+        return (
+            <div className="w-full h-[calc(100vh-160px)] md:h-[calc(100vh-110px)] p-4 md:p-6 rounded-[2.5rem] bg-slate-950 flex flex-col items-center justify-center gap-4 text-slate-200 border border-slate-800">
+                <Loader2 size={36} className="text-amber-500 animate-spin" />
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Medya İzinleri Denetleniyor...</p>
+            </div>
+        );
+    }
+
+    if (permissionFlowState === 'need_prompt') {
+        return (
+            <div className="w-full h-[calc(100vh-160px)] md:h-[calc(100vh-110px)] p-6 rounded-[2.5rem] bg-slate-950 flex flex-col items-center justify-center text-center border border-slate-800 relative overflow-hidden select-none">
+                {/* Ambient Glow */}
+                <div className="absolute -top-32 -right-32 w-80 h-80 bg-amber-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+                <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-brandPurple/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+                <div className="max-w-md space-y-6 relative z-10 p-6 md:p-8 rounded-[2rem] bg-slate-900/40 border border-slate-800/80 backdrop-blur-xl">
+                    <div className="w-16 h-16 bg-gradient-to-tr from-amber-400 to-yellow-500 rounded-2xl flex items-center justify-center mx-auto text-slate-950 shadow-[0_0_30px_rgba(245,158,11,0.25)] animate-pulse">
+                        <Shield size={28} />
+                    </div>
+                    
+                    <div className="space-y-2">
+                       <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">Canlı Sınıf İzin Sihirbazı</h2>
+                       <p className="text-xs text-slate-400 font-bold leading-relaxed uppercase tracking-wider">
+                           Derste sesinizi ve görüntünüzü paylaşabilmek için kamera ve mikrofon yetkilendirmesi gereklidir.
+                       </p>
+                       <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                           İzinler tarayıcınız tarafından güvenli şekilde saklanacak ve bir sonraki girişlerinizde tekrar sorulmayacaktır.
+                       </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 pt-2">
+                       <button
+                           onClick={() => handleRequestPermissions('both')}
+                           className="w-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black py-3 rounded-2xl shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 hover:scale-[1.01] transition-all flex items-center justify-center gap-2 text-xs"
+                       >
+                           <Camera size={16} /> KAMERA & MİKROFON İZNİ VER (Önerilen)
+                       </button>
+
+                       <button
+                           onClick={() => handleRequestPermissions('audio')}
+                           className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold py-3 rounded-2xl transition-all flex items-center justify-center gap-2 text-xs"
+                       >
+                           <Mic size={16} /> SADECE MİKROFON İZNİ VER
+                       </button>
+
+                       <button
+                           onClick={handleJoinWithoutPermissions}
+                           className="w-full bg-transparent hover:bg-slate-900/40 text-slate-400 hover:text-slate-200 font-bold py-2.5 rounded-xl transition-all text-xs"
+                       >
+                           Yetki Vermeden / Dinleyici Olarak Katıl
+                       </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (permissionFlowState === 'denied') {
+        return (
+            <div className="w-full h-[calc(100vh-160px)] md:h-[calc(100vh-110px)] p-6 rounded-[2.5rem] bg-slate-950 flex flex-col items-center justify-center text-center border border-slate-800 relative overflow-hidden select-none">
+                {/* Ambient Glow */}
+                <div className="absolute -top-32 -right-32 w-80 h-80 bg-rose-500/5 rounded-full blur-[100px] pointer-events-none"></div>
+
+                <div className="max-w-md space-y-6 relative z-10 p-6 md:p-8 rounded-[2rem] bg-slate-900/40 border border-slate-800/80 backdrop-blur-xl">
+                    <div className="w-16 h-16 bg-rose-500/10 text-rose-500 rounded-2xl flex items-center justify-center mx-auto border border-rose-500/20">
+                        <ShieldAlert size={28} />
+                    </div>
+                    
+                    <div className="space-y-2">
+                       <h2 className="text-xl md:text-2xl font-black text-rose-400 tracking-tight">İzinler Engellendi</h2>
+                       <p className="text-xs text-slate-300 font-bold leading-relaxed">
+                           Kamera veya mikrofon erişimi tarayıcınız tarafından engellenmiş durumda.
+                       </p>
+                       <div className="bg-slate-950/80 border border-slate-800/50 rounded-xl p-3.5 text-left text-[11px] text-slate-400 space-y-2 leading-relaxed">
+                           <p className="font-bold text-slate-200 flex items-center gap-1.5 border-b border-slate-800 pb-1.5">
+                               💡 İzinleri Nasıl Açarsınız?
+                           </p>
+                           <p>1. Tarayıcınızın üst adres çubuğundaki 🔒 (kilit) veya ayarlar simgesine tıklayın.</p>
+                           <p>2. <b>Kamera</b> ve <b>Mikrofon</b> izinlerini <b>"İzin Ver"</b> olarak işaretleyin.</p>
+                           <p>3. PWA uygulaması veya mobil tarayıcı kullanıyorsanız, telefonunuzun Uygulama Ayarları altından tarayıcıya/PWA'ya kamera yetkisi verin.</p>
+                       </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 pt-2">
+                       <button
+                           onClick={async () => {
+                               const perms = await checkPermissions();
+                               setPermissionStatus(perms);
+                               if (perms.camera === 'granted' || perms.microphone === 'granted') {
+                                   setPermissionFlowState('ready');
+                               } else {
+                                   handleRequestPermissions('both');
+                               }
+                           }}
+                           className="w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-rose-600/10 hover:shadow-rose-600/20 hover:scale-[1.01] transition-all flex items-center justify-center gap-2 text-xs"
+                       >
+                           YETKİLERİ AÇTIM, YENİDEN DENE
+                       </button>
+
+                       <button
+                           onClick={handleJoinWithoutPermissions}
+                           className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold py-3 rounded-2xl transition-all flex items-center justify-center text-xs"
+                       >
+                           Ses/Görüntü Olmadan Dinleyici Olarak Katıl
+                       </button>
+                    </div>
+                </div>
             </div>
         );
     }
