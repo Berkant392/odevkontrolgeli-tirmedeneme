@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-    html, body {
+    html, body, #root {
         /* 🔥 GÜNCELLEME: Mobildeki 300ms tıklama gecikmesini ve çift tıklama zoom hatasını sıfırlar */
         touch-action: manipulation;
         
@@ -14,6 +14,9 @@
         /* 🔥 GÜNCELLEME: Cihazların safe-area (çentik ve ev barı) mesafelerini otomatik hesaplar */
         padding-top: env(safe-area-inset-top);
         padding-bottom: env(safe-area-inset-bottom);
+        
+        /* 🔥 GÜNCELLEME: Mobil adres çubuğu atlamalarını önlemek için dinamik yükseklik */
+        min-height: 100dvh;
     }
 
     body { 
