@@ -43,17 +43,41 @@ const LiveSessionManager = ({ classes = [], isTeacherMode = false, showAlert, lo
         const q = query(collection(db, "liveSessions"), orderBy("createdAt", "desc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const sessions = [];
-            snapshot.forEach((doc) => {
-                sessions.push({ id: doc.id, ...doc.data() });
+            const now = new Date();
+            
+            snapshot.forEach((docSnap) => {
+                sessions.push({ id: docSnap.id, ...docSnap.data() });
             });
-            setLiveSessions(sessions);
+            
+            // UI'dan süresi geçmişleri hemen temizle
+            const validSessions = sessions.filter(s => {
+                if (s.startTime && s.duration) {
+                    const endTime = new Date(new Date(s.startTime).getTime() + (s.duration * 60000));
+                    return now <= endTime;
+                }
+                return true;
+            });
+
+            // Arka planda süresi bitenleri veritabanından sil (Sadece öğretmen silme yetkisine sahipse)
+            if (isTeacherMode) {
+                sessions.forEach(s => {
+                    if (s.startTime && s.duration) {
+                        const endTime = new Date(new Date(s.startTime).getTime() + (s.duration * 60000));
+                        if (now > endTime) {
+                            deleteDoc(doc(db, "liveSessions", s.id)).catch(e => console.log("Otomatik silme hatası:", e));
+                        }
+                    }
+                });
+            }
+
+            setLiveSessions(validSessions);
             setIsLoading(false);
         }, (err) => {
             console.error("Firestore Canlı Ders Okuma Hatası:", err);
             setIsLoading(false);
         });
         return () => unsubscribe();
-    }, []);
+    }, [isTeacherMode]);
 
     // Filter sessions for Student
     const studentClasses = classes?.filter(cls => 
