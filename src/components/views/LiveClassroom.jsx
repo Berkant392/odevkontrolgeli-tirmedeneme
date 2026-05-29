@@ -1,468 +1,551 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Video, 
-    VideoOff, 
+    Calendar, 
+    Clock, 
+    Shield, 
+    Sliders, 
+    UserCheck, 
     Mic, 
-    MicOff, 
-    Tv, 
-    ShieldAlert, 
-    CheckCircle, 
-    LogOut, 
-    Loader2, 
-    Sparkles, 
-    HelpCircle, 
     Camera, 
-    Shield,
-    Volume2,
-    Users,
-    Maximize2,
-    Minimize2
+    Plus, 
+    Trash2, 
+    ExternalLink, 
+    AlertCircle, 
+    Sparkles, 
+    Check, 
+    X,
+    Lock
 } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { doc, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
-const LiveClassroom = ({ 
-    session: initialSession, 
-    isTeacherMode: initialTeacherMode, 
-    onEndSession, 
-    onClose, 
-    classes = [], 
-    sessionId = null, 
-    role = null,
-    isStandalone = false 
-}) => {
-    const containerRef = useRef(null);
-    const apiRef = useRef(null);
-    
-    // States
-    const [session, setSession] = useState(initialSession);
-    const [isTeacherMode, setIsTeacherMode] = useState(initialTeacherMode || role === 'teacher');
+const LiveSessionManager = ({ classes = [], isTeacherMode = false, showAlert, loggedInStudent = null, startLiveSession, joinLiveSession }) => {
+    const [liveSessions, setLiveSessions] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isMicMuted, setIsMicMuted] = useState(false);
-    const [isVideoMuted, setIsVideoMuted] = useState(false);
-    const [isScreenSharing, setIsScreenSharing] = useState(false);
-    const [isJitsiLoaded, setIsJitsiLoaded] = useState(false);
-    const [alertMessage, setAlertMessage] = useState(null);
-    const [isFullscreen, setIsFullscreen] = useState(false);
 
-    // 1. Standalone / Query Param Yüklemesi için Firestore Dinleyicisi
+    // Form States (Teacher Only)
+    const [selectedClassId, setSelectedClassId] = useState('');
+    const [startTime, setStartTime] = useState('');
+    const [duration, setDuration] = useState(40); // Default: 40 minutes
+    const [allowCamera, setAllowCamera] = useState(true);
+    const [allowMic, setAllowMic] = useState(true);
+    const [requireApproval, setRequireApproval] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Filtered Classes for Teacher Dropdown (combines VIP & Regular)
+    const allTeacherClasses = classes || [];
+
+    // Real-Time Firestore Listener for Live Sessions
     useEffect(() => {
-        if (!sessionId) return;
-
-        const docRef = doc(db, "liveSessions", sessionId);
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setSession({ id: docSnap.id, ...data });
-                setIsTeacherMode(role === 'teacher');
-            } else {
-                // Ders Sonlandırıldı
-                setAlertMessage({
-                    type: 'info',
-                    title: 'Ders Tamamlandı',
-                    text: 'Bu canlı ders öğretmeniniz tarafından sonlandırılmıştır. Teşekkür ederiz!'
-                });
-                setTimeout(() => {
-                    if (onClose) onClose();
-                    else window.close();
-                }, 4000);
-            }
-        }, (err) => {
-            console.error("Firestore Canlı Ders Dinleme Hatası:", err);
-            setAlertMessage({
-                type: 'error',
-                title: 'Bağlantı Hatası',
-                text: 'Ders bilgileri alınırken Firestore yetki hatası oluştu.'
+        setIsLoading(true);
+        const q = query(collection(db, "liveSessions"), orderBy("createdAt", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const sessions = [];
+            snapshot.forEach((doc) => {
+                sessions.push({ id: doc.id, ...doc.data() });
             });
+            setLiveSessions(sessions);
+            setIsLoading(false);
+        }, (err) => {
+            console.error("Firestore Canlı Ders Okuma Hatası:", err);
+            setIsLoading(false);
         });
-
         return () => unsubscribe();
-    }, [sessionId, role, onClose]);
-
-    // 2. Jitsi Meet External API'sini Dinamik Yükleyen Garantör Effect
-    useEffect(() => {
-        if (window.JitsiMeetExternalAPI) {
-            setIsJitsiLoaded(true);
-            return;
-        }
-        const script = document.createElement("script");
-        script.src = "https://meet.jit.si/external_api.js";
-        script.async = true;
-        script.onload = () => setIsJitsiLoaded(true);
-        document.body.appendChild(script);
-        return () => {
-            if (script.parentNode) {
-                script.parentNode.removeChild(script);
-            }
-        };
     }, []);
 
-    // 3. Jitsi Iframe Başlatma
-    useEffect(() => {
-        if (!session || !isJitsiLoaded || !containerRef.current) return;
+    // Filter sessions for Student
+    const studentClasses = classes?.filter(cls => 
+        cls.students?.some(s => s.id === loggedInStudent?.id)
+    ) || [];
 
-        setIsLoading(true);
+    const visibleSessions = isTeacherMode 
+        ? liveSessions 
+        : liveSessions.filter(s => studentClasses.some(cls => String(cls.id) === String(s.classId)));
 
-        const domain = "meet.jit.si";
-        const options = {
-            roomName: session.roomId,
-            width: "100%",
-            height: "100%",
-            parentNode: containerRef.current,
-            userInfo: {
-                displayName: isTeacherMode ? "Berkant Hoca" : "Öğrenci"
-            },
-            configOverwrite: {
-                // 🚀 ULTRA DÜŞÜK GECİKME VE KALİTE OPTİMİZASYONLARI
-                desktopSharingFrameRate: {
-                    min: 5,
-                    max: 8 // Maksimum 8 FPS limit — upload bant genişliğini %75 düşürür!
-                },
-                p2p: {
-                    enabled: true, // P2P modunu zorunlu kıl — doğrudan hoca-öğrenci aktarımı!
-                    preferH264: false
-                },
-                constraints: {
-                    video: {
-                        frameRate: {
-                            max: 10
-                        }
-                    }
-                },
-                startWithAudioMuted: false,
-                startWithVideoMuted: false,
-                prejoinPageEnabled: false, // Hızlı giriş
-                lobby: {
-                    enabled: session.requireApproval // Planlama ayarından gelen Lobi ayarı
-                }
-            },
-            interfaceConfigOverwrite: {
-                TOOLBAR_BUTTONS: [
-                    'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
-                    'fodeviceselection', 'hangup', 'profile', 'chat', 'recording',
-                    'sharedvideo', 'settings', 'raisehand',
-                    'videoquality', 'filmstrip', 'invite', 'stats', 'shortcuts',
-                    'tileview', 'videobackgroundblur'
-                ],
-                SETTINGS_SECTIONS: ['devices', 'language', 'profile'],
-                SHOW_JITSI_WATERMARK: false,
-                SHOW_WATERMARK_FOR_GUESTS: false,
-                ALPHABETICAL_FILMSTRIP: true
-            }
-        };
+    // Handle Create/Schedule Live Session (Teacher Only)
+    const handleScheduleSession = async (e) => {
+        e.preventDefault();
+        if (!selectedClassId || !startTime) {
+            showAlert('warning', 'Eksik Bilgi', 'Lütfen sınıfı ve başlangıç saatini seçin.');
+            return;
+        }
 
-        const api = new window.JitsiMeetExternalAPI(domain, options);
-        apiRef.current = api;
+        const selectedClass = allTeacherClasses.find(c => String(c.id) === String(selectedClassId));
+        if (!selectedClass) return;
 
-        // Olay Dinleyicileri
-        api.addEventListener('videoConferenceJoined', () => {
-            setIsLoading(false);
+        setIsSubmitting(true);
+        try {
+            const roomId = `berkant-${selectedClass.type === 'vip' ? 'vip' : 'grup'}-${selectedClass.id}-${Math.random().toString(36).substring(2, 9)}`;
             
-            // Başlangıçta eğer öğretmen izinleri kapattıysa direkt uygula
-            if (!isTeacherMode) {
-                if (session.allowCamera === false) {
-                    api.executeCommand('muteVideo');
-                    setIsVideoMuted(true);
-                }
-                if (session.allowMic === false) {
-                    api.executeCommand('muteAudio');
-                    setIsMicMuted(true);
-                }
+            const newSession = {
+                classId: selectedClass.id,
+                className: selectedClass.className,
+                isVip: selectedClass.type === 'vip',
+                roomId: roomId,
+                teacherId: 'berkant-hoca',
+                createdAt: new Date().toISOString(),
+                startTime: startTime, // ISO or localized string from input
+                duration: Number(duration),
+                allowCamera: allowCamera,
+                allowMic: allowMic,
+                requireApproval: requireApproval,
+                status: 'planned' // 'planned' -> 'active' -> 'ended'
+            };
+
+            await addDoc(collection(db, "liveSessions"), newSession);
+            
+            showAlert('success', 'Planlama Başarılı', `${selectedClass.className} sınıfı için canlı ders planlandı.`);
+            
+            // Form Reset
+            setSelectedClassId('');
+            setStartTime('');
+            setDuration(40);
+            setAllowCamera(true);
+            setAllowMic(true);
+            setRequireApproval(false);
+        } catch (err) {
+            console.error("Ders planlama hatası:", err);
+            showAlert('error', 'Hata', 'Canlı ders planlanırken veritabanı hatası oluştu. Firebase kurallarınızı kontrol edin.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Start/Activate a Planned Session (Teacher Only)
+    const handleStartSession = async (session) => {
+        try {
+            const sessionRef = doc(db, "liveSessions", session.id);
+            await updateDoc(sessionRef, { status: 'active' });
+            
+            // Odaya doğrudan uygulama içinde bağlan!
+            if (joinLiveSession) {
+                joinLiveSession(session);
+            }
+        } catch (err) {
+            console.error("Ders başlatma hatası:", err);
+            showAlert('error', 'Hata', 'Canlı ders başlatılamadı.');
+        }
+    };
+
+    // End/Delete Session
+    const handleDeleteSession = async (sessionId, isPlanned = true) => {
+        const title = isPlanned ? 'Planı Sil' : 'Dersi Bitir';
+        const msg = isPlanned 
+            ? 'Bu planlanan canlı dersi silmek istediğinize emin misiniz?' 
+            : 'Bu aktif canlı dersi sonlandırmak istiyor musunuz? Öğrencilerin bağlantısı kesilecektir.';
+
+        showAlert('warning', title, msg, async () => {
+            try {
+                await deleteDoc(doc(db, "liveSessions", sessionId));
+            } catch (err) {
+                console.error("Ders silme hatası:", err);
             }
         });
-
-        api.addEventListener('audioMuteStatusChanged', (e) => {
-            setIsMicMuted(e.muted);
-        });
-
-        api.addEventListener('videoMuteStatusChanged', (e) => {
-            setIsVideoMuted(e.muted);
-        });
-
-        api.addEventListener('screenSharingStatusChanged', (e) => {
-            setIsScreenSharing(e.on);
-        });
-
-        return () => {
-            if (apiRef.current) {
-                apiRef.current.dispose();
-                apiRef.current = null;
-            }
-        };
-    }, [session?.roomId, isJitsiLoaded, isTeacherMode]);
-
-    // 4. Öğretmen İzin Değişimlerini Öğrenciye Gerçek Zamanlı Dayatma (Forced Mute)
-    useEffect(() => {
-        if (isTeacherMode || !apiRef.current || !session) return;
-
-        // Kamera Kısıtlaması
-        if (session.allowCamera === false && !isVideoMuted) {
-            apiRef.current.executeCommand('muteVideo');
-            setIsVideoMuted(true);
-            setAlertMessage({
-                type: 'warning',
-                title: 'Kamera Kapatıldı',
-                text: 'Öğretmeniniz ders genelinde kameraları geçici olarak devre dışı bıraktı.'
-            });
-            setTimeout(() => setAlertMessage(null), 4000);
-        }
-
-        // Ses Kısıtlaması
-        if (session.allowMic === false && !isMicMuted) {
-            apiRef.current.executeCommand('muteAudio');
-            setIsMicMuted(true);
-            setAlertMessage({
-                type: 'warning',
-                title: 'Mikrofon Kapatıldı',
-                text: 'Öğretmeniniz ders genelinde mikrofonları geçici olarak devre dışı bıraktı.'
-            });
-            setTimeout(() => setAlertMessage(null), 4000);
-        }
-    }, [session?.allowCamera, session?.allowMic, isTeacherMode]);
-
-    // Yerel Kontrol Metodları
-    const toggleMic = () => {
-        if (!isTeacherMode && session?.allowMic === false) return;
-        if (apiRef.current) {
-            apiRef.current.executeCommand('toggleAudio');
-        }
     };
 
-    const toggleVideo = () => {
-        if (!isTeacherMode && session?.allowCamera === false) return;
-        if (apiRef.current) {
-            apiRef.current.executeCommand('toggleVideo');
-        }
-    };
-
-    const toggleShareScreen = () => {
-        if (apiRef.current) {
-            apiRef.current.executeCommand('toggleShareScreen');
-        }
-    };
-
-    // Hoca İçin Anlık İzin Değiştiriciler (Ders Esnasında)
-    const handleLivePermissionToggle = async (field, currentValue) => {
-        if (!session?.id) return;
+    // Toggle Permission in Real Time (Teacher Only, updates Firestore)
+    const handleTogglePermission = async (session, field, currentValue) => {
         try {
             const sessionRef = doc(db, "liveSessions", session.id);
             await updateDoc(sessionRef, { [field]: !currentValue });
         } catch (err) {
-            console.error("Anlık izin güncelleme hatası:", err);
+            console.error("İzin güncelleme hatası:", err);
         }
     };
 
-    // Ders Sonlandırma
-    const handleCloseOrEnd = async () => {
-        if (isTeacherMode) {
-            if (window.confirm("Bu canlı dersi sonlandırmak ve sınıf odasını tamamen kapatmak istiyor musunuz?")) {
-                try {
-                    if (onEndSession && session?.id) {
-                        await onEndSession(session.id);
-                    } else if (session?.id) {
-                        await deleteDoc(doc(db, "liveSessions", session.id));
-                        if (onClose) onClose();
-                        else window.close();
-                    }
-                } catch (e) {
-                    console.error("Ders sonlandırma hatası:", e);
+    // Student Join Action
+    const handleStudentJoin = (session) => {
+        const now = new Date();
+        const start = new Date(session.startTime || "");
+        const diffMs = isNaN(start.getTime()) ? -1 : start.getTime() - now.getTime();
+
+        if (session.status === 'planned') {
+            let dateStr = "Belirtilmemiş";
+            try {
+                if (session.startTime) {
+                    dateStr = start.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
                 }
+            } catch (e) {
+                console.error(e);
             }
-        } else {
-            if (onClose) onClose();
-            else window.close();
+            if (diffMs > 0) {
+                showAlert('info', 'Ders Henüz Başlamadı', `Bu ders henüz başlamamıştır.\nBaşlangıç Zamanı: ${dateStr}`);
+                return;
+            } else {
+                showAlert('info', 'Giriş Bekleniyor', 'Ders saati geldi! Ancak öğretmeninizin derse girişi aktifleştirmesi bekleniyor. Lütfen sayfayı yenilemeden bekleyin.');
+                return;
+            }
+        }
+
+        // Odaya doğrudan uygulama içinde bağlan!
+        if (joinLiveSession) {
+            joinLiveSession(session);
         }
     };
 
-    if (!session) {
-        return (
-            <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 text-slate-200">
-                <Loader2 size={36} className="text-brandPurple animate-spin" />
-                <p className="text-sm font-bold uppercase tracking-wider">Canlı Ders Odasına Bağlanılıyor...</p>
-            </div>
-        );
-    }
+    // Helpers
+    const getStatusLabel = (status) => {
+        switch (status) {
+            case 'planned': return { text: 'Planlandı', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+            case 'active': return { text: 'Yayında', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 animate-pulse' };
+            default: return { text: 'Bitti', color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' };
+        }
+    };
+
+    const isClassTimeReached = (startTimeStr) => {
+        return new Date(startTimeStr) <= new Date();
+    };
 
     return (
-        <div className={`flex flex-col bg-slate-950 text-slate-100 relative overflow-hidden select-none transition-all duration-300 ${
-            isFullscreen 
-                ? 'fixed inset-0 w-screen h-screen z-[150] p-4 md:p-6 rounded-none bg-slate-950' 
-                : 'w-full h-[calc(100vh-160px)] md:h-[calc(100vh-110px)] p-4 md:p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl'
-        }`}>
-            
-            {/* 💎 GERÇEK ZAMANLI BİLDİRİM / DİNAMİK UYARI OVERLAY’I */}
-            <AnimatePresence>
-                {alertMessage && (
+        <div className="space-y-6 md:space-y-8 animate-fade-in-up pb-8">
+            {/* Header Area */}
+            <div className="flex items-center gap-3 bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
+                <div className="p-3 bg-gradient-to-tr from-brandPurple to-blue-600 rounded-2xl text-white shadow-lg">
+                    <Video size={24} />
+                </div>
+                <div>
+                    <h2 className="text-xl md:text-2xl font-black text-slate-800">
+                        {isTeacherMode ? 'Canlı Ders Planlama & Yönetim Paneli' : 'Canlı Sınıf Odalarım'}
+                    </h2>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                        {isTeacherMode ? 'Ders planlayın, süreleri belirleyin ve kamera yetkilerini yönetin' : 'Yaklaşan ve aktif olan canlı derslerinizi takip edin'}
+                    </p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                {/* Left Side: Create Session Form (Teacher Only) */}
+                {isTeacherMode && (
                     <motion.div 
-                        initial={{ opacity: 0, y: -50 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -50 }}
-                        className="absolute top-6 left-1/2 -translate-x-1/2 z-[200] max-w-sm w-full bg-slate-900/95 border border-amber-500/30 rounded-2xl p-4 shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-md flex gap-3"
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-5 md:p-6 space-y-5 lg:col-span-1"
                     >
-                        <div className={`p-2 shrink-0 rounded-xl ${alertMessage.type === 'warning' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                            <ShieldAlert size={20} />
-                        </div>
-                        <div>
-                            <h4 className="text-xs font-black text-white">{alertMessage.title}</h4>
-                            <p className="text-[10px] text-slate-300 font-medium leading-relaxed mt-1">{alertMessage.text}</p>
-                        </div>
-                        <button onClick={() => setAlertMessage(null)} className="ml-auto text-slate-400 hover:text-white shrink-0">
-                            <X size={16} />
-                        </button>
+                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                            <Plus size={18} className="text-brandPurple" /> Canlı Ders Planla
+                        </h3>
+
+                        <form onSubmit={handleScheduleSession} className="space-y-4">
+                            {/* Class Selection */}
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Ders Verilecek Sınıf / VIP Öğrenci</label>
+                                <select 
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-brandPurple focus:bg-white transition-all shadow-inner"
+                                    value={selectedClassId}
+                                    onChange={e => setSelectedClassId(e.target.value)}
+                                >
+                                    <option value="">Sınıf Seçin...</option>
+                                    {allTeacherClasses.map(c => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.className} {c.type === 'vip' ? '(VIP Özel Ders)' : '(Grup Sınıfı)'}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Date & Time */}
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Başlangıç Zamanı</label>
+                                <input 
+                                    type="datetime-local" 
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-brandPurple focus:bg-white transition-all shadow-inner"
+                                    value={startTime}
+                                    onChange={e => setStartTime(e.target.value)}
+                                />
+                            </div>
+
+                            {/* Duration */}
+                            <div>
+                                <div className="flex justify-between items-center mb-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Ders Süresi</label>
+                                    <span className="text-xs font-black text-brandPurple bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-100">{duration} Dakika</span>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min="15" 
+                                    max="180" 
+                                    step="5"
+                                    className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-brandPurple"
+                                    value={duration}
+                                    onChange={e => setDuration(e.target.value)}
+                                />
+                                <div className="flex justify-between text-[10px] text-slate-400 font-bold px-1 mt-1">
+                                    <span>15 dk</span>
+                                    <span>60 dk</span>
+                                    <span>120 dk</span>
+                                    <span>180 dk</span>
+                                </div>
+                            </div>
+
+                            {/* Permissions Control Card */}
+                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3.5">
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
+                                    <Shield size={14} className="text-brandPurple" /> İzin Yönetimi (Varsayılan)
+                                </h4>
+
+                                {/* Camera Toggle */}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`p-1.5 rounded-lg border ${allowCamera ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-slate-200 text-slate-400 border-slate-300'}`}>
+                                            <Camera size={14} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-700">Kameralar Açık</p>
+                                            <p className="text-[9px] font-bold text-slate-400">Öğrenciler kamera açabilir</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setAllowCamera(!allowCamera)}
+                                        className={`w-10 h-6 flex items-center rounded-full p-1 transition-all ${allowCamera ? 'bg-brandPurple justify-end' : 'bg-slate-300 justify-start'}`}
+                                    >
+                                        <motion.div layout className="w-4 h-4 bg-white rounded-full shadow" />
+                                    </button>
+                                </div>
+
+                                {/* Mic Toggle */}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`p-1.5 rounded-lg border ${allowMic ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-slate-200 text-slate-400 border-slate-300'}`}>
+                                            <Mic size={14} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-700">Mikrofonlar Açık</p>
+                                            <p className="text-[9px] font-bold text-slate-400">Öğrenciler ses açabilir</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setAllowMic(!allowMic)}
+                                        className={`w-10 h-6 flex items-center rounded-full p-1 transition-all ${allowMic ? 'bg-brandPurple justify-end' : 'bg-slate-300 justify-start'}`}
+                                    >
+                                        <motion.div layout className="w-4 h-4 bg-white rounded-full shadow" />
+                                    </button>
+                                </div>
+
+                                {/* Require Approval Toggle */}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`p-1.5 rounded-lg border ${requireApproval ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20' : 'bg-slate-200 text-slate-400 border-slate-300'}`}>
+                                            <UserCheck size={14} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-700">Bekleme Odası (Lobi)</p>
+                                            <p className="text-[9px] font-bold text-slate-400">Katılım için hoca onayı gerekir</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setRequireApproval(!requireApproval)}
+                                        className={`w-10 h-6 flex items-center rounded-full p-1 transition-all ${requireApproval ? 'bg-brandPurple justify-end' : 'bg-slate-300 justify-start'}`}
+                                    >
+                                        <motion.div layout className="w-4 h-4 bg-white rounded-full shadow" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Submit Button */}
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="w-full bg-brandPurple hover:bg-purple-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-brandPurple/20 hover:shadow-brandPurple/30 transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Sparkles size={16} className="animate-pulse" /> PLANLA VE OLUŞTUR
+                            </button>
+                        </form>
                     </motion.div>
                 )}
-            </AnimatePresence>
 
-            {/* ÜST BAR */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-4 mb-4 shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="p-3 bg-gradient-to-tr from-brandPurple to-blue-600 rounded-2xl text-white shadow-lg animate-pulse">
-                        <Sparkles size={20} />
-                    </div>
-                    <div>
-                        <h2 className="text-base md:text-xl font-black text-white flex items-center gap-2">
-                            {session.className} - VIP Canlı Sınıf Odası
-                        </h2>
-                        <p className="text-[10px] md:text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Yerel P2P WebRTC Bağlantısı
-                        </p>
-                    </div>
-                </div>
+                {/* Right Side: List of Scheduled / Active Classes */}
+                <div className={`bg-white rounded-[2rem] border border-slate-200 shadow-sm p-5 md:p-6 space-y-5 ${isTeacherMode ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                        <Calendar size={18} className="text-brandPurple" /> Canlı Ders Listesi ({visibleSessions.length})
+                    </h3>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                    {isTeacherMode ? (
-                        <button 
-                            onClick={handleCloseOrEnd}
-                            className="w-full sm:w-auto text-xs px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl shadow-lg hover:shadow-rose-600/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                        >
-                            <LogOut size={16} /> DERSİ BİTİR
-                        </button>
+                    {isLoading ? (
+                        <div className="flex flex-col items-center justify-center p-12 text-slate-400">
+                            <motion.div 
+                                animate={{ rotate: 360 }}
+                                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                                className="mb-3 text-brandPurple"
+                            >
+                                <Clock size={32} />
+                            </motion.div>
+                            <p className="text-xs font-bold uppercase tracking-wider">Veriler Yükleniyor...</p>
+                        </div>
+                    ) : visibleSessions.length === 0 ? (
+                        <div className="text-center p-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center gap-3 text-slate-400">
+                            <Video size={40} className="opacity-30" />
+                            <p className="text-sm font-black">Planlanmış Ders Bulunmuyor</p>
+                            <p className="text-xs leading-relaxed max-w-xs">
+                                {isTeacherMode 
+                                    ? 'Henüz bir ders tanımlanmamış. Sol taraftaki paneli kullanarak yeni bir ders oluşturabilirsiniz.' 
+                                    : 'Adınıza tanımlanmış aktif veya planlı bir canlı ders bulunmuyor.'}
+                            </p>
+                        </div>
                     ) : (
-                        <button 
-                            onClick={handleCloseOrEnd}
-                            className="w-full sm:w-auto text-xs px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-black rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                        >
-                            <LogOut size={16} /> AYRIL
-                        </button>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {visibleSessions.map(session => {
+                                const status = getStatusLabel(session.status);
+                                let formattedTime = "Belirtilmemiş";
+                                let isTimeReached = false;
+                                try {
+                                    if (session.startTime) {
+                                        const start = new Date(session.startTime);
+                                        isTimeReached = isClassTimeReached(session.startTime);
+                                        formattedTime = start.toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+                                    }
+                                } catch (e) {
+                                    console.error("Tarih ayrıştırma hatası:", e);
+                                }
+
+                                return (
+                                    <motion.div 
+                                        key={session.id}
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className={`rounded-2xl border p-4 flex flex-col justify-between gap-4 transition-all relative overflow-hidden ${
+                                            session.status === 'active' 
+                                                ? 'bg-emerald-50/20 border-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
+                                                : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+                                        }`}
+                                    >
+                                        {/* Status Badge & Vip Tag */}
+                                        <div className="flex justify-between items-center">
+                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${status.color}`}>
+                                                {status.text}
+                                            </span>
+                                            {session.isVip && (
+                                                <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase tracking-widest">
+                                                    VIP
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Class Title & Details */}
+                                        <div>
+                                            <h4 className="font-black text-slate-800 text-base leading-snug">{session.className} Canlı Sınıfı</h4>
+                                            
+                                            <div className="mt-2.5 space-y-1.5 text-xs text-slate-500 font-medium">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Calendar size={14} className="text-slate-400" />
+                                                    <span>{formattedTime}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Clock size={14} className="text-slate-400" />
+                                                    <span>{session.duration} Dakika Süre</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Live Permission Control inside Card (Teacher Only) */}
+                                        {isTeacherMode && (
+                                            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/50 flex items-center justify-around gap-1">
+                                                {/* Camera Permission Button */}
+                                                <button 
+                                                    onClick={() => handleTogglePermission(session, 'allowCamera', session.allowCamera)}
+                                                    className={`p-2 rounded-lg flex-1 flex flex-col items-center justify-center gap-1 transition-all ${
+                                                        session.allowCamera 
+                                                            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
+                                                            : 'bg-slate-200 text-slate-400 border border-slate-300'
+                                                    }`}
+                                                    title="Öğrenci kamerasını anlık yetkilendir"
+                                                >
+                                                    <Camera size={14} />
+                                                    <span className="text-[8px] font-black uppercase">Kamera: {session.allowCamera ? 'AÇIK' : 'KAPALI'}</span>
+                                                </button>
+
+                                                {/* Mic Permission Button */}
+                                                <button 
+                                                    onClick={() => handleTogglePermission(session, 'allowMic', session.allowMic)}
+                                                    className={`p-2 rounded-lg flex-1 flex flex-col items-center justify-center gap-1 transition-all ${
+                                                        session.allowMic 
+                                                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                                            : 'bg-slate-200 text-slate-400 border border-slate-300'
+                                                    }`}
+                                                    title="Öğrenci mikrofonunu anlık yetkilendir"
+                                                >
+                                                    <Mic size={14} />
+                                                    <span className="text-[8px] font-black uppercase">Ses: {session.allowMic ? 'AÇIK' : 'KAPALI'}</span>
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Actions */}
+                                        <div className="flex gap-2 items-center border-t border-slate-100 pt-3">
+                                            {isTeacherMode ? (
+                                                <>
+                                                    {session.status === 'planned' && (
+                                                        <button 
+                                                            onClick={() => handleStartSession(session)}
+                                                            className={`flex-1 text-xs py-2 bg-brandPurple hover:bg-purple-700 text-white font-black rounded-xl shadow-md hover:shadow-brandPurple/10 flex items-center justify-center gap-1.5 transition-all`}
+                                                        >
+                                                            <ExternalLink size={14} /> DERSİ BAŞLAT
+                                                        </button>
+                                                    )}
+
+                                                    {session.status === 'active' && (
+                                                        <button 
+                                                            onClick={() => {
+                                                                if (joinLiveSession) joinLiveSession(session);
+                                                            }}
+                                                            className="flex-1 text-xs py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all"
+                                                        >
+                                                            <ExternalLink size={14} /> ODAYA GİR
+                                                        </button>
+                                                    )}
+
+                                                    <button 
+                                                        onClick={() => handleDeleteSession(session.id, session.status === 'planned')}
+                                                        className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-xl transition-colors"
+                                                        title="Sınıfı sil veya dersi kapat"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                /* Student Mode Actions */
+                                                <>
+                                                    {session.status === 'planned' && !isTimeReached && (
+                                                        <button 
+                                                            onClick={() => handleStudentJoin(session)}
+                                                            className="w-full text-xs py-2 bg-slate-100 text-slate-400 font-black rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 cursor-not-allowed"
+                                                        >
+                                                            <Lock size={14} /> DERS SAATİ BEKLENİYOR
+                                                        </button>
+                                                    )}
+
+                                                    {session.status === 'planned' && isTimeReached && (
+                                                        <button 
+                                                            onClick={() => handleStudentJoin(session)}
+                                                            className="w-full text-xs py-2 bg-amber-500 text-white font-black rounded-xl hover:bg-amber-600 shadow-md flex items-center justify-center gap-1.5 transition-all animate-pulse"
+                                                        >
+                                                            <Clock size={14} /> BAŞLATILMASI BEKLENİYOR
+                                                        </button>
+                                                    )}
+
+                                                    {session.status === 'active' && (
+                                                        <button 
+                                                            onClick={() => handleStudentJoin(session)}
+                                                            className="w-full text-xs py-2 bg-gradient-to-r from-emerald-400 to-teal-500 text-white font-black rounded-xl hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:scale-[1.01] flex items-center justify-center gap-1.5 transition-all"
+                                                        >
+                                                            <ExternalLink size={14} /> CANLI DERSE KATIL
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
                     )}
                 </div>
-            </div>
-
-            {/* ANA YAYIN EKRANI */}
-            <div className="flex-1 bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 relative min-h-[300px]">
-                {isLoading && (
-                    <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md z-40 flex flex-col items-center justify-center gap-4">
-                        <Loader2 size={40} className="text-brandPurple animate-spin" />
-                        <div className="text-center">
-                            <h3 className="font-black text-sm text-slate-200">Görüntülü Sınıf Kuruluyor...</h3>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">Lütfen kamera ve mikrofon izinlerini onaylayın.</p>
-                        </div>
-                    </div>
-                )}
-                
-                {/* Jitsi Meet Iframe Container */}
-                <div ref={containerRef} className="w-full h-full"></div>
-            </div>
-
-            {/* ALT HIZLI KONTROL PANELİ & HOCA YETKİ KARTLARI */}
-            <div className="mt-4 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/60 shrink-0">
-                {/* Media Buttons */}
-                <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Microphone Toggle */}
-                    <button 
-                        onClick={toggleMic}
-                        disabled={!isTeacherMode && session?.allowMic === false}
-                        className={`p-3 rounded-xl transition-all shadow-md flex items-center gap-2 text-xs font-bold border ${
-                            !isTeacherMode && session?.allowMic === false 
-                                ? 'bg-slate-800 border-slate-700/50 text-slate-500 cursor-not-allowed' 
-                                : isMicMuted ? 'bg-rose-500/10 border-rose-500 text-rose-500' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                        }`}
-                    >
-                        {isMicMuted ? <MicOff size={16} /> : <Mic size={16} />} 
-                        <span>{!isTeacherMode && session?.allowMic === false ? 'Mikrofon Kilitli' : isMicMuted ? 'Sesi Aç' : 'Sesi Kapat'}</span>
-                    </button>
-
-                    {/* Camera Toggle */}
-                    <button 
-                        onClick={toggleVideo}
-                        disabled={!isTeacherMode && session?.allowCamera === false}
-                        className={`p-3 rounded-xl transition-all shadow-md flex items-center gap-2 text-xs font-bold border ${
-                            !isTeacherMode && session?.allowCamera === false 
-                                ? 'bg-slate-800 border-slate-700/50 text-slate-500 cursor-not-allowed' 
-                                : isVideoMuted ? 'bg-rose-500/10 border-rose-500 text-rose-500' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                        }`}
-                    >
-                        {isVideoMuted ? <VideoOff size={16} /> : <Video size={16} />} 
-                        <span>{!isTeacherMode && session?.allowCamera === false ? 'Kamera Kilitli' : isVideoMuted ? 'Kamerayı Aç' : 'Kamerayı Kapat'}</span>
-                    </button>
-
-                    {/* Screen Share Toggle */}
-                    <button 
-                        onClick={toggleShareScreen}
-                        className={`p-3 rounded-xl transition-all shadow-md flex items-center gap-2 text-xs font-bold border ${
-                            isScreenSharing ? 'bg-emerald-50/10 border-emerald-500 text-emerald-500' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                        }`}
-                    >
-                        <Tv size={16} />
-                        <span>{isScreenSharing ? 'Paylaşımı Durdur' : 'Ekranımı Paylaş'}</span>
-                    </button>
-
-                    {/* Fullscreen Toggle */}
-                    <button 
-                        onClick={() => setIsFullscreen(!isFullscreen)}
-                        className="p-3 rounded-xl transition-all shadow-md flex items-center gap-2 text-xs font-bold border bg-brandPurple/10 border-brandPurple text-brandPurple hover:bg-brandPurple hover:text-white"
-                    >
-                        {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                        <span>{isFullscreen ? 'Küçült' : 'Tam Ekran'}</span>
-                    </button>
-                </div>
-
-                {/* Teacher Instant Permissions Controller (Shows only on Teacher screen) */}
-                {isTeacherMode ? (
-                    <div className="flex flex-wrap items-center gap-2 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 flex items-center gap-1.5 border-r border-slate-800 mr-1">
-                            <Shield size={12} className="text-brandPurple" /> Canlı Yetkiler:
-                        </span>
-
-                        {/* Toggle Camera Live */}
-                        <button 
-                            onClick={() => handleLivePermissionToggle('allowCamera', session.allowCamera)}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${
-                                session.allowCamera 
-                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
-                                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                            }`}
-                            title="Öğrencilerin kamera kilidini anlık değiştir"
-                        >
-                            <Camera size={12} />
-                            Öğrenci Kamerası: {session.allowCamera ? 'AÇIK' : 'KAPALI'}
-                        </button>
-
-                        {/* Toggle Mic Live */}
-                        <button 
-                            onClick={() => handleLivePermissionToggle('allowMic', session.allowMic)}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${
-                                session.allowMic 
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                            }`}
-                            title="Öğrencilerin ses kilidini anlık değiştir"
-                        >
-                            <Volume2 size={12} />
-                            Öğrenci Sesi: {session.allowMic ? 'AÇIK' : 'KAPALI'}
-                        </button>
-                    </div>
-                ) : (
-                    /* Student Guide Text */
-                    <div className="hidden lg:flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        <HelpCircle size={14} className="text-brandPurple" />
-                        <span>Kameranızı veya sesinizi kısıtlamak için öğretmen yetki paneli aktiftir.</span>
-                    </div>
-                )}
             </div>
         </div>
     );
 };
 
-export default LiveClassroom;
+export default React.memo(LiveSessionManager);
