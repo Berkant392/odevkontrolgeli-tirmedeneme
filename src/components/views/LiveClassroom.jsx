@@ -201,6 +201,10 @@ const LiveClassroom = ({
         if (permissionFlowState !== 'ready' || !session || !isJitsiLoaded || !containerRef.current) return;
 
         setIsLoading(true);
+        // Safety timeout: automatically clear custom loader overlay after 3 seconds so native Jitsi is visible
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+        }, 3000);
 
         const domain = "meet.jit.si";
         const options = {
@@ -283,6 +287,7 @@ const LiveClassroom = ({
         });
 
         return () => {
+            clearTimeout(timer);
             if (apiRef.current) {
                 apiRef.current.dispose();
                 apiRef.current = null;
