@@ -25,9 +25,24 @@ const roomOptions = {
     videoCaptureDefaults: {
         resolution: VideoPresets.h720.resolution,  // 720p varsayılan yakalama
     },
+    screenShareCaptureDefaults: {
+        resolution: { width: 1920, height: 1080, frameRate: 120 } // Ekran paylaşımı için potansiyel maksimum 120 FPS yakalama
+    },
     publishDefaults: {
         simulcast: true,       // Birden fazla kalite katmanı gönder (düşük gecikme için kritik)
         videoSimulcastLayers: [VideoPresets.h90, VideoPresets.h216],
+        
+        // 🔥 AKILLI FPS ve ÇÖZÜNÜRLÜK KATMANLARI (İnternet Hızına Göre Otomatik Geçiş)
+        screenShareSimulcastLayers: [
+            { width: 1920, height: 1080, frameRate: 120, bitrate: 5000000 }, // Çok iyi internet (120 FPS / Yüksek Kalite)
+            { width: 1920, height: 1080, frameRate: 60, bitrate: 3000000 },  // İyi internet (60 FPS / Standart Akıcı)
+            { width: 1280, height: 720, frameRate: 30, bitrate: 1500000 },   // Orta internet (30 FPS / Yeterli)
+            { width: 854, height: 480, frameRate: 10, bitrate: 400000 },     // Kötü internet (10 FPS / Eski takılmalı ancak kopmayan hal)
+        ],
+        screenShareEncoding: {
+            maxBitrate: 5000000,
+            maxFramerate: 120 // Yayının çıkabileceği maksimum limit
+        },
         dtx: true,             // Sessizlikte ses paketi gönderme (bant genişliği tasarrufu)
         red: true,             // Ses hata düzeltme (paket kaybına karşı)
     },
@@ -109,16 +124,31 @@ const CustomLayout = () => {
                 </div>
             )}
 
-            {/* SOL ALT KÖŞE — Küçük Self-View (PIP) */}
-            {localVideoTrack?.publication?.track && (
-                <div className="absolute bottom-3 left-3 z-50 w-28 h-20 md:w-36 md:h-24 rounded-xl overflow-hidden border-2 border-slate-700/60 shadow-2xl shadow-black/60 bg-black">
-                    <VideoTrack
-                        trackRef={localVideoTrack}
-                        className="w-full h-full object-cover"
-                        style={{ transform: 'scaleX(-1)' }}
-                    />
-                </div>
-            )}
+            {/* SOL ALT KÖŞE — PIP Kameralar */}
+            <div className="absolute bottom-3 left-3 z-50 flex gap-2">
+                {/* Local Camera PIP (Kendi kameran açıksa hep görünür) */}
+                {localVideoTrack?.publication?.track && (
+                    <div className="w-28 h-20 md:w-36 md:h-24 rounded-xl overflow-hidden border-2 border-slate-700/60 shadow-2xl shadow-black/60 bg-black relative">
+                        <VideoTrack
+                            trackRef={localVideoTrack}
+                            className="w-full h-full object-cover"
+                            style={{ transform: 'scaleX(-1)' }}
+                        />
+                        <div className="absolute bottom-1.5 left-1.5 bg-black/60 px-1.5 py-0.5 rounded text-[9px] text-white font-bold backdrop-blur-sm">Sen</div>
+                    </div>
+                )}
+                
+                {/* Remote Camera PIP (Eğer Ekran Paylaşımı ana ekrandaysa ve karşı taraf kamerası açıksa) */}
+                {mainTrack === screenShareTrack && remoteVideoTrack?.publication?.track && (
+                    <div className="w-28 h-20 md:w-36 md:h-24 rounded-xl overflow-hidden border-2 border-slate-700/60 shadow-2xl shadow-black/60 bg-black relative">
+                        <VideoTrack
+                            trackRef={remoteVideoTrack}
+                            className="w-full h-full object-cover"
+                        />
+                        <div className="absolute bottom-1.5 left-1.5 bg-black/60 px-1.5 py-0.5 rounded text-[9px] text-white font-bold backdrop-blur-sm">Diğer</div>
+                    </div>
+                )}
+            </div>
 
             {/* Ses render */}
             <RoomAudioRenderer />
