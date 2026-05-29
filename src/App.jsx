@@ -984,8 +984,11 @@ const App = () => {
                         )}
                     </AnimatePresence>
 
-                    <header className={`no-print shrink-0 relative z-20 transition-all duration-500 ${currentUserRole === 'vip-student' ? 'bg-slate-800/90 border-b border-slate-700 shadow-md' : 'bg-white border-b border-slate-200 shadow-sm'}`}>
-                        <div className="max-w-7xl mx-auto px-3 py-2.5 md:py-4 flex flex-col items-center gap-2">
+                    <header 
+                        className={`no-print shrink-0 relative z-20 transition-all duration-500 ${currentUserRole === 'vip-student' ? 'bg-slate-800/90 border-b border-slate-700 shadow-md' : 'bg-white border-b border-slate-200 shadow-sm'}`}
+                        style={{ paddingTop: 'max(env(safe-area-inset-top), 0px)' }}
+                    >
+                        <div className="max-w-7xl mx-auto px-3 pb-2.5 pt-2.5 md:py-4 flex flex-col items-center gap-2">
                             <div className="flex items-center gap-3 w-full justify-between">
                                 <div className="flex items-center gap-2">
                                     {isMobile && (
