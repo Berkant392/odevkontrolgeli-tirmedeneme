@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Berkant Hoca - Eğitim Platformu</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <style>
+      #splash-screen {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: #ffffff; z-index: 99999; display: flex;
+        flex-direction: column; align-items: center; justify-content: center;
+        transition: opacity 0.5s ease-out;
+      }
+      .dark-theme #splash-screen { background: #0f172a; }
+      .spinner {
+        width: 40px; height: 40px; border: 4px solid rgba(139, 92, 246, 0.2);
+        border-top-color: #8b5cf6; border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      .logo-pulse {
+        width: 80px; height: 80px; margin-bottom: 20px;
+        animation: pulse 2s infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes pulse { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
+    </style>
+  </head>
+  <body>
+    <div id="splash-screen">
+      <img src="/pwa-192x192.png" alt="Logo" class="logo-pulse" onerror="this.style.display='none'">
+      <div class="spinner"></div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const splash = document.getElementById('splash-screen');
+          if(splash) {
+            splash.style.opacity = '0';
+            setTimeout(() => splash.remove(), 500);
+          }
+        }, 300); // Küçük bir gecikme ile React'in render edilmesini bekle
+      });
+    </script>
+  </body>
+</html>
