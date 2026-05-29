@@ -371,37 +371,51 @@ tbody tr:hover { background-color: #f1f5f9; }
     inset: 0 !important;
     z-index: 9999 !important;
     overflow: hidden !important;
-    /* iOS Safari tam ekran düzeltmesi */
     height: 100dvh !important;
     width: 100vw !important;
 }
 
-/* LiveKit bileşenlerinin taşmasını engelle */
+/* LiveKit bileşenlerinin tam ekranı kaplaması */
 .lk-classroom-root .lk-room-container,
-.lk-classroom-root .lk-video-conference,
 .lk-classroom-root [data-lk-theme] {
     height: 100% !important;
     width: 100% !important;
     overflow: hidden !important;
+    background: black !important;
 }
 
-/* LiveKit kontrol çubuğunun mobilde düzgün görünmesi */
+/* ──────────────────────────────────────────────
+   VARSAYILAN LİVEKİT UI'I TAMAMEN GİZLE
+   Artık kendi özel layout'umuzu kullanıyoruz
+   ────────────────────────────────────────────── */
+
+/* Varsayılan kontrol çubuğunu (Microphone/Camera/Chat/Leave) GİZLE */
 .lk-classroom-root .lk-control-bar {
-    padding-bottom: env(safe-area-inset-bottom) !important;
-    z-index: 50 !important;
+    display: none !important;
 }
 
-/* Video grid'in taşmasını engelle */
-.lk-classroom-root .lk-grid-layout {
-    overflow: hidden !important;
+/* Varsayılan katılımcı listesi/grid'ini GİZLE (bizim CustomLayout var) */
+.lk-classroom-root .lk-grid-layout,
+.lk-classroom-root .lk-focus-layout,
+.lk-classroom-root .lk-video-conference {
+    display: none !important;
 }
 
-/* Videoların kırpılmaması */
-.lk-classroom-root .lk-participant-tile video {
-    object-fit: cover !important;
+/* Varsayılan header/participant info GİZLE */
+.lk-classroom-root .lk-header,
+.lk-classroom-root .lk-participant-metadata,
+.lk-classroom-root .lk-participant-name {
+    display: none !important;
 }
 
-/* Yüzen kontrol paneli buton stilleri */
+/* Varsayılan chat panelini GİZLE */
+.lk-classroom-root .lk-chat {
+    display: none !important;
+}
+
+/* ──────────────────────────────────────────────
+   YÜZEN KONTROL PANELİ BUTON STİLLERİ
+   ────────────────────────────────────────────── */
 .lk-button-custom {
     width: 40px !important;
     height: 40px !important;
@@ -414,10 +428,13 @@ tbody tr:hover { background-color: #f1f5f9; }
     justify-content: center !important;
     transition: all 0.2s ease !important;
     padding: 0 !important;
+    cursor: pointer !important;
 }
 .lk-button-custom:hover {
     background: rgba(51, 65, 85, 0.9) !important;
+    transform: scale(1.05);
 }
+/* Kapalı durum (kırmızı vurgu) */
 .lk-button-custom[data-lk-enabled="false"],
 .lk-button-custom[data-lk-muted="true"] {
     background: rgba(239, 68, 68, 0.15) !important;
@@ -428,21 +445,4 @@ tbody tr:hover { background-color: #f1f5f9; }
 /* Fullscreen modunda iOS status bar düzeltmesi */
 .lk-classroom-root:fullscreen {
     padding-top: 0 !important;
-}
-
-/* Mobil küçük ekranlarda LiveKit düzeltmeleri */
-@media (max-width: 640px) {
-    .lk-classroom-root .lk-control-bar {
-        padding: 8px !important;
-        gap: 4px !important;
-    }
-    .lk-classroom-root .lk-control-bar button {
-        min-width: unset !important;
-        padding: 8px !important;
-        font-size: 0 !important; /* Buton yazılarını gizle, sadece ikonlar kalsın */
-    }
-    .lk-classroom-root .lk-control-bar button svg {
-        width: 18px !important;
-        height: 18px !important;
-    }
 }
