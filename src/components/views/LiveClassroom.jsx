@@ -25,27 +25,19 @@ const roomOptions = {
     videoCaptureDefaults: {
         resolution: VideoPresets.h720.resolution,  // 720p varsayılan yakalama
     },
-    screenShareCaptureDefaults: {
-        resolution: { width: 1920, height: 1080, frameRate: 60 } // Güvenli limit: 60 FPS (120 FPS bazı cihazlarda çökmeye/kapanmaya sebep olur)
-    },
+    // ⚠️ screenShareCaptureDefaults KALDIRILDI — 
+    // resolution içine frameRate koymak tarayıcının getDisplayMedia() çağrısını 
+    // sessizce reddetmesine ve ekran paylaşımının anında kapanmasına yol açıyordu.
     publishDefaults: {
-        simulcast: true,       // Birden fazla kalite katmanı gönder (düşük gecikme için kritik)
+        simulcast: true,       // Birden fazla kalite katmanı gönder
         videoSimulcastLayers: [VideoPresets.h90, VideoPresets.h216],
-        
-        // 🔥 AKILLI FPS ve ÇÖZÜNÜRLÜK KATMANLARI (İnternet Hızına Göre Otomatik Geçiş)
-        screenShareSimulcastLayers: [
-            { width: 1920, height: 1080, frameRate: 60, bitrate: 3000000 },  // Çok İyi internet (60 FPS / Standart Akıcı)
-            { width: 1280, height: 720, frameRate: 30, bitrate: 1500000 },   // Orta internet (30 FPS / Yeterli)
-            { width: 854, height: 480, frameRate: 10, bitrate: 400000 },     // Kötü internet (10 FPS / Eski takılmalı ancak kopmayan hal)
-        ],
         screenShareEncoding: {
-            maxBitrate: 3000000,
-            maxFramerate: 60 // Yayının çıkabileceği maksimum limit
+            maxBitrate: 3_000_000, // 3 Mbps — yüksek kaliteli ekran paylaşımı
+            maxFramerate: 30,      // 30 FPS — akıcı ve güvenli (adaptiveStream gerisini halleder)
         },
         dtx: true,             // Sessizlikte ses paketi gönderme (bant genişliği tasarrufu)
         red: true,             // Ses hata düzeltme (paket kaybına karşı)
     },
-    // Düşük gecikme bağlantı tercihleri
     disconnectOnPageLeave: true,
 };
 
