@@ -12,7 +12,7 @@
         user-select: none;
         
         /* 🔥 GÜNCELLEME: Cihazların safe-area (çentik ve ev barı) mesafelerini otomatik hesaplar */
-        padding-top: env(safe-area-inset-top);
+        /* padding-top kaldırıldı, doğrudan header ve sidebar içinde ele alınacak ki tepeye yapışsın */
         padding-bottom: env(safe-area-inset-bottom);
         
         /* 🔥 GÜNCELLEME: Mobil adres çubuğu atlamalarını önlemek için dinamik yükseklik */
