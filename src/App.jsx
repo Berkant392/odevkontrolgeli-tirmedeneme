@@ -1133,6 +1133,7 @@ const App = () => {
                             onEndSession={endLiveSession} 
                             onClose={() => { setView('home'); setActiveLiveSession(null); }}
                             classes={classes}
+                            loggedInStudent={loggedInStudent}
                         />
                     )}
                 </AnimatePresence>
