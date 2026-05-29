@@ -1,0 +1,148 @@
+import React, { useEffect, useState } from 'react';
+import { LiveKitRoom, VideoConference, RoomAudioRenderer } from '@livekit/components-react';
+import '@livekit/components-styles';
+import { Loader2, LogOut, Video, X } from 'lucide-react';
+import { db } from '../../config/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+
+const LiveClassroom = ({ 
+    session: initialSession, 
+    isTeacherMode: initialTeacherMode, 
+    onEndSession, 
+    onClose, 
+    classes = [], 
+    sessionId = null, 
+    role = null,
+    isStandalone = false,
+    loggedInStudent = null
+}) => {
+    const [session, setSession] = useState(initialSession);
+    const [isTeacherMode] = useState(initialTeacherMode || role === 'teacher');
+    const [token, setToken] = useState("");
+    const [error, setError] = useState("");
+
+    // Dinamik isim belirleme
+    const participantName = isTeacherMode ? "Öğretmen (Sen)" : (loggedInStudent?.name || "Öğrenci");
+    const roomName = session?.roomId || sessionId || "demo-room";
+
+    useEffect(() => {
+        if (!initialSession && sessionId) {
+            const unsub = onSnapshot(doc(db, "liveSessions", sessionId), (docSnap) => {
+                if (docSnap.exists()) {
+                    setSession({ id: docSnap.id, ...docSnap.data() });
+                } else {
+                    onClose();
+                }
+            });
+            return () => unsub();
+        }
+    }, [initialSession, sessionId, onClose]);
+
+    useEffect(() => {
+        const getToken = async () => {
+            try {
+                const response = await fetch(`/.netlify/functions/livekit-token?roomName=${roomName}&participantName=${encodeURIComponent(participantName)}&isTeacher=${isTeacherMode}`);
+                if (!response.ok) {
+                    throw new Error("Sunucudan LiveKit token'i alınamadı. (API Key ayarlarınızı kontrol edin)");
+                }
+                const data = await response.json();
+                setToken(data.token);
+            } catch (e) {
+                console.error(e);
+                setError(e.message || "Bağlantı tokeni oluşturulamadı. Lütfen tekrar deneyin.");
+            }
+        };
+        
+        if (roomName && participantName) {
+            getToken();
+        }
+    }, [roomName, participantName, isTeacherMode]);
+
+    if (error) {
+        return (
+            <div className="fixed inset-0 bg-slate-900 z-[9999] flex flex-col items-center justify-center text-white">
+                <div className="w-16 h-16 bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mb-4">
+                    <X size={32} />
+                </div>
+                <h3 className="text-xl font-black mb-2 text-center px-4">Bağlantı Hatası</h3>
+                <p className="text-slate-400 text-sm text-center max-w-sm">{error}</p>
+                <button onClick={onClose} className="mt-6 px-6 py-2.5 bg-white text-slate-900 font-bold rounded-xl">Geri Dön</button>
+            </div>
+        );
+    }
+
+    if (token === "") {
+        return (
+            <div className="fixed inset-0 bg-slate-900 z-[9999] flex flex-col items-center justify-center text-white">
+                <Loader2 size={48} className="animate-spin text-brandPurple mb-4" />
+                <p className="font-bold">Güvenli Odaya Bağlanılıyor...</p>
+                <p className="text-xs text-slate-400 mt-2">LiveKit Cloud üzerinden şifrelenmiş oturum hazırlanıyor.</p>
+            </div>
+        );
+    }
+
+    // LiveKit Sunucu URL'si: VITE_LIVEKIT_URL değişkeninden alınmalı
+    const serverUrl = import.meta.env.VITE_LIVEKIT_URL;
+
+    if (!serverUrl) {
+        return (
+            <div className="fixed inset-0 bg-slate-900 z-[9999] flex flex-col items-center justify-center text-white p-4">
+                <div className="w-16 h-16 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mb-4">
+                    <X size={32} />
+                </div>
+                <h3 className="text-xl font-black mb-2 text-center text-amber-500">LiveKit URL Eksik</h3>
+                <p className="text-slate-400 text-sm text-center max-w-sm mb-6">
+                    Netlify (veya `.env.local`) ortam değişkenlerinde `VITE_LIVEKIT_URL` tanımlanmamış. Lütfen ekleyin.
+                </p>
+                <button onClick={onClose} className="px-6 py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700">Geri Dön</button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+            {/* Üst Bar */}
+            <div className="h-16 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 flex items-center justify-between shrink-0 absolute top-0 left-0 right-0 z-50">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-brandPurple/20 text-brandPurple rounded-xl flex items-center justify-center">
+                        <Video size={20} />
+                    </div>
+                    <div>
+                        <h2 className="text-white font-bold text-sm md:text-base">{session?.className || "Canlı Sınıf"}</h2>
+                        <p className="text-slate-400 text-[10px] md:text-xs">Uçtan Uca Şifreli • LiveKit Cloud</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => isTeacherMode ? onEndSession(session?.id) : onClose()} 
+                    className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl transition-colors font-black text-xs md:text-sm shadow-lg shadow-rose-500/20"
+                >
+                    <LogOut size={16} />
+                    {isTeacherMode ? "Dersi Bitir" : "Ayrıl"}
+                </button>
+            </div>
+
+            {/* LiveKit Alanı */}
+            <div className="flex-1 w-full h-full pt-16">
+                <LiveKitRoom
+                    video={true}
+                    audio={true}
+                    token={token}
+                    serverUrl={serverUrl}
+                    data-lk-theme="default"
+                    style={{ height: '100%', width: '100%' }}
+                    onDisconnected={() => {
+                        console.log("Oda bağlantısı kesildi.");
+                        onClose();
+                    }}
+                >
+                    {/* LiveKit Cloud Standart Konferans Bileşeni */}
+                    <VideoConference />
+                    {/* Sesleri render etmek için zorunlu bileşen */}
+                    <RoomAudioRenderer />
+                </LiveKitRoom>
+            </div>
+        </div>
+    );
+};
+
+export default LiveClassroom;
