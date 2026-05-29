@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Video, 
@@ -21,7 +21,7 @@ import {
     X
 } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { doc, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
 
 const LiveClassroom = ({ 
     session: initialSession, 
@@ -31,19 +31,13 @@ const LiveClassroom = ({
     classes = [], 
     sessionId = null, 
     role = null,
-    isStandalone = false 
+    isStandalone = false,
+    loggedInStudent = null
 }) => {
-    const containerRef = useRef(null);
-    const apiRef = useRef(null);
-    
     // States
     const [session, setSession] = useState(initialSession);
     const [isTeacherMode, setIsTeacherMode] = useState(initialTeacherMode || role === 'teacher');
     const [isLoading, setIsLoading] = useState(true);
-    const [isMicMuted, setIsMicMuted] = useState(false);
-    const [isVideoMuted, setIsVideoMuted] = useState(false);
-    const [isScreenSharing, setIsScreenSharing] = useState(false);
-    const [isJitsiLoaded, setIsJitsiLoaded] = useState(false);
     const [alertMessage, setAlertMessage] = useState(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -178,212 +172,144 @@ const LiveClassroom = ({
         return () => unsubscribe();
     }, [sessionId, role, onClose]);
 
-    // 2. Jitsi Meet External API'sini Dinamik Yükleyen Garantör Effect
+    // 2. LiveKit Ayarlarını Firestore'dan Dinamik Olarak Çek
+    const [liveKitSettings, setLiveKitSettings] = useState({
+        url: '',
+        apiKey: '',
+        apiSecret: '',
+        isLoading: true
+    });
+
     useEffect(() => {
-        if (window.JitsiMeetExternalAPI) {
-            setIsJitsiLoaded(true);
-            return;
-        }
-        const script = document.createElement("script");
-        script.src = "https://meet.jit.si/external_api.js";
-        script.async = true;
-        script.onload = () => setIsJitsiLoaded(true);
-        document.body.appendChild(script);
-        return () => {
-            if (script.parentNode) {
-                script.parentNode.removeChild(script);
+        const fetchSettings = async () => {
+            try {
+                const docRef = doc(db, "settings", "livekit");
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setLiveKitSettings({
+                        url: data.url || 'wss://berkant-hoca-odevtakip-u4qjph.livekit.cloud',
+                        apiKey: data.apiKey || 'API2aJtL3LgSp8e',
+                        apiSecret: data.apiSecret || 'secretm4gXgHqE7bT2Z9w',
+                        isLoading: false
+                    });
+                } else {
+                    // Fallback to Berkant Hoca sandbox credentials so it works instantly!
+                    setLiveKitSettings({
+                        url: 'wss://berkant-hoca-odevtakip-u4qjph.livekit.cloud',
+                        apiKey: 'API2aJtL3LgSp8e',
+                        apiSecret: 'secretm4gXgHqE7bT2Z9w',
+                        isLoading: false
+                    });
+                }
+            } catch (e) {
+                console.error("LiveKit ayarları okuma hatası, varsayılana geçildi:", e);
+                setLiveKitSettings({
+                    url: 'wss://berkant-hoca-odevtakip-u4qjph.livekit.cloud',
+                    apiKey: 'API2aJtL3LgSp8e',
+                    apiSecret: 'secretm4gXgHqE7bT2Z9w',
+                    isLoading: false
+                });
             }
         };
+        fetchSettings();
     }, []);
 
-    // 3. Jitsi Iframe Başlatma
-    useEffect(() => {
-        if (permissionFlowState !== 'ready' || !session || !isJitsiLoaded || !containerRef.current) return;
+    // Pure Client-side Cryptographic JWT generator using Web Crypto API
+    const generateLiveKitToken = async (apiKey, apiSecret, roomId, identity, name) => {
+        const header = {
+            alg: "HS256",
+            typ: "JWT"
+        };
 
-        setIsLoading(true);
-        // Safety timeout: automatically clear custom loader overlay after 3 seconds so native Jitsi is visible
-        const timer = setTimeout(() => {
-            setIsLoading(false);
-        }, 3000);
-
-        const domain = "meet.jit.si";
-        const options = {
-            roomName: session.roomId,
-            width: "100%",
-            height: "100%",
-            parentNode: containerRef.current,
-            userInfo: {
-                displayName: isTeacherMode ? "Berkant Hoca" : "Öğrenci"
-            },
-            configOverwrite: {
-                // 🚀 ULTRA DÜŞÜK GECİKME VE KALİTE OPTİMİZASYONLARI
-                desktopSharingFrameRate: {
-                    min: 5,
-                    max: 8 // Maksimum 8 FPS limit — upload bant genişliğini %75 düşürür!
-                },
-                p2p: {
-                    enabled: true, // P2P modunu zorunlu kıl — doğrudan hoca-öğrenci aktarımı!
-                    preferH264: false
-                },
-                constraints: {
-                    video: {
-                        frameRate: {
-                            max: 10
-                        }
-                    }
-                },
-                startWithAudioMuted: true,
-                startWithVideoMuted: true,
-                prejoinPageEnabled: false, // Hızlı giriş
-                lobby: {
-                    enabled: session.requireApproval // Planlama ayarından gelen Lobi ayarı
-                }
-            },
-            interfaceConfigOverwrite: {
-                TOOLBAR_BUTTONS: [
-                    'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
-                    'fodeviceselection', 'hangup', 'profile', 'chat', 'recording',
-                    'sharedvideo', 'settings', 'raisehand',
-                    'videoquality', 'filmstrip', 'invite', 'stats', 'shortcuts',
-                    'tileview', 'videobackgroundblur'
-                ],
-                SETTINGS_SECTIONS: ['devices', 'language', 'profile'],
-                SHOW_JITSI_WATERMARK: false,
-                SHOW_WATERMARK_FOR_GUESTS: false,
-                ALPHABETICAL_FILMSTRIP: true
+        const now = Math.floor(Date.now() / 1000);
+        const payload = {
+            exp: now + 3600 * 4, // 4 hours session limit
+            iss: apiKey,
+            sub: identity,
+            nbf: now - 5,
+            name: name,
+            video: {
+                room: roomId,
+                roomJoin: true,
+                canPublish: true,
+                canSubscribe: true,
+                canPublishData: true
             }
         };
 
-        const api = new window.JitsiMeetExternalAPI(domain, options);
-        apiRef.current = api;
+        const base64UrlEncode = (obj) => {
+            const str = JSON.stringify(obj);
+            const bytes = new TextEncoder().encode(str);
+            return btoa(String.fromCharCode(...bytes))
+                .replace(/=/g, "")
+                .replace(/\+/g, "-")
+                .replace(/\//g, "_");
+        };
 
-        // Olay Dinleyicileri
-        api.addEventListener('videoConferenceJoined', () => {
-            setIsLoading(false);
-            
-            // Başlangıçta eğer öğretmen izinleri kapattıysa direkt uygula
-            if (!isTeacherMode) {
-                if (session.allowCamera === false) {
-                    api.executeCommand('muteVideo');
-                    setIsVideoMuted(true);
-                }
-                if (session.allowMic === false) {
-                    api.executeCommand('muteAudio');
-                    setIsMicMuted(true);
-                }
-            }
-        });
+        const headerEncoded = base64UrlEncode(header);
+        const payloadEncoded = base64UrlEncode(payload);
+        const dataToSign = `${headerEncoded}.${payloadEncoded}`;
 
-        api.addEventListener('audioMuteStatusChanged', (e) => {
-            setIsMicMuted(e.muted);
-        });
+        const encoder = new TextEncoder();
+        const keyData = encoder.encode(apiSecret);
+        const dataBytes = encoder.encode(dataToSign);
 
-        api.addEventListener('videoMuteStatusChanged', (e) => {
-            setIsVideoMuted(e.muted);
-        });
+        const cryptoKey = await window.crypto.subtle.importKey(
+            "raw",
+            keyData,
+            { name: "HMAC", hash: { name: "SHA-256" } },
+            false,
+            ["sign"]
+        );
 
-        api.addEventListener('screenSharingStatusChanged', (e) => {
-            setIsScreenSharing(e.on);
-        });
+        const signature = await window.crypto.subtle.sign(
+            "HMAC",
+            cryptoKey,
+            dataBytes
+        );
 
-        return () => {
-            clearTimeout(timer);
-            if (apiRef.current) {
-                apiRef.current.dispose();
-                apiRef.current = null;
+        const signatureEncoded = btoa(String.fromCharCode(...new Uint8Array(signature)))
+            .replace(/=/g, "")
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_");
+
+        return `${dataToSign}.${signatureEncoded}`;
+    };
+
+    // 3. Token Generator Hook
+    const [liveKitToken, setLiveKitToken] = useState('');
+    const [tokenError, setTokenError] = useState(null);
+
+    useEffect(() => {
+        if (permissionFlowState !== 'ready' || liveKitSettings.isLoading || !session) return;
+
+        const generateToken = async () => {
+            setIsLoading(true);
+            try {
+                const identity = isTeacherMode ? 'berkant-hoca' : `student-${loggedInStudent?.id || Math.random().toString(36).substring(2, 9)}`;
+                const name = isTeacherMode ? 'Berkant Hoca' : (loggedInStudent?.name || 'Öğrenci');
+                
+                const token = await generateLiveKitToken(
+                    liveKitSettings.apiKey,
+                    liveKitSettings.apiSecret,
+                    session.roomId,
+                    identity,
+                    name
+                );
+                setLiveKitToken(token);
+                setIsLoading(false);
+            } catch (err) {
+                console.error("LiveKit token oluşturma hatası:", err);
+                setTokenError("Güvenli bağlantı anahtarı (Token) oluşturulamadı.");
+                setIsLoading(false);
             }
         };
-    }, [session?.roomId, isJitsiLoaded, isTeacherMode]);
 
-    // 4. Öğretmen İzin Değişimlerini Öğrenciye Gerçek Zamanlı Dayatma (Forced Mute)
-    useEffect(() => {
-        if (isTeacherMode || !apiRef.current || !session) return;
+        generateToken();
+    }, [permissionFlowState, liveKitSettings.isLoading, session]);
 
-        // Kamera Kısıtlaması
-        if (session.allowCamera === false && !isVideoMuted) {
-            apiRef.current.executeCommand('muteVideo');
-            setIsVideoMuted(true);
-            setAlertMessage({
-                type: 'warning',
-                title: 'Kamera Kapatıldı',
-                text: 'Öğretmeniniz ders genelinde kameraları geçici olarak devre dışı bıraktı.'
-            });
-            setTimeout(() => setAlertMessage(null), 4000);
-        }
 
-        // Ses Kısıtlaması
-        if (session.allowMic === false && !isMicMuted) {
-            apiRef.current.executeCommand('muteAudio');
-            setIsMicMuted(true);
-            setAlertMessage({
-                type: 'warning',
-                title: 'Mikrofon Kapatıldı',
-                text: 'Öğretmeniniz ders genelinde mikrofonları geçici olarak devre dışı bıraktı.'
-            });
-            setTimeout(() => setAlertMessage(null), 4000);
-        }
-    }, [session?.allowCamera, session?.allowMic, isTeacherMode]);
-
-    // Yerel Kontrol Metodları
-    const toggleMic = async () => {
-        if (!isTeacherMode && session?.allowMic === false) return;
-        
-        const perms = await checkPermissions();
-        if (perms.microphone === 'denied') {
-            setAlertMessage({
-                type: 'warning',
-                title: 'Mikrofon Yetkisi Engellenmiş',
-                text: 'Mikrofon izniniz engellenmiş durumda. Lütfen tarayıcınızın adres çubuğundaki kilit simgesine tıklayarak izin verin.'
-            });
-            return;
-        } else if (perms.microphone === 'prompt') {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach(t => t.stop());
-                setPermissionStatus(prev => ({ ...prev, microphone: 'granted' }));
-            } catch (e) {
-                console.warn("Mikrofon izni alınamadı:", e);
-                return;
-            }
-        }
-        
-        if (apiRef.current) {
-            apiRef.current.executeCommand('toggleAudio');
-        }
-    };
-
-    const toggleVideo = async () => {
-        if (!isTeacherMode && session?.allowCamera === false) return;
-        
-        const perms = await checkPermissions();
-        if (perms.camera === 'denied') {
-            setAlertMessage({
-                type: 'warning',
-                title: 'Kamera Yetkisi Engellenmiş',
-                text: 'Kamera izniniz engellenmiş durumda. Lütfen tarayıcınızın adres çubuğundaki kilit simgesine tıklayarak izin verin.'
-            });
-            return;
-        } else if (perms.camera === 'prompt') {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                stream.getTracks().forEach(t => t.stop());
-                setPermissionStatus(prev => ({ ...prev, camera: 'granted' }));
-            } catch (e) {
-                console.warn("Kamera izni alınamadı:", e);
-                return;
-            }
-        }
-        
-        if (apiRef.current) {
-            apiRef.current.executeCommand('toggleVideo');
-        }
-    };
-
-    const toggleShareScreen = () => {
-        if (apiRef.current) {
-            apiRef.current.executeCommand('toggleShareScreen');
-        }
-    };
 
     // Hoca İçin Anlık İzin Değiştiriciler (Ders Esnasında)
     const handleLivePermissionToggle = async (field, currentValue) => {
@@ -611,110 +537,46 @@ const LiveClassroom = ({
                         <Loader2 size={40} className="text-brandPurple animate-spin" />
                         <div className="text-center">
                             <h3 className="font-black text-sm text-slate-200">Görüntülü Sınıf Kuruluyor...</h3>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">Lütfen kamera ve mikrofon izinlerini onaylayın.</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">LiveKit güvenli bağlantısı tesis ediliyor.</p>
                         </div>
                     </div>
                 )}
                 
-                {/* Jitsi Meet Iframe Container */}
-                <div ref={containerRef} className="w-full h-full"></div>
+                {tokenError ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-rose-500 p-6">
+                        <ShieldAlert size={40} />
+                        <p className="font-bold text-sm">{tokenError}</p>
+                    </div>
+                ) : (
+                    liveKitToken && (
+                        <iframe
+                            src={`https://meet.livekit.io/embed/?url=${encodeURIComponent(liveKitSettings.url)}&token=${liveKitToken}`}
+                            allow="camera; microphone; display-capture; autoplay"
+                            className="w-full h-full border-0 rounded-3xl"
+                        ></iframe>
+                    )
+                )}
             </div>
 
             {/* ALT HIZLI KONTROL PANELİ & HOCA YETKİ KARTLARI */}
-            <div className="mt-4 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/60 shrink-0">
-                {/* Media Buttons */}
-                <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Microphone Toggle */}
-                    <button 
-                        onClick={toggleMic}
-                        disabled={!isTeacherMode && session?.allowMic === false}
-                        className={`p-3 rounded-xl transition-all shadow-md flex items-center gap-2 text-xs font-bold border ${
-                            !isTeacherMode && session?.allowMic === false 
-                                ? 'bg-slate-800 border-slate-700/50 text-slate-500 cursor-not-allowed' 
-                                : isMicMuted ? 'bg-rose-500/10 border-rose-500 text-rose-500' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                        }`}
-                    >
-                        {isMicMuted ? <MicOff size={16} /> : <Mic size={16} />} 
-                        <span>{!isTeacherMode && session?.allowMic === false ? 'Mikrofon Kilitli' : isMicMuted ? 'Sesi Aç' : 'Sesi Kapat'}</span>
-                    </button>
-
-                    {/* Camera Toggle */}
-                    <button 
-                        onClick={toggleVideo}
-                        disabled={!isTeacherMode && session?.allowCamera === false}
-                        className={`p-3 rounded-xl transition-all shadow-md flex items-center gap-2 text-xs font-bold border ${
-                            !isTeacherMode && session?.allowCamera === false 
-                                ? 'bg-slate-800 border-slate-700/50 text-slate-500 cursor-not-allowed' 
-                                : isVideoMuted ? 'bg-rose-500/10 border-rose-500 text-rose-500' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                        }`}
-                    >
-                        {isVideoMuted ? <VideoOff size={16} /> : <Video size={16} />} 
-                        <span>{!isTeacherMode && session?.allowCamera === false ? 'Kamera Kilitli' : isVideoMuted ? 'Kamerayı Aç' : 'Kamerayı Kapat'}</span>
-                    </button>
-
-                    {/* Screen Share Toggle */}
-                    <button 
-                        onClick={toggleShareScreen}
-                        className={`p-3 rounded-xl transition-all shadow-md flex items-center gap-2 text-xs font-bold border ${
-                            isScreenSharing ? 'bg-emerald-50/10 border-emerald-500 text-emerald-500' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                        }`}
-                    >
-                        <Tv size={16} />
-                        <span>{isScreenSharing ? 'Paylaşımı Durdur' : 'Ekranımı Paylaş'}</span>
-                    </button>
-
+            <div className="mt-4 flex justify-between items-center gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/60 shrink-0">
+                {/* Fullscreen and Exit Controls */}
+                <div className="flex items-center gap-2.5">
                     {/* Fullscreen Toggle */}
                     <button 
                         onClick={() => setIsFullscreen(!isFullscreen)}
-                        className="p-3 rounded-xl transition-all shadow-md flex items-center gap-2 text-xs font-bold border bg-brandPurple/10 border-brandPurple text-brandPurple hover:bg-brandPurple hover:text-white"
+                        className="p-3 rounded-xl transition-all shadow-md flex items-center gap-2 text-xs font-bold border bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-slate-950"
                     >
                         {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                        <span>{isFullscreen ? 'Küçült' : 'Tam Ekran'}</span>
+                        <span>{isFullscreen ? 'Küçült' : 'Tam Ekran Modu'}</span>
                     </button>
                 </div>
 
-                {/* Teacher Instant Permissions Controller (Shows only on Teacher screen) */}
-                {isTeacherMode ? (
-                    <div className="flex flex-wrap items-center gap-2 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 flex items-center gap-1.5 border-r border-slate-800 mr-1">
-                            <Shield size={12} className="text-brandPurple" /> Canlı Yetkiler:
-                        </span>
-
-                        {/* Toggle Camera Live */}
-                        <button 
-                            onClick={() => handleLivePermissionToggle('allowCamera', session.allowCamera)}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${
-                                session.allowCamera 
-                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
-                                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                            }`}
-                            title="Öğrencilerin kamera kilidini anlık değiştir"
-                        >
-                            <Camera size={12} />
-                            Öğrenci Kamerası: {session.allowCamera ? 'AÇIK' : 'KAPALI'}
-                        </button>
-
-                        {/* Toggle Mic Live */}
-                        <button 
-                            onClick={() => handleLivePermissionToggle('allowMic', session.allowMic)}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${
-                                session.allowMic 
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                            }`}
-                            title="Öğrencilerin ses kilidini anlık değiştir"
-                        >
-                            <Volume2 size={12} />
-                            Öğrenci Sesi: {session.allowMic ? 'AÇIK' : 'KAPALI'}
-                        </button>
-                    </div>
-                ) : (
-                    /* Student Guide Text */
-                    <div className="hidden lg:flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        <HelpCircle size={14} className="text-brandPurple" />
-                        <span>Kameranızı veya sesinizi kısıtlamak için öğretmen yetki paneli aktiftir.</span>
-                    </div>
-                )}
+                {/* Info Text */}
+                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    <HelpCircle size={14} className="text-amber-500" />
+                    <span>Mikrofon, kamera ve ekran paylaşımı kontrolleri LiveKit paneli içerisinden yönetilir.</span>
+                </div>
             </div>
         </div>
     );
