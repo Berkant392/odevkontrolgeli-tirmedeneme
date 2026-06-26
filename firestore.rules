@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Sınıflar, öğrenciler ve notların tutulduğu ana koleksiyon
+    match /berkant_hoca_classes_secure/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // 2. Konu ve kaynak kütüphanesi koleksiyonu
+    match /berkant_hoca_library/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // 3. Sistem ayarları, duyurular ve PIN kodunun tutulduğu koleksiyon
+    match /berkant_hoca_system_config_v2/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // 4. Deneme Takibi koleksiyonu
+    match /trials/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // 5. Bildirim Merkezi koleksiyonu (Öğrenci duyuruları ve sistem alarmları)
+    match /berkant_hoca_notifications/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // 6. Süper Ajan Becerileri koleksiyonu (Jarvis öğrenilen görev şablonları)
+    match /agent_skills/{document=**} {
+      allow read, write: if true;
+    }
+
+    // 7. Öğrenci oynatma listeleri koleksiyonu
+    match /playlists/{document=**} {
+      allow read, write: if true;
+    }
+
+    // 8. Oynatma listesi önbelleği koleksiyonu (CORS/Hız optimizasyonu için)
+    match /playlistCache/{document=**} {
+      allow read, write: if true;
+    }
+
+    // 9. Video detayları önbelleği koleksiyonu (Süre ve başlık için)
+    match /videoCache/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
