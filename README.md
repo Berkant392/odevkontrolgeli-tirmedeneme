@@ -1,2 +1,0 @@
-# odevkontroluygulamam1
-1
